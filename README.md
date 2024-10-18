@@ -8,6 +8,10 @@ This driver has been developed in partnership with Yamaha Corporation of Japan, 
 
 [ TODO ]
 
+## Related Projects
+
+The Windows MIDI Services Project https://aka.ms/midi is highly related to this project in that they are two sides of the coin for musician-focused APIs on Windows.
+
 ## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
