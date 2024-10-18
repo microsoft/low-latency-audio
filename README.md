@@ -4,7 +4,7 @@
 
 This driver has been developed in partnership with Yamaha Corporation of Japan, and Qualcomm
 
-## Project Goals
+## Project Details
 
 [ TODO ]
 
