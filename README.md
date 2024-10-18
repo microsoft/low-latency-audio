@@ -1,14 +1,12 @@
-# Project
+# USB Audio Class 2 Driver with ASIO and WaveRT Endpoints
 
-> This repo has been populated by an initial template to help get you started. Please
-> make sure to update the content to build a great experience for community-building.
+## Acknowledgements
 
-As the maintainer of this project, please make a few updates:
+This driver has been developed in partnership with Yamaha Corporation of Japan, and Qualcomm
 
-- Improving this README.MD file to provide a great experience
-- Updating SUPPORT.MD with content about this project's support experience
-- Understanding the security reporting process in SECURITY.MD
-- Remove this section from the README
+## Project Goals
+
+[ TODO ]
 
 ## Contributing
 
