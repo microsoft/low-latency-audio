@@ -1,4 +1,4 @@
-# USB Audio Class 2 Driver with ASIO and WaveRT Endpoints
+# Low-latency USB Audio Class 2 Driver
 
 ## Acknowledgements
 
