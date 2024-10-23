@@ -1,4 +1,4 @@
-# Low-latency USB Audio Class 2 Driver
+# Low-latency Audio Projects
 
 ## Acknowledgements
 
