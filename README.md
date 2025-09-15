@@ -6,7 +6,13 @@ This driver has been developed in partnership with Yamaha Corporation of Japan, 
 
 ## Project Details
 
-[ TODO ]
+This project includes a new USB Audio Class 2 driver, optimized for low-latency musician scenarios, as well as an ASIO interface to the driver.
+
+### Steinberg ASIO SDK
+
+The projects in this repo require the Steinberg ASIO SDK to compile. Use of the source here does not grant any license for the Steinberg ASIO SDK. All contributors to the project, and anyone compiling from source, is required to have an agreement with Steinberg and obtain the ASIO SDK directly from them.
+
+ASIO is a trademark and software of Steinberg Media Technologies GmbH
 
 ## Related Projects
 
@@ -27,6 +33,8 @@ For more information see the [Code of Conduct FAQ](https://opensource.microsoft.
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
 ## Trademarks
+
+ASIO is a trademark and software of Steinberg Media Technologies GmbH
 
 This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft 
 trademarks or logos is subject to and must follow 
