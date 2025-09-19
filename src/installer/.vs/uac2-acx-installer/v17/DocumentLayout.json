@@ -1,0 +1,37 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "G:\\Github\\microsoft\\low-latency-audio\\src\\installer\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{490B9960-BD12-FE45-7485-51D1ED037718}|Uac2AcxInstaller.wixproj|g:\\github\\microsoft\\low-latency-audio\\src\\installer\\uac2-acx-installer.wxs||{FA3CD31E-987B-443A-9B81-186104E8DAC1}",
+      "RelativeMoniker": "D:0:0:{490B9960-BD12-FE45-7485-51D1ED037718}|Uac2AcxInstaller.wixproj|solutionrelative:uac2-acx-installer.wxs||{FA3CD31E-987B-443A-9B81-186104E8DAC1}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "uac2-acx-installer.wxs",
+              "DocumentMoniker": "G:\\Github\\microsoft\\low-latency-audio\\src\\installer\\uac2-acx-installer.wxs",
+              "RelativeDocumentMoniker": "uac2-acx-installer.wxs",
+              "ToolTip": "G:\\Github\\microsoft\\low-latency-audio\\src\\installer\\uac2-acx-installer.wxs",
+              "RelativeToolTip": "uac2-acx-installer.wxs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABQAAAAcAAAAAAAAAA==",
+              "Icon": "71fa8cad-8471-402b-834a-c68922df4385.000080|",
+              "WhenOpened": "2025-06-29T16:14:35.732Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,163 @@
+; Copyright (c) Yamaha Corporation.
+; Licensed under the terms of the MIT license:
+; https://github.com/microsoft/low-latency-audio/blob/main/LICENSE
+;
+; USBAudio2-ACX.inf
+;
+
+[Version]
+Signature="$WINDOWS NT$"
+Class=MEDIA
+ClassGuid={4d36e96c-e325-11ce-bfc1-08002be10318}
+Provider=%ManufacturerName%
+CatalogFile=USBAudio2-ACX.cat
+DriverVer = 09/19/2025,14.37.1.887
+PnpLockDown=1
+
+[DestinationDirs]
+DefaultDestDir = 13
+
+[SourceDisksNames]
+1 = %DiskName%,,,""
+
+[SourceDisksFiles]
+USBAudio2-ACX.sys  = 1,,
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName%=Standard,NTamd64.10.0...16299 ; %13% support introduced in build 16299
+
+[Standard.NTamd64.10.0...16299]
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1509        ; Steinberg UR22
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1730        ; Steinberg UR44C
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1760        ; Steinberg IXO22
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_8219&MI_00  ; Focusrite Scarlett 2i2 4th Gen
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_821B&MI_00  ; Focusrite Scarlett 16i16
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_060D&MI_00  ; PreSonus Quantum HD 2
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0423&MI_00  ; PreSonus Revelator IO 24
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0423&MI_03  ; PreSonus Revelator IO 24 Stream Mix A
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0423&MI_06  ; PreSonus Revelator IO 24 Stream Mix B
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2B5A&PID_0021&MI_00  ; UA Volt 2
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2B5A&PID_0023&MI_00  ; UA Volt 276
+
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1C75&PID_AF72&MI_00  ; Arturia Minifuse 4
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2B5A&PID_0020&MI_00  ; UA Volt 1
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1397&PID_0508&MI_00  ; Behringer UMC204HD
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_07FD&PID_000B&MI_00  ; MOTU M4
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0A73&PID_001F&MI_00  ; Mackie Onyx Performer 2+2
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0109&MI_00  ; PreSonus Studio 24C
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0644&PID_8070&MI_00  ; Tascam US 2x2HR
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1686&PID_074F&MI_00  ; Zoom UAC 232
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2708&PID_0009&MI_00  ; Audient ID4
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_8006&MI_00  ; Focusrite Scarlett 2i2 1st (or 2nd?) Gen
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_821D&MI_00  ; Focusrite Scarlett 18i20 4th Gen
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_17C8&PID_7010&MI_00  ; Bitwig Connect
+
+
+[USBAudio2-ACX_Device.NT]
+CopyFiles=File_Copy
+
+[File_Copy]
+USBAudio2-ACX.sys
+
+[USBAudio2-ACX_Device.NT.HW]
+AddReg=USBAudio2-ACX_AddReg
+
+[USBAudio2-ACX_AddReg]
+; By default, USBDevice class uses iProduct descriptor to name the device
+; Uncomment for this device to use %USBAudio2-ACX.DeviceDesc%
+;HKR,,FriendlyName,,%USBAudio2-ACX.DeviceDesc%
+
+;-------------- Service installation
+[USBAudio2-ACX_Device.NT.Services]
+AddService = USBAudio2-ACX,%SPSVCINST_ASSOCSERVICE%, USBAudio2-ACX_Service_Inst
+
+; -------------- USBAudio2-ACX driver install sections
+[USBAudio2-ACX_Service_Inst]
+DisplayName    = %USBAudio2-ACX.SVCDESC%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %13%\USBAudio2-ACX.sys
+
+[USBAudio2-ACX_Device.NT.Wdf]
+KmdfService =  USBAudio2-ACX, USBAudio2-ACX_wdfsect
+
+[USBAudio2-ACX_wdfsect]
+KmdfLibraryVersion = 1.33
+
+;
+; render interfaces: speaker
+;
+[USBAudio2-ACX_Device.I.RenderDevice]
+AddReg=USBAudio2-ACX_Device.I.RenderDevice.AddReg
+[USBAudio2-ACX_Device.I.RenderDevice.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%USBAudio2-ACX_Device.RenderDevice.szPname%
+; The following lines opt-in to pull mode.
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+
+;
+; capture interfaces: microphone
+;
+[USBAudio2-ACX_Device.I.CaptureDevice]
+AddReg=USBAudio2-ACX_Device.I.CaptureDevice.AddReg
+[USBAudio2-ACX_Device.I.CaptureDevice.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%USBAudio2-ACX_Device.CaptureDevice.szPname%
+; The following lines opt-in to pull mode.
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+
+;
+; PnP add interface directives for static enumerated audio endpoints.
+;
+[USBAudio2-ACX_Device.NT.Interfaces]
+; Interfaces for render endpoint.
+AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_RenderDevice%,  USBAudio2-ACX_Device.I.RenderDevice
+AddInterface=%KSCATEGORY_RENDER%,   %KSNAME_RenderDevice%,  USBAudio2-ACX_Device.I.RenderDevice
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_RenderDevice%,  USBAudio2-ACX_Device.I.RenderDevice
+
+; Interfaces for mic capture endpoint 
+AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_CaptureDevice%, USBAudio2-ACX_Device.I.CaptureDevice
+AddInterface=%KSCATEGORY_CAPTURE%,  %KSNAME_CaptureDevice%, USBAudio2-ACX_Device.I.CaptureDevice
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_CaptureDevice%, USBAudio2-ACX_Device.I.CaptureDevice
+
+[Strings]
+;
+;Non-localizable
+;
+KSNAME_RenderDevice="RenderDevice0"
+KSNAME_CaptureDevice="CaptureDevice0"
+
+SPSVCINST_ASSOCSERVICE= 0x00000002
+ProviderName = "Microsoft Corporation"
+
+Proxy.CLSID         = "{17CCA71B-ECD7-11D0-B908-00A0C9223196}"
+KSCATEGORY_AUDIO    = "{6994AD04-93EF-11D0-A3CC-00A0C9223196}"
+KSCATEGORY_RENDER   = "{65E8773E-8F56-11D0-A3B9-00A0C9223196}"
+KSCATEGORY_CAPTURE  = "{65E8773D-8F56-11D0-A3B9-00A0C9223196}"
+KSCATEGORY_REALTIME = "{EB115FFC-10C8-4964-831D-6DCB02E6F23F}"
+
+KSNODETYPE_ANY      = "{00000000-0000-0000-0000-000000000000}"
+
+PKEY_AudioEndpoint_ControlPanelPageProvider  = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},1"
+PKEY_AudioEndpoint_Association               = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
+PKEY_AudioEndpoint_Supports_EventDriven_Mode = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},7"
+PKEY_AudioEndpoint_Default_VolumeInDb        = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},9"
+
+;
+;Localizable
+;
+ManufacturerName="USBAudio2-ACX"
+DiskName = "Windows USB Audio 2 (ACX) Disk Installation Disk"
+USBAudio2-ACX.DeviceDesc = "USBAudio2-ACX"
+USBAudio2-ACX.SVCDESC = "Windows USB Audio 2 (ACX)"
+
+;; Friendly names
+USBAudio2-ACX_Device.RenderDevice.szPname="USBAudio2-ACX Render Device"
+USBAudio2-ACX_Device.CaptureDevice.szPname="USBAudio2-ACX Capture Device"

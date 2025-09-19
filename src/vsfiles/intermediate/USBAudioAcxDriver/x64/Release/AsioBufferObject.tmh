@@ -1,0 +1,4485 @@
+// 029b1a1d86c212869b0dc5541d35c11c Generated file. Do not edit.
+// File created by WPP compiler version 10.0.26100
+// from template km-default.tpl
+
+#pragma once
+
+// template km-header.tpl
+
+#ifdef  WPP_THIS_FILE
+// included twice
+#       define  WPP_ALREADY_INCLUDED
+#       undef   WPP_THIS_FILE
+#endif  // #ifdef WPP_THIS_FILE
+
+#define WPP_THIS_FILE AsioBufferObject_cpp
+
+#ifndef WPP_ALREADY_INCLUDED
+
+#define WPP_KERNEL_MODE 
+
+#include <evntrace.h>
+#include <stddef.h>
+#include <stdarg.h>
+#include <wmistr.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef
+LONG
+(*PFN_WPPQUERYTRACEINFORMATION) (
+    IN  TRACE_INFORMATION_CLASS TraceInformationClass,
+    OUT PVOID  TraceInformation,
+    IN  ULONG  TraceInformationLength,
+    OUT PULONG RequiredLength OPTIONAL,
+    IN  PVOID  Buffer OPTIONAL
+    );
+
+typedef
+LONG
+(*PFN_WPPTRACEMESSAGE)(
+    IN ULONG64  LoggerHandle,
+    IN ULONG   MessageFlags,
+    IN LPCGUID MessageGuid,
+    IN USHORT  MessageNumber,
+    IN ...
+    );
+
+typedef enum _WPP_TRACE_API_SUITE {
+    WppTraceDisabledSuite,
+    WppTraceWin2K,
+    WppTraceWinXP,
+    WppTraceTraceLH,
+    WppTraceServer08,
+    WppTraceMaxSuite
+} WPP_TRACE_API_SUITE;
+
+_IRQL_requires_same_
+typedef
+VOID
+(NTAPI *PETW_CLASSIC_CALLBACK)(
+    _In_ LPCGUID Guid,
+    _In_ UCHAR ControlCode,
+    _In_ PVOID EnableContext,
+    _In_opt_ PVOID CallbackContext
+    );
+
+_IRQL_requires_same_
+typedef
+NTSTATUS
+NTKERNELAPI
+(FN_ETWREGISTERCLASSICPROVIDER)(
+    _In_ LPCGUID ProviderGuid,
+    _In_ ULONG Type,
+    _In_ PETW_CLASSIC_CALLBACK EnableCallback,
+    _In_opt_ PVOID CallbackContext,
+    _Out_ PREGHANDLE RegHandle
+    );
+
+typedef FN_ETWREGISTERCLASSICPROVIDER *PFN_ETWREGISTERCLASSICPROVIDER;
+
+typedef
+BOOLEAN
+NTKERNELAPI
+(FN_WPPGETVERSION)(
+    _Out_opt_ PULONG MajorVersion,
+    _Out_opt_ PULONG MinorVersion,
+    _Out_opt_ PULONG BuildNumber,
+    _Out_opt_ PUNICODE_STRING CSDVersion
+    );
+
+typedef FN_WPPGETVERSION *PFN_WPPGETVERSION;
+
+typedef
+NTSTATUS
+NTKERNELAPI
+(FN_ETWUNREGISTER)(
+    _In_ REGHANDLE RegHandle
+    );
+
+typedef FN_ETWUNREGISTER *PFN_ETWUNREGISTER;
+
+#pragma prefast(suppress:__WARNING_ENCODE_GLOBAL_FUNCTION_POINTER, "this pointer can not be encoded");
+__declspec(selectany) PFN_WPPQUERYTRACEINFORMATION   pfnWppQueryTraceInformation = NULL;
+
+#pragma prefast(suppress:__WARNING_ENCODE_GLOBAL_FUNCTION_POINTER, "this pointer can not be encoded");
+__declspec(selectany) PFN_WPPTRACEMESSAGE            pfnWppTraceMessage = NULL;
+
+#pragma prefast(suppress:__WARNING_ENCODE_GLOBAL_FUNCTION_POINTER, "this pointer can not be encoded");
+__declspec(selectany) PFN_ETWUNREGISTER              pfnEtwUnregister = NULL;
+
+#pragma prefast(suppress:__WARNING_ENCODE_GLOBAL_FUNCTION_POINTER, "this pointer can not be encoded");
+__declspec(selectany) PFN_ETWREGISTERCLASSICPROVIDER pfnEtwRegisterClassicProvider = NULL;
+
+#pragma prefast(suppress:__WARNING_ENCODE_GLOBAL_FUNCTION_POINTER, "this pointer can not be encoded");
+__declspec(selectany) PFN_WPPGETVERSION              pfnWppGetVersion = NULL;
+
+
+__declspec(selectany) WPP_TRACE_API_SUITE            WPPTraceSuite = WppTraceDisabledSuite;
+
+#if !defined(_NTRTL_)
+#if !defined(_NTHAL_)
+// fake RTL_TIME_ZONE_INFORMATION //
+typedef int RTL_TIME_ZONE_INFORMATION;
+#endif
+#define _WMIKM_
+#endif
+
+#ifndef WPP_TRACE
+#define WPP_TRACE pfnWppTraceMessage
+#endif
+
+#if ENABLE_WPP_RECORDER
+
+#define _ENABLE_WPP_RECORDER TRUE
+
+#ifndef WPP_RECORDER
+#define WPP_RECORDER WppAutoLogTrace
+#endif
+
+//
+// This setting is only applicable when IFR is enabled.
+// Setting this to 1 will allow a WPP trace session to 
+// capture trace messages as usual i.e it will require the
+// user to provide WPP trace ENABLED and LOGGER macro. If 
+// this is set to 0 by default the IFR trace filter also
+// affects which trace messages land in the WPP trace session.
+//
+#if !defined(ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER)
+#define ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER 0
+#endif
+
+#if !defined(WPP_RECORDER_LEVEL_FLAGS_ARGS)
+#define WPP_RECORDER_LEVEL_FLAGS_ARGS(lvl, flags) WPP_CONTROL(WPP_BIT_ ## flags).AutoLogContext, lvl, WPP_BIT_ ## flags
+#define WPP_RECORDER_LEVEL_FLAGS_FILTER(lvl,flags) (lvl < TRACE_LEVEL_VERBOSE || WPP_CONTROL(WPP_BIT_ ## flags).AutoLogVerboseEnabled)
+#endif
+
+
+#if !defined(WPP_RECORDER_LEVEL_ARGS)
+#define WPP_RECORDER_LEVEL_ARGS(lvl) WPP_CONTROL(WPP_BIT_ ## lvl).AutoLogContext, 0, WPP_BIT_ ## lvl
+#define WPP_RECORDER_LEVEL_FILTER(lvl) (WPP_CONTROL(WPP_BIT_ ## lvl).AutoLogVerboseEnabled)
+#endif
+
+NTSTATUS
+WppAutoLogTrace(
+    IN PVOID              AutoLogContext,
+    IN UCHAR              MessageLevel,
+    IN ULONG              MessageFlags,
+    IN LPGUID             MessageGuid,
+    IN USHORT             MessageNumber,
+    IN ...
+    );
+
+#else
+#define _ENABLE_WPP_RECORDER FALSE
+#endif
+
+VOID
+WppLoadTracingSupport(
+    VOID
+    );
+
+NTSTATUS
+WppTraceCallback(
+    _In_ UCHAR MinorFunction,
+    _In_opt_ PVOID DataPath,
+    _In_ ULONG BufferLength,
+    _Inout_updates_bytes_(BufferLength) PVOID Buffer,
+    _Inout_ PVOID Context,
+    _Out_ PULONG Size
+    );
+
+#if !defined(WPP_TRACE_CONTROL_NULL_GUID)
+DEFINE_GUID(WPP_TRACE_CONTROL_NULL_GUID, 0x00000000L, 0x0000, 0x0000, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00);
+#endif
+
+#define WPP_TRACE_CONTROL(Function,Buffer,BufferSize,ReturnSize) WppTraceCallback(Function,NULL,BufferSize,Buffer,&WPP_CB[0],&ReturnSize);
+
+__inline ULONG64 WppQueryLogger(_In_opt_ PCWSTR LoggerName)
+{
+    if (WppTraceWinXP != WPPTraceSuite) {
+        return (ULONG64)0;
+    }
+
+    ULONG ReturnLength;
+    LONG Status;
+    ULONG64 TraceHandle;
+    UNICODE_STRING Buffer;
+
+    RtlInitUnicodeString(&Buffer, LoggerName ? LoggerName : L"stdout");
+
+    Status = pfnWppQueryTraceInformation(TraceHandleByNameClass,
+                                         (PVOID)&TraceHandle,
+                                         sizeof(TraceHandle),
+                                         &ReturnLength,
+                                         (PVOID)&Buffer
+                                         );
+    if (Status != STATUS_SUCCESS) {
+        return (ULONG64)0;
+    }
+
+    return TraceHandle;
+}
+
+typedef LONG (*WMIENTRY_NEW)(
+    _In_ UCHAR MinorFunction,
+    _In_opt_ PVOID DataPath,
+    _In_ ULONG BufferLength,
+    _Inout_updates_bytes_(BufferLength) PVOID Buffer,
+    _In_ PVOID Context,
+    _Out_ PULONG Size
+    );
+
+typedef struct _WPP_TRACE_CONTROL_BLOCK
+{
+    WMIENTRY_NEW                        Callback;
+    LPCGUID                             ControlGuid;
+    struct _WPP_TRACE_CONTROL_BLOCK    *Next;
+    __int64                             Logger;
+    PUNICODE_STRING                     RegistryPath;
+    UCHAR                               FlagsLen;
+    UCHAR                               Level;
+    USHORT                              Reserved;
+    ULONG                               Flags[1];
+    ULONG                               ReservedFlags;
+    REGHANDLE                           RegHandle;
+#if ENABLE_WPP_RECORDER
+    PVOID                               AutoLogContext;
+    USHORT                              AutoLogVerboseEnabled;
+    USHORT                              AutoLogAttachToMiniDump;
+#endif
+} WPP_TRACE_CONTROL_BLOCK, *PWPP_TRACE_CONTROL_BLOCK;
+
+VOID WppCleanupKm(_When_(_ENABLE_WPP_RECORDER, _In_) _When_(!_ENABLE_WPP_RECORDER, _In_opt_) PDRIVER_OBJECT DriverObject);
+
+#define WPP_CLEANUP(DriverObject) WppCleanupKm((PDRIVER_OBJECT)DriverObject)
+
+#define WPP_IsValidSid RtlValidSid
+#define WPP_GetLengthSid RtlLengthSid
+
+//
+// Callback routine to be defined by the driver, which will be called from WPP callback
+// WPP will pass current valued of : GUID, Logger, Enable, Flags, and Level
+//
+// To activate driver must define WPP_PRIVATE_ENABLE_CALLBACK in their code, sample below
+// #define WPP_PRIVATE_ENABLE_CALLBACK MyPrivateCallback;
+//
+typedef
+VOID
+(*PFN_WPP_PRIVATE_ENABLE_CALLBACK)(
+    _In_ LPCGUID Guid,
+    _In_ __int64 Logger,
+    _In_ BOOLEAN Enable,
+    _In_ ULONG Flags,
+    _In_ UCHAR Level);
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
+
+#endif  // #ifndef WPP_ALREADY_INCLUDED
+
+// template control.tpl
+
+//
+//     Defines a set of macro that expand control model specified
+//     with WPP_CONTROL_GUIDS (example shown below)
+//     into an enum of trace levels and required structures that
+//     contain the mask of levels, logger handle and some information
+//     required for registration.
+//
+
+#ifndef WPP_ALREADY_INCLUDED
+
+#define WPP_EVAL(x) x
+#define WPP_STR(x)  #x
+#define WPP_STRINGIZE(x) WPP_STR(x)
+#define WPP_GLUE(a, b)  a ## b
+#define WPP_GLUE3(a, b, c)  a ## b ## c
+#define WPP_GLUE4(a, b, c, d)  a ## b ## c ## d
+#define WPP_XGLUE(a, b) WPP_GLUE(a, b)
+#define WPP_XGLUE3(a, b, c) WPP_GLUE3(a, b, c)
+#define WPP_XGLUE4(a, b, c, d) WPP_GLUE4(a, b, c, d)
+
+///////////////////////////////////////////////////////////////////////////////////
+//
+// #define WPP_CONTROL_GUIDS \
+//     WPP_DEFINE_CONTROL_GUID(Regular,(81b20fea,73a8,4b62,95bc,354477c97a6f), \
+//       WPP_DEFINE_BIT(Error)      \
+//       WPP_DEFINE_BIT(Unusual)    \
+//       WPP_DEFINE_BIT(Noise)      \
+//    )        \
+//    WPP_DEFINE_CONTROL_GUID(HiFreq,(91b20fea,73a8,4b62,95bc,354477c97a6f), \
+//       WPP_DEFINE_BIT(Entry)      \
+//       WPP_DEFINE_BIT(Exit)       \
+//       WPP_DEFINE_BIT(ApiCalls)   \
+//       WPP_DEFINE_BIT(RandomJunk) \
+//       WPP_DEFINE_BIT(LovePoem)   \
+//    )
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifndef WPP_NO_CONTROL_GUIDS
+
+#ifdef WPP_DEFAULT_CONTROL_GUID
+#  ifdef WPP_CONTROL_GUIDS
+#     error WPP_DEFAULT_CONTROL_GUID cannot be used together with WPP_CONTROL_GUIDS.
+#  else // WPP_CONTROL_GUIDS
+#     define WPP_CONTROL_GUIDS \
+         WPP_DEFINE_CONTROL_GUID(Default,(WPP_DEFAULT_CONTROL_GUID), \
+         WPP_DEFINE_BIT(Error)   \
+         WPP_DEFINE_BIT(Unusual) \
+         WPP_DEFINE_BIT(Noise)   \
+      )
+#  endif // WPP_CONTROL_GUIDS
+#endif // WPP_DEFAULT_CONTROL_GUID
+
+#ifndef WPP_CONTROL_GUIDS
+#  pragma message(__FILE__ " : error : Please define control model via WPP_CONTROL_GUIDS or WPP_DEFAULT_CONTROL_GUID macros")
+#  pragma message(__FILE__ " : error : don't forget to call WPP_INIT_TRACING and WPP_CLEANUP in your main, DriverEntry or DllInit")
+#  pragma message(__FILE__ " : error : see tracewpp.doc for further information")
+#  error WPP_CONTROL_GUIDS not defined.
+#endif // WPP_CONTROL_GUIDS
+// a set of macro to convert a guid in a form x(81b20fea,73a8,4b62,95bc,354477c97a6f)
+// into either a a struct or text string
+
+#define _WPPW(x) WPP_GLUE(L, x)
+
+#define WPP_GUID_NORM(l,w1,w2,w3,ll) l ## w1 ## w2 ## w3 ## ll
+#define WPP_GUID_TEXT(l,w1,w2,w3,ll) #l "-" #w1 "-" #w2 "-" #w3 "-" #ll
+#define WPP_GUID_WTEXT(l,w1,w2,w3,ll) _WPPW(#l) L"-" _WPPW(#w1) L"-" _WPPW(#w2) L"-" _WPPW(#w3) L"-" _WPPW(#ll)
+#define WPP_EXTRACT_BYTE(val,n) (((ULONGLONG)(0x ## val) >> (8 * n)) & 0xFF)
+#define WPP_GUID_STRUCT(l,w1,w2,w3,ll) {0x ## l, 0x ## w1, 0x ## w2,\
+     {WPP_EXTRACT_BYTE(w3, 1), WPP_EXTRACT_BYTE(w3, 0),\
+      WPP_EXTRACT_BYTE(ll, 5), WPP_EXTRACT_BYTE(ll, 4),\
+      WPP_EXTRACT_BYTE(ll, 3), WPP_EXTRACT_BYTE(ll, 2),\
+      WPP_EXTRACT_BYTE(ll, 1), WPP_EXTRACT_BYTE(ll, 0)} }
+
+#ifndef WPP_FORCEINLINE
+#define WPP_FORCEINLINE __forceinline
+#endif
+
+// define an enum of control block names
+//////
+#define WPP_DEFINE_CONTROL_GUID(Name,Guid,Bits) WPP_XGLUE(WPP_CTL_, WPP_EVAL(Name)),
+enum WPP_CTL_NAMES { WPP_CONTROL_GUIDS WPP_LAST_CTL};
+#undef WPP_DEFINE_CONTROL_GUID
+
+// define control guids
+//////
+#define WPP_DEFINE_CONTROL_GUID(Name,Guid,Bits) \
+extern __declspec(selectany) const GUID WPP_XGLUE4(WPP_, ThisDir, _CTLGUID_, WPP_EVAL(Name)) = WPP_GUID_STRUCT Guid;
+WPP_CONTROL_GUIDS
+#undef WPP_DEFINE_CONTROL_GUID
+
+// define enums of individual bits
+/////
+#define WPP_DEFINE_CONTROL_GUID(Name,Guid,Bits) \
+    WPP_XGLUE(WPP_BLOCK_START_, WPP_EVAL(Name)) = WPP_XGLUE(WPP_CTL_, WPP_EVAL(Name)) * 0x10000, Bits WPP_XGLUE(WPP_BLOCK_END_, WPP_EVAL(Name)),
+# define WPP_DEFINE_BIT(Name) WPP_BIT_ ## Name,
+enum WPP_DEFINE_BIT_NAMES { WPP_CONTROL_GUIDS };
+# undef WPP_DEFINE_BIT
+#undef WPP_DEFINE_CONTROL_GUID
+
+#define WPP_MASK(CTL)    (1 << ( ((CTL)-1) & 31 ))
+#define WPP_FLAG_NO(CTL) ( (0xFFFF & ((CTL)-1) ) / 32)
+#define WPP_CTRL_NO(CTL) ((CTL) >> 16)
+
+// calculate how many DWORDs we need to get the required number of bits
+// upper estimate. Sometimes will be off by one
+#define WPP_DEFINE_CONTROL_GUID(Name,Guid,Bits) | WPP_XGLUE(WPP_BLOCK_END_, WPP_EVAL(Name))
+enum _WPP_FLAG_LEN_ENUM { WPP_FLAG_LEN = 1 | ((0 WPP_CONTROL_GUIDS) & 0xFFFF) / 32 };
+#undef WPP_DEFINE_CONTROL_GUID
+
+//
+// Check that maximum number of flags does not exceed 32
+//
+#ifndef C_ASSERT
+#define C_ASSERT(e) typedef char __C_ASSERT__[(e)?1:-1]
+#endif
+
+#define MAX_NUMBER_OF_ETW_FLAGS 34 // 32 flags plus 2 separators
+#define WPP_DEFINE_CONTROL_GUID(Name,Guid,Bits) && ((WPP_XGLUE(WPP_BLOCK_END_, WPP_EVAL(Name) & 0xFFFF)) < MAX_NUMBER_OF_ETW_FLAGS)
+enum _WPP_FLAG_LEN_ENUM_MAX { WPP_MAX_FLAG_LEN_CHECK = (1 WPP_CONTROL_GUIDS) };
+#undef WPP_DEFINE_CONTROL_GUID
+
+#ifndef WPP_CB
+#define WPP_CB      WPP_GLOBAL_Control
+#endif
+#ifndef WPP_CB_TYPE
+#define WPP_CB_TYPE WPP_PROJECT_CONTROL_BLOCK
+#endif
+
+#ifndef WPP_CHECK_INIT
+#define WPP_CHECK_INIT (WPP_CB != (WPP_CB_TYPE*)&WPP_CB) &&
+#endif
+
+typedef union {
+    WPP_TRACE_CONTROL_BLOCK Control;
+    UCHAR ReserveSpace[ sizeof(WPP_TRACE_CONTROL_BLOCK) + sizeof(ULONG) * (WPP_FLAG_LEN - 1) ];
+} WPP_CB_TYPE ;
+
+
+extern __declspec(selectany) WPP_CB_TYPE *WPP_CB = (WPP_CB_TYPE*)&WPP_CB;
+
+#if ENABLE_WPP_RECORDER
+#ifndef WPP_RECORDER_CHECK_INIT
+#define WPP_RECORDER_CHECK_INIT (WPP_RECORDER_INITIALIZED != (WPP_CB_TYPE*)&WPP_RECORDER_INITIALIZED) &&
+#endif
+// Global varaible used to track if WPP_RECORDER was initialized.
+// It will be initialized on calling WPP_INIT_TRACING macro.
+extern __declspec(selectany) WPP_CB_TYPE *WPP_RECORDER_INITIALIZED = (WPP_CB_TYPE*)&WPP_RECORDER_INITIALIZED;
+#endif
+
+#define WPP_CONTROL(CTL) (WPP_CB[WPP_CTRL_NO(CTL)].Control)
+
+// Define the default WPP_LEVEL_LOGGER/WPP_LEVEL_ENABLED macros for the
+// predefined DoTraceMessage(LEVEL) function.
+#ifdef WPP_USE_TRACE_LEVELS
+
+#ifndef WPP_LEVEL_LOGGER
+#define WPP_LEVEL_LOGGER(lvl) (WPP_CONTROL(WPP_BIT_ ## DUMMY).Logger),
+#endif
+#ifndef WPP_LEVEL_ENABLED
+#define WPP_LEVEL_ENABLED(lvl) (WPP_CONTROL(WPP_BIT_ ## DUMMY).Level >= lvl)
+#endif
+
+#else // WPP_USE_TRACE_LEVELS
+
+// For historical reasons, the use of LEVEL means flags by default.
+// This was a bad choice but very difficult to undo.
+#ifndef WPP_LEVEL_LOGGER
+#  define WPP_LEVEL_LOGGER(CTL)  (WPP_CONTROL(WPP_BIT_ ## CTL).Logger),
+#endif
+#ifndef WPP_LEVEL_ENABLED
+#  define WPP_LEVEL_ENABLED(CTL) (WPP_CONTROL(WPP_BIT_ ## CTL).Flags[WPP_FLAG_NO(WPP_BIT_ ## CTL)] & WPP_MASK(WPP_BIT_ ## CTL))
+#endif
+
+#endif // WPP_USE_TRACE_LEVELS
+
+// Define default WPP_FLAG_LOGGER/WPP_FLAG_ENABLED macros for convenience in
+// defining a function that takes a FLAG parameter e.g. DoTrace(FLAG).
+#ifndef WPP_FLAG_LOGGER
+#  define WPP_FLAG_LOGGER(CTL)  (WPP_CONTROL(WPP_BIT_ ## CTL).Logger),
+#endif
+#ifndef WPP_FLAG_ENABLED
+#  define WPP_FLAG_ENABLED(CTL) (WPP_CONTROL(WPP_BIT_ ## CTL).Flags[WPP_FLAG_NO(WPP_BIT_ ## CTL)] & WPP_MASK(WPP_BIT_ ## CTL))
+#endif
+
+#ifndef WPP_ENABLED
+#  define WPP_ENABLED() 1
+#endif
+#ifndef WPP_LOGGER
+#  define WPP_LOGGER() (WPP_CB[0].Control.Logger),
+#endif
+
+#endif // WPP_NO_CONTROL_GUIDS
+
+#ifndef WPP_GET_LOGGER
+#  define WPP_GET_LOGGER Logger
+#endif
+
+#ifndef WPP_LOGGER_ARG
+#  define WPP_LOGGER_ARG TRACEHANDLE Logger,
+#endif
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
+
+#endif // WPP_ALREADY_INCLUDED
+
+// template tracemacro.tpl
+
+// This template expects:
+//      WPP_THIS_FILE defined (see header.tpl)
+//      WPP_LOGGER_ARG  defined
+//      WPP_GET_LOGGER  defined
+//      WPP_ENABLED() defined
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#ifdef WPP_ALREADY_INCLUDED
+
+#undef WPP_LOCAL_TraceGuids
+#undef WPP_INVOKE_WPP_DEBUG
+
+#else // WPP_ALREADY_INCLUDED
+
+#ifndef NO_CHECK_FOR_NULL_STRING
+#ifndef WPP_CHECK_FOR_NULL_STRING
+#define WPP_CHECK_FOR_NULL_STRING
+#endif
+#endif // NO_CHECK_FOR_NULL_STRING
+
+#define WPP_FLATTEN(...) __VA_ARGS__
+#define WPP_GLUE5(a, b, c, d, e)  a ## b ## c ## d ## e
+#define WPP_XGLUE5(a, b, c, d, e)  WPP_GLUE5(a, b, c, d, e)
+#define WPP_(Id) WPP_XGLUE5(WPP_, Id, _, WPP_THIS_FILE, __LINE__)
+
+#ifndef WPP_INLINE
+#define WPP_INLINE DECLSPEC_NOINLINE __inline
+#endif
+
+#ifndef WPP_FORCEINLINE
+#define WPP_FORCEINLINE __forceinline
+#endif
+
+#endif // WPP_ALREADY_INCLUDED
+
+#ifdef WPP_NO_ANNOTATIONS
+
+#define WPP_ANNOTATE(x)
+
+#else // WPP_NO_ANNOTATIONS
+
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp55
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp57
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp65
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp72
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp91
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp117
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp129
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp131
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp137
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp142
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp156
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp170
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp189
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp207
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp228
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp266
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp267
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp326
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp327
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp370
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp371
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp379
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp392
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp407
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp815
+#endif
+#ifdef WPP_PUBLIC_
+#define WPP_PUBLIC_ANNOT_AsioBufferObject_cpp831
+#endif
+#ifdef WPP_EMIT_FUNC_NAME
+#define WPP_FUNC_NAME L" FUNC=" _WPPW(__FUNCTION__)
+#else // WPP_EMIT_FUNC_NAME
+#define WPP_FUNC_NAME
+#endif // WPP_EMIT_FUNC_NAME
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp55_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 10 \"%0%!FUNC! Entry\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp55_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 10 \"%0%!FUNC! Entry\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp55
+# define WPP_ANNOTATE_AsioBufferObject_cpp55 WPP_ANNOTATE_AsioBufferObject_cpp55_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp55
+# define WPP_ANNOTATE_AsioBufferObject_cpp55 WPP_ANNOTATE_AsioBufferObject_cpp55_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp55", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp55
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp57_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 11 \"%0%!FUNC! Exit\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp57_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 11 \"%0%!FUNC! Exit\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp57
+# define WPP_ANNOTATE_AsioBufferObject_cpp57 WPP_ANNOTATE_AsioBufferObject_cpp57_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp57
+# define WPP_ANNOTATE_AsioBufferObject_cpp57 WPP_ANNOTATE_AsioBufferObject_cpp57_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp57", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp57
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp65_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 12 \"%0%!FUNC! Entry\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp65_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 12 \"%0%!FUNC! Entry\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp65
+# define WPP_ANNOTATE_AsioBufferObject_cpp65 WPP_ANNOTATE_AsioBufferObject_cpp65_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp65
+# define WPP_ANNOTATE_AsioBufferObject_cpp65 WPP_ANNOTATE_AsioBufferObject_cpp65_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp65", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp65
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp72_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 13 \"%0%!FUNC! Exit\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp72_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 13 \"%0%!FUNC! Exit\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp72
+# define WPP_ANNOTATE_AsioBufferObject_cpp72 WPP_ANNOTATE_AsioBufferObject_cpp72_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp72
+# define WPP_ANNOTATE_AsioBufferObject_cpp72 WPP_ANNOTATE_AsioBufferObject_cpp72_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp72", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp72
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp91_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 14 \"%0%!FUNC! Entry, %10!s!\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp91_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 14 \"%0%!FUNC! Entry, %10!s!\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp91
+# define WPP_ANNOTATE_AsioBufferObject_cpp91 WPP_ANNOTATE_AsioBufferObject_cpp91_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemListLong(false,true) -- 10" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp91
+# define WPP_ANNOTATE_AsioBufferObject_cpp91 WPP_ANNOTATE_AsioBufferObject_cpp91_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp91", \
+    L"{", \
+    L"isInput, ItemListLong(false,true) -- 10" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp91
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp117_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 15 \"%0failed to allocate MDL for %10!s! buffer\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp117_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 15 \"%0failed to allocate MDL for %10!s! buffer\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp117
+# define WPP_ANNOTATE_AsioBufferObject_cpp117 WPP_ANNOTATE_AsioBufferObject_cpp117_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemString -- 10" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp117
+# define WPP_ANNOTATE_AsioBufferObject_cpp117 WPP_ANNOTATE_AsioBufferObject_cpp117_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp117", \
+    L"{", \
+    L"isInput ? 'rec' : 'play', ItemString -- 10" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp117
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp129_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 16 \"%0failed to lock MDL for play buffer\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp129_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 16 \"%0failed to lock MDL for play buffer\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp129
+# define WPP_ANNOTATE_AsioBufferObject_cpp129 WPP_ANNOTATE_AsioBufferObject_cpp129_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp129
+# define WPP_ANNOTATE_AsioBufferObject_cpp129 WPP_ANNOTATE_AsioBufferObject_cpp129_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp129", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp129
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp131_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 17 \"%0ERROR: File:%10!s!, Line:%11!d! - status=%12!s!\" //   LEVEL=LEVEL_ERROR FLAGS=FLAG_DEVICE_ALL IFRLOG=g_AudioDspLog RETSTATUS=status" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp131_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 17 \"%0ERROR: File:%10!s!, Line:%11!d! - status=%12!s!\" //   LEVEL=LEVEL_ERROR FLAGS=FLAG_DEVICE_ALL IFRLOG=g_AudioDspLog RETSTATUS=status" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp131
+# define WPP_ANNOTATE_AsioBufferObject_cpp131 WPP_ANNOTATE_AsioBufferObject_cpp131_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemString -- 10" , \
+    L"Arg, ItemLong -- 11" , \
+    L"Arg, ItemNTSTATUS -- 12" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp131
+# define WPP_ANNOTATE_AsioBufferObject_cpp131 WPP_ANNOTATE_AsioBufferObject_cpp131_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp131", \
+    L"{", \
+    L"__FILE__, ItemString -- 10" , \
+    L"__LINE__, ItemLong -- 11" , \
+    L"__statusRet, ItemNTSTATUS -- 12" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp131
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp137_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 18 \"%0failed to get system address for %10!s! buffer\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp137_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 18 \"%0failed to get system address for %10!s! buffer\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp137
+# define WPP_ANNOTATE_AsioBufferObject_cpp137 WPP_ANNOTATE_AsioBufferObject_cpp137_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemString -- 10" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp137
+# define WPP_ANNOTATE_AsioBufferObject_cpp137 WPP_ANNOTATE_AsioBufferObject_cpp137_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp137", \
+    L"{", \
+    L"isInput ? 'rec' : 'play', ItemString -- 10" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp137
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp142_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 19 \"%0%!FUNC! Exit, %10!s!, %11!p!, %12!u!, %13!p!, %14!s!, %15!p!\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp142_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 19 \"%0%!FUNC! Exit, %10!s!, %11!p!, %12!u!, %13!p!, %14!s!, %15!p!\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp142
+# define WPP_ANNOTATE_AsioBufferObject_cpp142 WPP_ANNOTATE_AsioBufferObject_cpp142_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemListLong(false,true) -- 10" , \
+    L"Arg, ItemPtr -- 11" , \
+    L"Arg, ItemLong -- 12" , \
+    L"Arg, ItemPtr -- 13" , \
+    L"Arg, ItemListLong(false,true) -- 14" , \
+    L"Arg, ItemPtr -- 15" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp142
+# define WPP_ANNOTATE_AsioBufferObject_cpp142 WPP_ANNOTATE_AsioBufferObject_cpp142_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp142", \
+    L"{", \
+    L"isInput, ItemListLong(false,true) -- 10" , \
+    L"virtualAddress, ItemPtr -- 11" , \
+    L"length, ItemLong -- 12" , \
+    L"mdl, ItemPtr -- 13" , \
+    L"isLocked, ItemListLong(false,true) -- 14" , \
+    L"systemAddress, ItemPtr -- 15" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp142
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp156_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 20 \"%0%!FUNC! Entry\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp156_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 20 \"%0%!FUNC! Entry\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp156
+# define WPP_ANNOTATE_AsioBufferObject_cpp156 WPP_ANNOTATE_AsioBufferObject_cpp156_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp156
+# define WPP_ANNOTATE_AsioBufferObject_cpp156 WPP_ANNOTATE_AsioBufferObject_cpp156_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp156", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp156
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp170_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 21 \"%0%!FUNC! Exit\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp170_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 21 \"%0%!FUNC! Exit\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp170
+# define WPP_ANNOTATE_AsioBufferObject_cpp170 WPP_ANNOTATE_AsioBufferObject_cpp170_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp170
+# define WPP_ANNOTATE_AsioBufferObject_cpp170 WPP_ANNOTATE_AsioBufferObject_cpp170_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp170", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp170
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp189_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 22 \"%0%!FUNC! Entry\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp189_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 22 \"%0%!FUNC! Entry\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp189
+# define WPP_ANNOTATE_AsioBufferObject_cpp189 WPP_ANNOTATE_AsioBufferObject_cpp189_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp189
+# define WPP_ANNOTATE_AsioBufferObject_cpp189 WPP_ANNOTATE_AsioBufferObject_cpp189_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp189", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp189
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp207_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 23 \"%0ERROR: File:%10!s!, Line:%11!d! - status=%12!s!\" //   LEVEL=LEVEL_ERROR FLAGS=FLAG_DEVICE_ALL IFRLOG=g_AudioDspLog RETSTATUS=status" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp207_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 23 \"%0ERROR: File:%10!s!, Line:%11!d! - status=%12!s!\" //   LEVEL=LEVEL_ERROR FLAGS=FLAG_DEVICE_ALL IFRLOG=g_AudioDspLog RETSTATUS=status" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp207
+# define WPP_ANNOTATE_AsioBufferObject_cpp207 WPP_ANNOTATE_AsioBufferObject_cpp207_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemString -- 10" , \
+    L"Arg, ItemLong -- 11" , \
+    L"Arg, ItemNTSTATUS -- 12" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp207
+# define WPP_ANNOTATE_AsioBufferObject_cpp207 WPP_ANNOTATE_AsioBufferObject_cpp207_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp207", \
+    L"{", \
+    L"__FILE__, ItemString -- 10" , \
+    L"__LINE__, ItemLong -- 11" , \
+    L"__statusRet, ItemNTSTATUS -- 12" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp207
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp228_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 24 \"%0ERROR: File:%10!s!, Line:%11!d! - status=%12!s!\" //   LEVEL=LEVEL_ERROR FLAGS=FLAG_DEVICE_ALL IFRLOG=g_AudioDspLog RETSTATUS=status" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp228_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 24 \"%0ERROR: File:%10!s!, Line:%11!d! - status=%12!s!\" //   LEVEL=LEVEL_ERROR FLAGS=FLAG_DEVICE_ALL IFRLOG=g_AudioDspLog RETSTATUS=status" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp228
+# define WPP_ANNOTATE_AsioBufferObject_cpp228 WPP_ANNOTATE_AsioBufferObject_cpp228_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemString -- 10" , \
+    L"Arg, ItemLong -- 11" , \
+    L"Arg, ItemNTSTATUS -- 12" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp228
+# define WPP_ANNOTATE_AsioBufferObject_cpp228 WPP_ANNOTATE_AsioBufferObject_cpp228_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp228", \
+    L"{", \
+    L"__FILE__, ItemString -- 10" , \
+    L"__LINE__, ItemLong -- 11" , \
+    L"__statusRet, ItemNTSTATUS -- 12" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp228
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp266_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 25 \"%0invalid buffer length, IN %10!u!, req %11!u!, OUT %12!u!, req %13!u!\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp266_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 25 \"%0invalid buffer length, IN %10!u!, req %11!u!, OUT %12!u!, req %13!u!\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp266
+# define WPP_ANNOTATE_AsioBufferObject_cpp266 WPP_ANNOTATE_AsioBufferObject_cpp266_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemLong -- 10" , \
+    L"Arg, ItemLong -- 11" , \
+    L"Arg, ItemLong -- 12" , \
+    L"Arg, ItemLong -- 13" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp266
+# define WPP_ANNOTATE_AsioBufferObject_cpp266 WPP_ANNOTATE_AsioBufferObject_cpp266_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp266", \
+    L"{", \
+    L"m_recHeader->HeaderLength + requiredRecBufferLength, ItemLong -- 10" , \
+    L"recBufferLength - recBufferOffset, ItemLong -- 11" , \
+    L"m_playHeader->HeaderLength + requiredPlayBufferLength, ItemLong -- 12" , \
+    L"playBufferLength - playBufferOffset, ItemLong -- 13" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp266
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp267_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 26 \"%0playHdr PeriodSamples %10!u!, RecChannels %11!u!, PlayChannels %12!u!, bytesPerSample %13!u!\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp267_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 26 \"%0playHdr PeriodSamples %10!u!, RecChannels %11!u!, PlayChannels %12!u!, bytesPerSample %13!u!\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp267
+# define WPP_ANNOTATE_AsioBufferObject_cpp267 WPP_ANNOTATE_AsioBufferObject_cpp267_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemLong -- 10" , \
+    L"Arg, ItemLong -- 11" , \
+    L"Arg, ItemLong -- 12" , \
+    L"Arg, ItemLong -- 13" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp267
+# define WPP_ANNOTATE_AsioBufferObject_cpp267 WPP_ANNOTATE_AsioBufferObject_cpp267_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp267", \
+    L"{", \
+    L"m_playHeader->PeriodSamples, ItemLong -- 10" , \
+    L"m_playHeader->RecChannels, ItemLong -- 11" , \
+    L"m_playHeader->PlayChannels, ItemLong -- 12" , \
+    L"bytesPerSample, ItemLong -- 13" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp267
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp326_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 27 \"%0failed to reference notification event handle\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp326_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 27 \"%0failed to reference notification event handle\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp326
+# define WPP_ANNOTATE_AsioBufferObject_cpp326 WPP_ANNOTATE_AsioBufferObject_cpp326_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp326
+# define WPP_ANNOTATE_AsioBufferObject_cpp326 WPP_ANNOTATE_AsioBufferObject_cpp326_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp326", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp326
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp327_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 28 \"%0ERROR: File:%10!s!, Line:%11!d! - status=%12!s!\" //   LEVEL=LEVEL_ERROR FLAGS=FLAG_DEVICE_ALL IFRLOG=g_AudioDspLog RETSTATUS=status" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp327_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 28 \"%0ERROR: File:%10!s!, Line:%11!d! - status=%12!s!\" //   LEVEL=LEVEL_ERROR FLAGS=FLAG_DEVICE_ALL IFRLOG=g_AudioDspLog RETSTATUS=status" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp327
+# define WPP_ANNOTATE_AsioBufferObject_cpp327 WPP_ANNOTATE_AsioBufferObject_cpp327_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemString -- 10" , \
+    L"Arg, ItemLong -- 11" , \
+    L"Arg, ItemNTSTATUS -- 12" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp327
+# define WPP_ANNOTATE_AsioBufferObject_cpp327 WPP_ANNOTATE_AsioBufferObject_cpp327_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp327", \
+    L"{", \
+    L"__FILE__, ItemString -- 10" , \
+    L"__LINE__, ItemLong -- 11" , \
+    L"__statusRet, ItemNTSTATUS -- 12" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp327
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp370_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 29 \"%0failed to reference output ready event handle\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp370_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 29 \"%0failed to reference output ready event handle\" //   LEVEL=TRACE_LEVEL_ERROR FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp370
+# define WPP_ANNOTATE_AsioBufferObject_cpp370 WPP_ANNOTATE_AsioBufferObject_cpp370_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp370
+# define WPP_ANNOTATE_AsioBufferObject_cpp370 WPP_ANNOTATE_AsioBufferObject_cpp370_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp370", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp370
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp371_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 30 \"%0ERROR: File:%10!s!, Line:%11!d! - status=%12!s!\" //   LEVEL=LEVEL_ERROR FLAGS=FLAG_DEVICE_ALL IFRLOG=g_AudioDspLog RETSTATUS=status" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp371_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 30 \"%0ERROR: File:%10!s!, Line:%11!d! - status=%12!s!\" //   LEVEL=LEVEL_ERROR FLAGS=FLAG_DEVICE_ALL IFRLOG=g_AudioDspLog RETSTATUS=status" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp371
+# define WPP_ANNOTATE_AsioBufferObject_cpp371 WPP_ANNOTATE_AsioBufferObject_cpp371_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemString -- 10" , \
+    L"Arg, ItemLong -- 11" , \
+    L"Arg, ItemNTSTATUS -- 12" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp371
+# define WPP_ANNOTATE_AsioBufferObject_cpp371 WPP_ANNOTATE_AsioBufferObject_cpp371_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp371", \
+    L"{", \
+    L"__FILE__, ItemString -- 10" , \
+    L"__LINE__, ItemLong -- 11" , \
+    L"__statusRet, ItemNTSTATUS -- 12" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp371
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp379_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 31 \"%0%!FUNC! Exit\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_DEVICE" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp379_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 31 \"%0%!FUNC! Exit\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_DEVICE" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp379
+# define WPP_ANNOTATE_AsioBufferObject_cpp379 WPP_ANNOTATE_AsioBufferObject_cpp379_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp379
+# define WPP_ANNOTATE_AsioBufferObject_cpp379 WPP_ANNOTATE_AsioBufferObject_cpp379_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp379", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp379
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp392_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 32 \"%0%!FUNC! Entry\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp392_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 32 \"%0%!FUNC! Entry\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp392
+# define WPP_ANNOTATE_AsioBufferObject_cpp392 WPP_ANNOTATE_AsioBufferObject_cpp392_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp392
+# define WPP_ANNOTATE_AsioBufferObject_cpp392 WPP_ANNOTATE_AsioBufferObject_cpp392_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp392", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp392
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp407_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 33 \"%0%!FUNC! Exit\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp407_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 33 \"%0%!FUNC! Exit\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp407
+# define WPP_ANNOTATE_AsioBufferObject_cpp407 WPP_ANNOTATE_AsioBufferObject_cpp407_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp407
+# define WPP_ANNOTATE_AsioBufferObject_cpp407 WPP_ANNOTATE_AsioBufferObject_cpp407_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp407", \
+    L"{", \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp407
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp815_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 34 \"%0 - asio notify: write position %10!I64u!, read position %11!I64u!, notify position %12!I64u!, buffer period %13!u!, current time %14!I64u! us, last asio notify %15!I64u! us, notify count %16!I64u!\" //   LEVEL=TRACE_LEVEL_VERBOSE FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp815_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 34 \"%0 - asio notify: write position %10!I64u!, read position %11!I64u!, notify position %12!I64u!, buffer period %13!u!, current time %14!I64u! us, last asio notify %15!I64u! us, notify count %16!I64u!\" //   LEVEL=TRACE_LEVEL_VERBOSE FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp815
+# define WPP_ANNOTATE_AsioBufferObject_cpp815 WPP_ANNOTATE_AsioBufferObject_cpp815_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemULongLong -- 10" , \
+    L"Arg, ItemULongLong -- 11" , \
+    L"Arg, ItemULongLong -- 12" , \
+    L"Arg, ItemLong -- 13" , \
+    L"Arg, ItemULongLong -- 14" , \
+    L"Arg, ItemULongLong -- 15" , \
+    L"Arg, ItemULongLong -- 16" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp815
+# define WPP_ANNOTATE_AsioBufferObject_cpp815 WPP_ANNOTATE_AsioBufferObject_cpp815_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp815", \
+    L"{", \
+    L"m_writePosition, ItemULongLong -- 10" , \
+    L"m_readPosition, ItemULongLong -- 11" , \
+    L"m_notifyPosition, ItemULongLong -- 12" , \
+    L"m_bufferPeriod, ItemLong -- 13" , \
+    L"currentTimePCUs, ItemULongLong -- 14" , \
+    L"lastAsioNotifyPCUs, ItemULongLong -- 15" , \
+    L"asioNotifyCount, ItemULongLong -- 16" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp815
+
+#ifdef WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp831_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    WPP_GUID_WTEXT WPP_USER_MSG_GUID L"uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 35 \"%0dropout detected. Callback period now %10!d!us, last %11!d!us, threshold %12!d!us, processing %13!d!us.\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#else // WPP_USER_MSG_GUID
+# define WPP_ANNOTATE_AsioBufferObject_cpp831_FINAL(P, File, Name, ...) __annotation( \
+    L ## P, \
+    L"05d73123-9a3f-3c4b-1317-200937f62657 uac2-driver // SRC=" _WPPW(File) \
+    L" MJ= MN=", \
+    L"#typev " _WPPW(Name) \
+    L" 35 \"%0dropout detected. Callback period now %10!d!us, last %11!d!us, threshold %12!d!us, processing %13!d!us.\" //   LEVEL=TRACE_LEVEL_INFORMATION FLAGS=TRACE_ASIO" \
+    WPP_FUNC_NAME, \
+    __VA_ARGS__)
+#endif // WPP_USER_MSG_GUID
+
+#ifdef WPP_PUBLIC_ANNOT_AsioBufferObject_cpp831
+# define WPP_ANNOTATE_AsioBufferObject_cpp831 WPP_ANNOTATE_AsioBufferObject_cpp831_FINAL( \
+    "TMF:", \
+    "Unknown_cxx00", \
+    "Unknown_cxx00", \
+    L"{", \
+    L"Arg, ItemLong -- 10" , \
+    L"Arg, ItemLong -- 11" , \
+    L"Arg, ItemLong -- 12" , \
+    L"Arg, ItemLong -- 13" , \
+    L"}", \
+    L"PUBLIC_TMF:")
+# ifndef WPP_PUBLIC_TMC
+#  define WPP_PUBLIC_TMC // Adds "PUBLIC_TMF:" to the control guid annotation
+# endif
+#else // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp831
+# define WPP_ANNOTATE_AsioBufferObject_cpp831 WPP_ANNOTATE_AsioBufferObject_cpp831_FINAL( \
+    "TMF:", \
+    "AsioBufferObject.cpp", \
+    "AsioBufferObject_cpp831", \
+    L"{", \
+    L"curAsioMeasuredPeriodUs, ItemLong -- 10" , \
+    L"prevAsioMeasuredPeriodUs, ItemLong -- 11" , \
+    L"thresholdUs, ItemLong -- 12" , \
+    L"curClientProcessingTimeUs, ItemLong -- 13" , \
+    L"}")
+#endif // WPP_PUBLIC_ANNOT_AsioBufferObject_cpp831
+
+# define WPP_ANNOTATE(x) WPP_ANNOTATE_ ## x,
+
+#endif // WPP_NO_ANNOTATIONS
+
+#ifdef WPP_USER_MSG_GUID
+
+#define WPP_LOCAL_MSG_VAR(Guid) WPP_XGLUE3(WPP_, WPP_GUID_NORM Guid, _Traceguids)
+
+#define WPP_LOCAL_MSG_GUID(Guid) \
+extern const __declspec(selectany) GUID WPP_LOCAL_MSG_VAR(Guid)[] = { WPP_GUID_STRUCT Guid }
+
+WPP_LOCAL_MSG_GUID(WPP_USER_MSG_GUID);
+#define WPP_LOCAL_TraceGuids WPP_LOCAL_MSG_VAR(WPP_USER_MSG_GUID)
+
+#else // WPP_USER_MSG_GUID
+
+#define WPP_LOCAL_TraceGuids WPP_05d731239a3f3c4b1317200937f62657_Traceguids
+extern const __declspec(selectany) GUID WPP_LOCAL_TraceGuids[] = { {0x05d73123,0x9a3f,0x3c4b,{0x13,0x17,0x20,0x09,0x37,0xf6,0x26,0x57}}, };
+
+#endif // WPP_USER_MSG_GUID
+
+#ifndef WPP_ALREADY_INCLUDED
+
+#ifndef WPP_TRACE_OPTIONS
+enum { WPP_TRACE_OPTIONS =
+    TRACE_MESSAGE_SEQUENCE   |
+    TRACE_MESSAGE_GUID       |
+    TRACE_MESSAGE_SYSTEMINFO |
+    TRACE_MESSAGE_TIMESTAMP };
+#endif // WPP_TRACE_OPTIONS
+
+#ifndef WPP_LOGPAIR_SEPARATOR
+# define WPP_LOGPAIR_SEPARATOR ,
+#endif
+#ifndef WPP_LOGPAIR_SIZET
+# define WPP_LOGPAIR_SIZET SIZE_T
+#endif
+#ifndef WPP_LOGPAIR
+# define WPP_LOGPAIR(_Size, _Addr)     (_Addr),((WPP_LOGPAIR_SIZET)(_Size))WPP_LOGPAIR_SEPARATOR
+#endif
+
+#define WPP_LOGTYPEVAL(_Type, _Value) WPP_LOGPAIR(sizeof(_Type), &(_Value))
+#define WPP_LOGTYPEPTR(_Value)        WPP_LOGPAIR(sizeof(*(_Value)), (_Value))
+
+// Marshalling macros.
+
+#ifndef WPP_LOGASTR
+# ifdef WPP_CHECK_FOR_NULL_STRING
+#  define WPP_LOGASTR(_value)  WPP_LOGPAIR( \
+    (_value) ? strlen(_value) + 1 : 5, \
+    (_value) ?       (_value)     : "NULL" )
+# else // WPP_CHECK_FOR_NULL_STRING
+#  define WPP_LOGASTR(_value)  WPP_LOGPAIR( \
+    strlen(_value) + 1, \
+    _value )
+# endif // WPP_CHECK_FOR_NULL_STRING
+#endif // WPP_LOGASTR
+
+#ifndef WPP_LOGWSTR
+# ifdef WPP_CHECK_FOR_NULL_STRING
+#  define WPP_LOGWSTR(_value)  WPP_LOGPAIR( \
+    ((_value) ? wcslen(_value) + 1 : 5) * sizeof(WCHAR), \
+     (_value) ?       (_value)     : L"NULL" )
+# else // WPP_CHECK_FOR_NULL_STRING
+#  define WPP_LOGWSTR(_value)  WPP_LOGPAIR( \
+    (wcslen(_value) + 1) * sizeof(WCHAR), \
+    _value )
+# endif // WPP_CHECK_FOR_NULL_STRING
+#endif // WPP_LOGWSTR
+
+#ifndef WPP_LOGPGUID
+# define WPP_LOGPGUID(_value) WPP_LOGPAIR( sizeof(GUID), (_value) )
+#endif // WPP_LOGPGUID
+
+#ifndef WPP_LOGPSID
+# ifdef WPP_CHECK_FOR_NULL_STRING
+# define WPP_LOGPSID(_value)  WPP_LOGPAIR( \
+    (_value) && WPP_IsValidSid(_value) ? WPP_GetLengthSid(_value) : 5, \
+    (_value) && WPP_IsValidSid(_value) ? (_value) : (void const*)"NULL")
+# else // WPP_CHECK_FOR_NULL_STRING
+# define WPP_LOGPSID(_value)  WPP_LOGPAIR( \
+    WPP_GetLengthSid(_value), \
+    (_value) )
+#endif // WPP_CHECK_FOR_NULL_STRING
+#endif // WPP_LOGPSID
+
+#ifndef WPP_LOGCSTR
+# define WPP_LOGCSTR(_x) \
+    WPP_LOGPAIR( sizeof(USHORT),      &(_x).Length ) \
+    WPP_LOGPAIR( (USHORT)(_x).Length, (USHORT)(_x).Length ? (_x).Buffer : "" )
+#endif // WPP_LOGCSTR
+
+#ifndef WPP_LOGUSTR
+# define WPP_LOGUSTR(_x) \
+    WPP_LOGPAIR( sizeof(USHORT),      &(_x).Length ) \
+    WPP_LOGPAIR( (USHORT)(_x).Length, (USHORT)(_x).Length ? (_x).Buffer : L"" )
+#endif // WPP_LOGUSTR
+
+#ifndef WPP_LOGPUSTR
+#ifdef WPP_CHECK_FOR_NULL_STRING
+# define WPP_LOGPUSTR(_x) \
+    WPP_LOGPAIR( \
+        sizeof(USHORT), \
+        (_x) ? &(_x)->Length : (void const*)L"\x08" ) \
+    WPP_LOGPAIR( \
+        (_x)                         ? (USHORT)(_x)->Length : 0x08, \
+        (_x) && (USHORT)(_x)->Length ? (_x)->Buffer         : L"NULL" )
+#else // WPP_CHECK_FOR_NULL_STRING
+# define WPP_LOGPUSTR(_x) WPP_LOGUSTR(*(_x))
+#endif // WPP_CHECK_FOR_NULL_STRING
+#endif // WPP_LOGPUSTR
+
+#ifndef WPP_LOGPCSTR
+#ifdef WPP_CHECK_FOR_NULL_STRING
+# define WPP_LOGPCSTR(_x) \
+    WPP_LOGPAIR( \
+        sizeof(USHORT), \
+        (_x) ? &(_x)->Length : (void const*)L"\x04" ) \
+    WPP_LOGPAIR( \
+        (_x)                         ? (USHORT)(_x)->Length : 0x04, \
+        (_x) && (USHORT)(_x)->Length ? (_x)->Buffer         : "NULL" )
+#else // WPP_CHECK_FOR_NULL_STRING
+# define WPP_LOGPCSTR(_x) WPP_LOGCSTR(*(_x))
+#endif // WPP_CHECK_FOR_NULL_STRING
+#endif // WPP_LOGPCSTR
+
+#ifdef __cplusplus
+
+#ifndef WPP_POINTER_TO_USHORT
+struct WppPointerToUshort
+{
+    USHORT m_val;
+    WPP_FORCEINLINE explicit WppPointerToUshort(USHORT val) : m_val(val) {}
+    WPP_FORCEINLINE USHORT const* get() const { return &m_val; }
+};
+#define WPP_POINTER_TO_USHORT(val) (WppPointerToUshort((val)).get())
+#endif // WPP_POINTER_TO_USHORT
+
+#ifndef WPP_LOGCPPSTR
+#define WPP_LOGCPPSTR(_value) \
+    WPP_LOGPAIR( \
+        sizeof(USHORT), \
+        WPP_POINTER_TO_USHORT((USHORT)((_value).size()*sizeof(*(_value).c_str()))) ) \
+    WPP_LOGPAIR( \
+        (USHORT)((_value).size()*sizeof(*(_value).c_str())), \
+        (_value).c_str() )
+#endif // WPP_LOGCPPSTR
+
+#ifndef WPP_LOGCPPVEC
+#define WPP_LOGCPPVEC(_value) \
+    WPP_LOGPAIR( \
+        sizeof(USHORT), \
+        WPP_POINTER_TO_USHORT((USHORT)((_value).size()*sizeof(*(_value).data()))) ) \
+    WPP_LOGPAIR( \
+        (USHORT)((_value).size()*sizeof(*(_value).data())), \
+        (_value).data() + ((_value).data() == NULL) )
+#endif // WPP_LOGCPPVEC
+
+#endif // __cplusplus
+
+#ifndef WPP_BINARY_def
+# define WPP_BINARY_def
+typedef struct tagWPP_BINARY
+{
+    _Field_size_bytes_(Length) void const* Buffer;
+    USHORT Length;
+} WPP_BINARY;
+#endif // WPP_BINARY_def
+
+#ifndef WPP_BINARY_func
+# define WPP_BINARY_func
+WPP_FORCEINLINE WPP_BINARY
+WppBinary(_In_reads_bytes_(Length) void const* Buffer, USHORT Length)
+{
+    WPP_BINARY data;
+    data.Buffer = Buffer;
+    data.Length = Length;
+    return data;
+}
+#endif // WPP_BINARY_func
+
+#endif // WPP_ALREADY_INCLUDED
+
+#ifndef WPP_ENABLE_FLAG_BIT
+#define WPP_ENABLE_FLAG_BIT(flag) (WPP_CB[((flag) >> 16)].Control).Flags[( (0xFFFF & ((flag)-1) ) / 32)] & (1 << ( ((flag)-1) & 31 ))
+#endif
+
+#ifndef WPP_SF__def
+# define WPP_SF__def
+WPP_INLINE void WPP_SF_(WPP_LOGGER_ARG unsigned short id, LPCGUID TraceGuid)
+{ WPP_TRACE(WPP_GET_LOGGER, WPP_TRACE_OPTIONS, (LPGUID)TraceGuid, id,  (void*)0); }
+#endif // WPP_SF__def
+
+#if ENABLE_WPP_RECORDER
+
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_AND_TRACE_SF_ function
+//
+#ifndef WPP_RECORDER_AND_TRACE_SF__def
+#define WPP_RECORDER_AND_TRACE_SF__def
+WPP_INLINE
+VOID
+WPP_RECORDER_AND_TRACE_SF_(
+    WPP_LOGGER_ARG
+    BOOLEAN  wppEnabled,
+    BOOLEAN  recorderEnabled,
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    
+    )
+{
+    if (wppEnabled)
+    {
+        WPP_TRACE( WPP_GET_LOGGER,
+                   WPP_TRACE_OPTIONS,
+                   (LPGUID)traceGuid,
+                   id,
+                    (void*)0);
+    }
+
+    if (recorderEnabled)
+    {
+        WPP_RECORDER( AutoLogContext, level, flags, (LPGUID) traceGuid, id,  (void*)0 );
+    }
+}
+#endif // WPP_RECORDER_AND_TRACE_SF__def
+
+#else  // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_SP_ function
+//
+#ifndef WPP_RECORDER_SF__def
+#define WPP_RECORDER_SF__def
+WPP_INLINE
+VOID
+WPP_RECORDER_SF_(
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    
+    )
+{
+    if (WPP_ENABLE_FLAG_BIT(flags) &&
+        (WPP_CONTROL(flags).Level >= level))
+    {
+        WPP_TRACE(
+            WPP_CONTROL(flags).Logger,
+            WPP_TRACE_OPTIONS,
+            (LPGUID)traceGuid,
+            id,
+             (void*)0);
+    }
+
+    WPP_RECORDER(AutoLogContext, level, flags, (LPGUID) traceGuid, id,  (void*)0);
+}
+#endif // WPP_RECORDER_SF__def
+
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+#endif // ENABLE_WPP_RECORDER
+
+#ifndef WPP_SF_DDDD_def
+# define WPP_SF_DDDD_def
+WPP_INLINE void WPP_SF_DDDD(WPP_LOGGER_ARG unsigned short id, LPCGUID TraceGuid, unsigned int _a1, unsigned int _a2, unsigned int _a3, unsigned int _a4)
+{ WPP_TRACE(WPP_GET_LOGGER, WPP_TRACE_OPTIONS, (LPGUID)TraceGuid, id, WPP_LOGTYPEVAL(unsigned int, _a1) WPP_LOGTYPEVAL(unsigned int, _a2) WPP_LOGTYPEVAL(unsigned int, _a3) WPP_LOGTYPEVAL(unsigned int, _a4)  (void*)0); }
+#endif // WPP_SF_DDDD_def
+
+#if ENABLE_WPP_RECORDER
+
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_AND_TRACE_SF_DDDD function
+//
+#ifndef WPP_RECORDER_AND_TRACE_SF_DDDD_def
+#define WPP_RECORDER_AND_TRACE_SF_DDDD_def
+WPP_INLINE
+VOID
+WPP_RECORDER_AND_TRACE_SF_DDDD(
+    WPP_LOGGER_ARG
+    BOOLEAN  wppEnabled,
+    BOOLEAN  recorderEnabled,
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , unsigned int _a1, unsigned int _a2, unsigned int _a3, unsigned int _a4
+    )
+{
+    if (wppEnabled)
+    {
+        WPP_TRACE( WPP_GET_LOGGER,
+                   WPP_TRACE_OPTIONS,
+                   (LPGUID)traceGuid,
+                   id,
+                   WPP_LOGTYPEVAL(unsigned int, _a1) WPP_LOGTYPEVAL(unsigned int, _a2) WPP_LOGTYPEVAL(unsigned int, _a3) WPP_LOGTYPEVAL(unsigned int, _a4)  (void*)0);
+    }
+
+    if (recorderEnabled)
+    {
+        WPP_RECORDER( AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGTYPEVAL(unsigned int, _a1) WPP_LOGTYPEVAL(unsigned int, _a2) WPP_LOGTYPEVAL(unsigned int, _a3) WPP_LOGTYPEVAL(unsigned int, _a4)  (void*)0 );
+    }
+}
+#endif // WPP_RECORDER_AND_TRACE_SF_DDDD_def
+
+#else  // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_SP_DDDD function
+//
+#ifndef WPP_RECORDER_SF_DDDD_def
+#define WPP_RECORDER_SF_DDDD_def
+WPP_INLINE
+VOID
+WPP_RECORDER_SF_DDDD(
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , unsigned int _a1, unsigned int _a2, unsigned int _a3, unsigned int _a4
+    )
+{
+    if (WPP_ENABLE_FLAG_BIT(flags) &&
+        (WPP_CONTROL(flags).Level >= level))
+    {
+        WPP_TRACE(
+            WPP_CONTROL(flags).Logger,
+            WPP_TRACE_OPTIONS,
+            (LPGUID)traceGuid,
+            id,
+            WPP_LOGTYPEVAL(unsigned int, _a1) WPP_LOGTYPEVAL(unsigned int, _a2) WPP_LOGTYPEVAL(unsigned int, _a3) WPP_LOGTYPEVAL(unsigned int, _a4)  (void*)0);
+    }
+
+    WPP_RECORDER(AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGTYPEVAL(unsigned int, _a1) WPP_LOGTYPEVAL(unsigned int, _a2) WPP_LOGTYPEVAL(unsigned int, _a3) WPP_LOGTYPEVAL(unsigned int, _a4)  (void*)0);
+}
+#endif // WPP_RECORDER_SF_DDDD_def
+
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+#endif // ENABLE_WPP_RECORDER
+
+#ifndef WPP_SF_IIIDIII_def
+# define WPP_SF_IIIDIII_def
+WPP_INLINE void WPP_SF_IIIDIII(WPP_LOGGER_ARG unsigned short id, LPCGUID TraceGuid, unsigned __int64 _a1, unsigned __int64 _a2, unsigned __int64 _a3, unsigned int _a4, unsigned __int64 _a5, unsigned __int64 _a6, unsigned __int64 _a7)
+{ WPP_TRACE(WPP_GET_LOGGER, WPP_TRACE_OPTIONS, (LPGUID)TraceGuid, id, WPP_LOGTYPEVAL(unsigned __int64, _a1) WPP_LOGTYPEVAL(unsigned __int64, _a2) WPP_LOGTYPEVAL(unsigned __int64, _a3) WPP_LOGTYPEVAL(unsigned int, _a4) WPP_LOGTYPEVAL(unsigned __int64, _a5) WPP_LOGTYPEVAL(unsigned __int64, _a6) WPP_LOGTYPEVAL(unsigned __int64, _a7)  (void*)0); }
+#endif // WPP_SF_IIIDIII_def
+
+#if ENABLE_WPP_RECORDER
+
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_AND_TRACE_SF_IIIDIII function
+//
+#ifndef WPP_RECORDER_AND_TRACE_SF_IIIDIII_def
+#define WPP_RECORDER_AND_TRACE_SF_IIIDIII_def
+WPP_INLINE
+VOID
+WPP_RECORDER_AND_TRACE_SF_IIIDIII(
+    WPP_LOGGER_ARG
+    BOOLEAN  wppEnabled,
+    BOOLEAN  recorderEnabled,
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , unsigned __int64 _a1, unsigned __int64 _a2, unsigned __int64 _a3, unsigned int _a4, unsigned __int64 _a5, unsigned __int64 _a6, unsigned __int64 _a7
+    )
+{
+    if (wppEnabled)
+    {
+        WPP_TRACE( WPP_GET_LOGGER,
+                   WPP_TRACE_OPTIONS,
+                   (LPGUID)traceGuid,
+                   id,
+                   WPP_LOGTYPEVAL(unsigned __int64, _a1) WPP_LOGTYPEVAL(unsigned __int64, _a2) WPP_LOGTYPEVAL(unsigned __int64, _a3) WPP_LOGTYPEVAL(unsigned int, _a4) WPP_LOGTYPEVAL(unsigned __int64, _a5) WPP_LOGTYPEVAL(unsigned __int64, _a6) WPP_LOGTYPEVAL(unsigned __int64, _a7)  (void*)0);
+    }
+
+    if (recorderEnabled)
+    {
+        WPP_RECORDER( AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGTYPEVAL(unsigned __int64, _a1) WPP_LOGTYPEVAL(unsigned __int64, _a2) WPP_LOGTYPEVAL(unsigned __int64, _a3) WPP_LOGTYPEVAL(unsigned int, _a4) WPP_LOGTYPEVAL(unsigned __int64, _a5) WPP_LOGTYPEVAL(unsigned __int64, _a6) WPP_LOGTYPEVAL(unsigned __int64, _a7)  (void*)0 );
+    }
+}
+#endif // WPP_RECORDER_AND_TRACE_SF_IIIDIII_def
+
+#else  // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_SP_IIIDIII function
+//
+#ifndef WPP_RECORDER_SF_IIIDIII_def
+#define WPP_RECORDER_SF_IIIDIII_def
+WPP_INLINE
+VOID
+WPP_RECORDER_SF_IIIDIII(
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , unsigned __int64 _a1, unsigned __int64 _a2, unsigned __int64 _a3, unsigned int _a4, unsigned __int64 _a5, unsigned __int64 _a6, unsigned __int64 _a7
+    )
+{
+    if (WPP_ENABLE_FLAG_BIT(flags) &&
+        (WPP_CONTROL(flags).Level >= level))
+    {
+        WPP_TRACE(
+            WPP_CONTROL(flags).Logger,
+            WPP_TRACE_OPTIONS,
+            (LPGUID)traceGuid,
+            id,
+            WPP_LOGTYPEVAL(unsigned __int64, _a1) WPP_LOGTYPEVAL(unsigned __int64, _a2) WPP_LOGTYPEVAL(unsigned __int64, _a3) WPP_LOGTYPEVAL(unsigned int, _a4) WPP_LOGTYPEVAL(unsigned __int64, _a5) WPP_LOGTYPEVAL(unsigned __int64, _a6) WPP_LOGTYPEVAL(unsigned __int64, _a7)  (void*)0);
+    }
+
+    WPP_RECORDER(AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGTYPEVAL(unsigned __int64, _a1) WPP_LOGTYPEVAL(unsigned __int64, _a2) WPP_LOGTYPEVAL(unsigned __int64, _a3) WPP_LOGTYPEVAL(unsigned int, _a4) WPP_LOGTYPEVAL(unsigned __int64, _a5) WPP_LOGTYPEVAL(unsigned __int64, _a6) WPP_LOGTYPEVAL(unsigned __int64, _a7)  (void*)0);
+}
+#endif // WPP_RECORDER_SF_IIIDIII_def
+
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+#endif // ENABLE_WPP_RECORDER
+
+#ifndef WPP_SF_dddd_def
+# define WPP_SF_dddd_def
+WPP_INLINE void WPP_SF_dddd(WPP_LOGGER_ARG unsigned short id, LPCGUID TraceGuid, signed int _a1, signed int _a2, signed int _a3, signed int _a4)
+{ WPP_TRACE(WPP_GET_LOGGER, WPP_TRACE_OPTIONS, (LPGUID)TraceGuid, id, WPP_LOGTYPEVAL(signed int, _a1) WPP_LOGTYPEVAL(signed int, _a2) WPP_LOGTYPEVAL(signed int, _a3) WPP_LOGTYPEVAL(signed int, _a4)  (void*)0); }
+#endif // WPP_SF_dddd_def
+
+#if ENABLE_WPP_RECORDER
+
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_AND_TRACE_SF_dddd function
+//
+#ifndef WPP_RECORDER_AND_TRACE_SF_dddd_def
+#define WPP_RECORDER_AND_TRACE_SF_dddd_def
+WPP_INLINE
+VOID
+WPP_RECORDER_AND_TRACE_SF_dddd(
+    WPP_LOGGER_ARG
+    BOOLEAN  wppEnabled,
+    BOOLEAN  recorderEnabled,
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , signed int _a1, signed int _a2, signed int _a3, signed int _a4
+    )
+{
+    if (wppEnabled)
+    {
+        WPP_TRACE( WPP_GET_LOGGER,
+                   WPP_TRACE_OPTIONS,
+                   (LPGUID)traceGuid,
+                   id,
+                   WPP_LOGTYPEVAL(signed int, _a1) WPP_LOGTYPEVAL(signed int, _a2) WPP_LOGTYPEVAL(signed int, _a3) WPP_LOGTYPEVAL(signed int, _a4)  (void*)0);
+    }
+
+    if (recorderEnabled)
+    {
+        WPP_RECORDER( AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGTYPEVAL(signed int, _a1) WPP_LOGTYPEVAL(signed int, _a2) WPP_LOGTYPEVAL(signed int, _a3) WPP_LOGTYPEVAL(signed int, _a4)  (void*)0 );
+    }
+}
+#endif // WPP_RECORDER_AND_TRACE_SF_dddd_def
+
+#else  // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_SP_dddd function
+//
+#ifndef WPP_RECORDER_SF_dddd_def
+#define WPP_RECORDER_SF_dddd_def
+WPP_INLINE
+VOID
+WPP_RECORDER_SF_dddd(
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , signed int _a1, signed int _a2, signed int _a3, signed int _a4
+    )
+{
+    if (WPP_ENABLE_FLAG_BIT(flags) &&
+        (WPP_CONTROL(flags).Level >= level))
+    {
+        WPP_TRACE(
+            WPP_CONTROL(flags).Logger,
+            WPP_TRACE_OPTIONS,
+            (LPGUID)traceGuid,
+            id,
+            WPP_LOGTYPEVAL(signed int, _a1) WPP_LOGTYPEVAL(signed int, _a2) WPP_LOGTYPEVAL(signed int, _a3) WPP_LOGTYPEVAL(signed int, _a4)  (void*)0);
+    }
+
+    WPP_RECORDER(AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGTYPEVAL(signed int, _a1) WPP_LOGTYPEVAL(signed int, _a2) WPP_LOGTYPEVAL(signed int, _a3) WPP_LOGTYPEVAL(signed int, _a4)  (void*)0);
+}
+#endif // WPP_RECORDER_SF_dddd_def
+
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+#endif // ENABLE_WPP_RECORDER
+
+#ifndef WPP_SF_l_def
+# define WPP_SF_l_def
+WPP_INLINE void WPP_SF_l(WPP_LOGGER_ARG unsigned short id, LPCGUID TraceGuid, signed long _a1)
+{ WPP_TRACE(WPP_GET_LOGGER, WPP_TRACE_OPTIONS, (LPGUID)TraceGuid, id, WPP_LOGTYPEVAL(signed long, _a1)  (void*)0); }
+#endif // WPP_SF_l_def
+
+#if ENABLE_WPP_RECORDER
+
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_AND_TRACE_SF_l function
+//
+#ifndef WPP_RECORDER_AND_TRACE_SF_l_def
+#define WPP_RECORDER_AND_TRACE_SF_l_def
+WPP_INLINE
+VOID
+WPP_RECORDER_AND_TRACE_SF_l(
+    WPP_LOGGER_ARG
+    BOOLEAN  wppEnabled,
+    BOOLEAN  recorderEnabled,
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , signed long _a1
+    )
+{
+    if (wppEnabled)
+    {
+        WPP_TRACE( WPP_GET_LOGGER,
+                   WPP_TRACE_OPTIONS,
+                   (LPGUID)traceGuid,
+                   id,
+                   WPP_LOGTYPEVAL(signed long, _a1)  (void*)0);
+    }
+
+    if (recorderEnabled)
+    {
+        WPP_RECORDER( AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGTYPEVAL(signed long, _a1)  (void*)0 );
+    }
+}
+#endif // WPP_RECORDER_AND_TRACE_SF_l_def
+
+#else  // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_SP_l function
+//
+#ifndef WPP_RECORDER_SF_l_def
+#define WPP_RECORDER_SF_l_def
+WPP_INLINE
+VOID
+WPP_RECORDER_SF_l(
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , signed long _a1
+    )
+{
+    if (WPP_ENABLE_FLAG_BIT(flags) &&
+        (WPP_CONTROL(flags).Level >= level))
+    {
+        WPP_TRACE(
+            WPP_CONTROL(flags).Logger,
+            WPP_TRACE_OPTIONS,
+            (LPGUID)traceGuid,
+            id,
+            WPP_LOGTYPEVAL(signed long, _a1)  (void*)0);
+    }
+
+    WPP_RECORDER(AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGTYPEVAL(signed long, _a1)  (void*)0);
+}
+#endif // WPP_RECORDER_SF_l_def
+
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+#endif // ENABLE_WPP_RECORDER
+
+#ifndef WPP_SF_lqDqlq_def
+# define WPP_SF_lqDqlq_def
+WPP_INLINE void WPP_SF_lqDqlq(WPP_LOGGER_ARG unsigned short id, LPCGUID TraceGuid, signed long _a1, const void* _a2, unsigned int _a3, const void* _a4, signed long _a5, const void* _a6)
+{ WPP_TRACE(WPP_GET_LOGGER, WPP_TRACE_OPTIONS, (LPGUID)TraceGuid, id, WPP_LOGTYPEVAL(signed long, _a1) WPP_LOGTYPEVAL(const void*, _a2) WPP_LOGTYPEVAL(unsigned int, _a3) WPP_LOGTYPEVAL(const void*, _a4) WPP_LOGTYPEVAL(signed long, _a5) WPP_LOGTYPEVAL(const void*, _a6)  (void*)0); }
+#endif // WPP_SF_lqDqlq_def
+
+#if ENABLE_WPP_RECORDER
+
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_AND_TRACE_SF_lqDqlq function
+//
+#ifndef WPP_RECORDER_AND_TRACE_SF_lqDqlq_def
+#define WPP_RECORDER_AND_TRACE_SF_lqDqlq_def
+WPP_INLINE
+VOID
+WPP_RECORDER_AND_TRACE_SF_lqDqlq(
+    WPP_LOGGER_ARG
+    BOOLEAN  wppEnabled,
+    BOOLEAN  recorderEnabled,
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , signed long _a1, const void* _a2, unsigned int _a3, const void* _a4, signed long _a5, const void* _a6
+    )
+{
+    if (wppEnabled)
+    {
+        WPP_TRACE( WPP_GET_LOGGER,
+                   WPP_TRACE_OPTIONS,
+                   (LPGUID)traceGuid,
+                   id,
+                   WPP_LOGTYPEVAL(signed long, _a1) WPP_LOGTYPEVAL(const void*, _a2) WPP_LOGTYPEVAL(unsigned int, _a3) WPP_LOGTYPEVAL(const void*, _a4) WPP_LOGTYPEVAL(signed long, _a5) WPP_LOGTYPEVAL(const void*, _a6)  (void*)0);
+    }
+
+    if (recorderEnabled)
+    {
+        WPP_RECORDER( AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGTYPEVAL(signed long, _a1) WPP_LOGTYPEVAL(const void*, _a2) WPP_LOGTYPEVAL(unsigned int, _a3) WPP_LOGTYPEVAL(const void*, _a4) WPP_LOGTYPEVAL(signed long, _a5) WPP_LOGTYPEVAL(const void*, _a6)  (void*)0 );
+    }
+}
+#endif // WPP_RECORDER_AND_TRACE_SF_lqDqlq_def
+
+#else  // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_SP_lqDqlq function
+//
+#ifndef WPP_RECORDER_SF_lqDqlq_def
+#define WPP_RECORDER_SF_lqDqlq_def
+WPP_INLINE
+VOID
+WPP_RECORDER_SF_lqDqlq(
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , signed long _a1, const void* _a2, unsigned int _a3, const void* _a4, signed long _a5, const void* _a6
+    )
+{
+    if (WPP_ENABLE_FLAG_BIT(flags) &&
+        (WPP_CONTROL(flags).Level >= level))
+    {
+        WPP_TRACE(
+            WPP_CONTROL(flags).Logger,
+            WPP_TRACE_OPTIONS,
+            (LPGUID)traceGuid,
+            id,
+            WPP_LOGTYPEVAL(signed long, _a1) WPP_LOGTYPEVAL(const void*, _a2) WPP_LOGTYPEVAL(unsigned int, _a3) WPP_LOGTYPEVAL(const void*, _a4) WPP_LOGTYPEVAL(signed long, _a5) WPP_LOGTYPEVAL(const void*, _a6)  (void*)0);
+    }
+
+    WPP_RECORDER(AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGTYPEVAL(signed long, _a1) WPP_LOGTYPEVAL(const void*, _a2) WPP_LOGTYPEVAL(unsigned int, _a3) WPP_LOGTYPEVAL(const void*, _a4) WPP_LOGTYPEVAL(signed long, _a5) WPP_LOGTYPEVAL(const void*, _a6)  (void*)0);
+}
+#endif // WPP_RECORDER_SF_lqDqlq_def
+
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+#endif // ENABLE_WPP_RECORDER
+
+#ifndef WPP_SF_s_def
+# define WPP_SF_s_def
+WPP_INLINE void WPP_SF_s(WPP_LOGGER_ARG unsigned short id, LPCGUID TraceGuid, LPCSTR _a1)
+{ WPP_TRACE(WPP_GET_LOGGER, WPP_TRACE_OPTIONS, (LPGUID)TraceGuid, id, WPP_LOGASTR(_a1)  (void*)0); }
+#endif // WPP_SF_s_def
+
+#if ENABLE_WPP_RECORDER
+
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_AND_TRACE_SF_s function
+//
+#ifndef WPP_RECORDER_AND_TRACE_SF_s_def
+#define WPP_RECORDER_AND_TRACE_SF_s_def
+WPP_INLINE
+VOID
+WPP_RECORDER_AND_TRACE_SF_s(
+    WPP_LOGGER_ARG
+    BOOLEAN  wppEnabled,
+    BOOLEAN  recorderEnabled,
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , LPCSTR _a1
+    )
+{
+    if (wppEnabled)
+    {
+        WPP_TRACE( WPP_GET_LOGGER,
+                   WPP_TRACE_OPTIONS,
+                   (LPGUID)traceGuid,
+                   id,
+                   WPP_LOGASTR(_a1)  (void*)0);
+    }
+
+    if (recorderEnabled)
+    {
+        WPP_RECORDER( AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGASTR(_a1)  (void*)0 );
+    }
+}
+#endif // WPP_RECORDER_AND_TRACE_SF_s_def
+
+#else  // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_SP_s function
+//
+#ifndef WPP_RECORDER_SF_s_def
+#define WPP_RECORDER_SF_s_def
+WPP_INLINE
+VOID
+WPP_RECORDER_SF_s(
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , LPCSTR _a1
+    )
+{
+    if (WPP_ENABLE_FLAG_BIT(flags) &&
+        (WPP_CONTROL(flags).Level >= level))
+    {
+        WPP_TRACE(
+            WPP_CONTROL(flags).Logger,
+            WPP_TRACE_OPTIONS,
+            (LPGUID)traceGuid,
+            id,
+            WPP_LOGASTR(_a1)  (void*)0);
+    }
+
+    WPP_RECORDER(AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGASTR(_a1)  (void*)0);
+}
+#endif // WPP_RECORDER_SF_s_def
+
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+#endif // ENABLE_WPP_RECORDER
+
+#ifndef WPP_SF_sdd_def
+# define WPP_SF_sdd_def
+WPP_INLINE void WPP_SF_sdd(WPP_LOGGER_ARG unsigned short id, LPCGUID TraceGuid, LPCSTR _a1, signed int _a2, signed int _a3)
+{ WPP_TRACE(WPP_GET_LOGGER, WPP_TRACE_OPTIONS, (LPGUID)TraceGuid, id, WPP_LOGASTR(_a1) WPP_LOGTYPEVAL(signed int, _a2) WPP_LOGTYPEVAL(signed int, _a3)  (void*)0); }
+#endif // WPP_SF_sdd_def
+
+#if ENABLE_WPP_RECORDER
+
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_AND_TRACE_SF_sdd function
+//
+#ifndef WPP_RECORDER_AND_TRACE_SF_sdd_def
+#define WPP_RECORDER_AND_TRACE_SF_sdd_def
+WPP_INLINE
+VOID
+WPP_RECORDER_AND_TRACE_SF_sdd(
+    WPP_LOGGER_ARG
+    BOOLEAN  wppEnabled,
+    BOOLEAN  recorderEnabled,
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , LPCSTR _a1, signed int _a2, signed int _a3
+    )
+{
+    if (wppEnabled)
+    {
+        WPP_TRACE( WPP_GET_LOGGER,
+                   WPP_TRACE_OPTIONS,
+                   (LPGUID)traceGuid,
+                   id,
+                   WPP_LOGASTR(_a1) WPP_LOGTYPEVAL(signed int, _a2) WPP_LOGTYPEVAL(signed int, _a3)  (void*)0);
+    }
+
+    if (recorderEnabled)
+    {
+        WPP_RECORDER( AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGASTR(_a1) WPP_LOGTYPEVAL(signed int, _a2) WPP_LOGTYPEVAL(signed int, _a3)  (void*)0 );
+    }
+}
+#endif // WPP_RECORDER_AND_TRACE_SF_sdd_def
+
+#else  // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+//
+// Generate the WPP_RECORDER_SP_sdd function
+//
+#ifndef WPP_RECORDER_SF_sdd_def
+#define WPP_RECORDER_SF_sdd_def
+WPP_INLINE
+VOID
+WPP_RECORDER_SF_sdd(
+    PVOID    AutoLogContext,
+    UCHAR    level,
+    ULONG    flags,
+    USHORT   id,
+    LPCGUID  traceGuid
+    , LPCSTR _a1, signed int _a2, signed int _a3
+    )
+{
+    if (WPP_ENABLE_FLAG_BIT(flags) &&
+        (WPP_CONTROL(flags).Level >= level))
+    {
+        WPP_TRACE(
+            WPP_CONTROL(flags).Logger,
+            WPP_TRACE_OPTIONS,
+            (LPGUID)traceGuid,
+            id,
+            WPP_LOGASTR(_a1) WPP_LOGTYPEVAL(signed int, _a2) WPP_LOGTYPEVAL(signed int, _a3)  (void*)0);
+    }
+
+    WPP_RECORDER(AutoLogContext, level, flags, (LPGUID) traceGuid, id, WPP_LOGASTR(_a1) WPP_LOGTYPEVAL(signed int, _a2) WPP_LOGTYPEVAL(signed int, _a3)  (void*)0);
+}
+#endif // WPP_RECORDER_SF_sdd_def
+
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_LOG_ALWAYS:
+// Called for each event: WPP_LOG_ALWAYS(EX, MSG, arg1, arg2, arg3...) Other()
+// If defined, the definition needs to include a trailing comma or semicolon.
+// In addition, you will need to define a WPP_EX_[args](args...) macro to
+// extract any needed information from the other arguments (e.g. LEVEL).
+#ifndef WPP_LOG_ALWAYS
+#define WPP_LOG_ALWAYS(...)
+#endif
+
+// WPP_DEBUG:
+// Called for each enabled event: WPP_DEBUG((MSG, arg1, arg2, arg3...)), Other()
+// Potential definition: printf MsgArgs
+// Definition should not include any trailing comma or semicolon.
+#ifdef WPP_DEBUG
+#define WPP_INVOKE_WPP_DEBUG(MsgArgs) WPP_DEBUG(MsgArgs)
+#else // WPP_DEBUG
+#define WPP_INVOKE_WPP_DEBUG(MsgArgs) (void)0
+#endif // WPP_DEBUG
+
+// WPP_CALL_AsioBufferObject_cpp55
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp55(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp55) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     10, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp55(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp55) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                10, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp55(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp55) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                10, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp57
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp57(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp57) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     11, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp57(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp57) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                11, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp57(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp57) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                11, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp65
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp65(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp65) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     12, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp65(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp65) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                12, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp65(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp65) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                12, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp72
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp72(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp72) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     13, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp72(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp72) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                13, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp72(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp72) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                13, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp91
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp91(LEVEL, FLAGS, MSG, _a10) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp91) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG, _a10)); \
+            WPP_RECORDER_AND_TRACE_SF_l( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     14, \
+                     WPP_LOCAL_TraceGuids+0, _a10);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp91(LEVEL, FLAGS, MSG, _a10) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp91) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10)), \
+            WPP_RECORDER_SF_l( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                14, \
+                WPP_LOCAL_TraceGuids+0, _a10), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp91(LEVEL, FLAGS, MSG, _a10) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp91) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10)), \
+            WPP_SF_l( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                14, \
+                WPP_LOCAL_TraceGuids+0, _a10), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp117
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp117(LEVEL, FLAGS, MSG, _a10) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp117) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG, _a10)); \
+            WPP_RECORDER_AND_TRACE_SF_s( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     15, \
+                     WPP_LOCAL_TraceGuids+0, _a10);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp117(LEVEL, FLAGS, MSG, _a10) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp117) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10)), \
+            WPP_RECORDER_SF_s( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                15, \
+                WPP_LOCAL_TraceGuids+0, _a10), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp117(LEVEL, FLAGS, MSG, _a10) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp117) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10)), \
+            WPP_SF_s( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                15, \
+                WPP_LOCAL_TraceGuids+0, _a10), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp129
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp129(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp129) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     16, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp129(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp129) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                16, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp129(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp129) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                16, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp131
+#ifndef WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE
+#  define WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL,FLAGS,IFRLOG,RETSTATUS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST
+#  define WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL,FLAGS,IFRLOG,RETSTATUS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp131(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp131) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_ENABLED(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_FILTER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)); \
+            WPP_RECORDER_AND_TRACE_SF_sdd( \
+                     WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_LOGGER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_ARGS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), \
+                     17, \
+                     WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp131(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp131) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_FILTER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+        ?   WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)), \
+            WPP_RECORDER_SF_sdd( \
+                WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_ARGS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), \
+                17, \
+                WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp131(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp131) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_ENABLED(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+        ?   WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)), \
+            WPP_SF_sdd( \
+                WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_LOGGER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+                17, \
+                WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp137
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp137(LEVEL, FLAGS, MSG, _a10) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp137) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG, _a10)); \
+            WPP_RECORDER_AND_TRACE_SF_s( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     18, \
+                     WPP_LOCAL_TraceGuids+0, _a10);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp137(LEVEL, FLAGS, MSG, _a10) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp137) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10)), \
+            WPP_RECORDER_SF_s( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                18, \
+                WPP_LOCAL_TraceGuids+0, _a10), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp137(LEVEL, FLAGS, MSG, _a10) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp137) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10)), \
+            WPP_SF_s( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                18, \
+                WPP_LOCAL_TraceGuids+0, _a10), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp142
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp142(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13, _a14, _a15) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13, _a14, _a15) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp142) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13, _a14, _a15)); \
+            WPP_RECORDER_AND_TRACE_SF_lqDqlq( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     19, \
+                     WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13, _a14, _a15);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp142(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13, _a14, _a15) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13, _a14, _a15) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp142) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13, _a14, _a15)), \
+            WPP_RECORDER_SF_lqDqlq( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                19, \
+                WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13, _a14, _a15), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp142(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13, _a14, _a15) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13, _a14, _a15) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp142) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13, _a14, _a15)), \
+            WPP_SF_lqDqlq( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                19, \
+                WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13, _a14, _a15), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp156
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp156(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp156) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     20, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp156(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp156) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                20, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp156(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp156) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                20, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp170
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp170(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp170) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     21, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp170(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp170) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                21, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp170(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp170) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                21, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp189
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp189(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp189) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     22, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp189(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp189) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                22, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp189(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp189) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                22, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp207
+#ifndef WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE
+#  define WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL,FLAGS,IFRLOG,RETSTATUS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST
+#  define WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL,FLAGS,IFRLOG,RETSTATUS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp207(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp207) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_ENABLED(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_FILTER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)); \
+            WPP_RECORDER_AND_TRACE_SF_sdd( \
+                     WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_LOGGER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_ARGS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), \
+                     23, \
+                     WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp207(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp207) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_FILTER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+        ?   WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)), \
+            WPP_RECORDER_SF_sdd( \
+                WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_ARGS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), \
+                23, \
+                WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp207(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp207) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_ENABLED(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+        ?   WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)), \
+            WPP_SF_sdd( \
+                WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_LOGGER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+                23, \
+                WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp228
+#ifndef WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE
+#  define WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL,FLAGS,IFRLOG,RETSTATUS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST
+#  define WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL,FLAGS,IFRLOG,RETSTATUS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp228(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp228) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_ENABLED(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_FILTER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)); \
+            WPP_RECORDER_AND_TRACE_SF_sdd( \
+                     WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_LOGGER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_ARGS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), \
+                     24, \
+                     WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp228(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp228) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_FILTER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+        ?   WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)), \
+            WPP_RECORDER_SF_sdd( \
+                WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_ARGS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), \
+                24, \
+                WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp228(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp228) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_ENABLED(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+        ?   WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)), \
+            WPP_SF_sdd( \
+                WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_LOGGER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+                24, \
+                WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp266
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp266(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp266) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13)); \
+            WPP_RECORDER_AND_TRACE_SF_DDDD( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     25, \
+                     WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp266(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp266) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13)), \
+            WPP_RECORDER_SF_DDDD( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                25, \
+                WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp266(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp266) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13)), \
+            WPP_SF_DDDD( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                25, \
+                WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp267
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp267(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp267) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13)); \
+            WPP_RECORDER_AND_TRACE_SF_DDDD( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     26, \
+                     WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp267(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp267) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13)), \
+            WPP_RECORDER_SF_DDDD( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                26, \
+                WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp267(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp267) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13)), \
+            WPP_SF_DDDD( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                26, \
+                WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp326
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp326(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp326) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     27, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp326(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp326) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                27, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp326(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp326) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                27, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp327
+#ifndef WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE
+#  define WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL,FLAGS,IFRLOG,RETSTATUS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST
+#  define WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL,FLAGS,IFRLOG,RETSTATUS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp327(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp327) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_ENABLED(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_FILTER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)); \
+            WPP_RECORDER_AND_TRACE_SF_sdd( \
+                     WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_LOGGER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_ARGS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), \
+                     28, \
+                     WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp327(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp327) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_FILTER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+        ?   WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)), \
+            WPP_RECORDER_SF_sdd( \
+                WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_ARGS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), \
+                28, \
+                WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp327(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp327) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_ENABLED(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+        ?   WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)), \
+            WPP_SF_sdd( \
+                WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_LOGGER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+                28, \
+                WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp370
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp370(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp370) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     29, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp370(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp370) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                29, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp370(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp370) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                29, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp371
+#ifndef WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE
+#  define WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL,FLAGS,IFRLOG,RETSTATUS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST
+#  define WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL,FLAGS,IFRLOG,RETSTATUS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp371(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp371) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_ENABLED(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_FILTER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)); \
+            WPP_RECORDER_AND_TRACE_SF_sdd( \
+                     WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_LOGGER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_ARGS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), \
+                     30, \
+                     WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp371(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp371) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_FILTER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+        ?   WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)), \
+            WPP_RECORDER_SF_sdd( \
+                WPP_RECORDER_LEVEL_FLAGS_IFRLOG_RETSTATUS_ARGS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), \
+                30, \
+                WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp371(RETSTATUS) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS_IFRLOG_RETSTATUS(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS), "ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_PRE(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp371) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_ENABLED(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+        ?   WPP_INVOKE_WPP_DEBUG(("ERROR: File:%s, Line:%d - status=%!STATUS!", __FILE__, __LINE__, __statusRet)), \
+            WPP_SF_sdd( \
+                WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_LOGGER(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS) \
+                30, \
+                WPP_LOCAL_TraceGuids+0, __FILE__, __LINE__, __statusRet), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_IFRLOG_RETSTATUS_POST(LEVEL_ERROR, FLAG_DEVICE_ALL, g_AudioDspLog, RETSTATUS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp379
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp379(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp379) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     31, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp379(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp379) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                31, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp379(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp379) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                31, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp392
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp392(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp392) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     32, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp392(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp392) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                32, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp392(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp392) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                32, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp407
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp407(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp407) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG)); \
+            WPP_RECORDER_AND_TRACE_SF_( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     33, \
+                     WPP_LOCAL_TraceGuids+0);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp407(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp407) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_RECORDER_SF_( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                33, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp407(LEVEL, FLAGS, MSG) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp407) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG)), \
+            WPP_SF_( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                33, \
+                WPP_LOCAL_TraceGuids+0), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp815
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp815(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13, _a14, _a15, _a16) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13, _a14, _a15, _a16) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp815) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13, _a14, _a15, _a16)); \
+            WPP_RECORDER_AND_TRACE_SF_IIIDIII( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     34, \
+                     WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13, _a14, _a15, _a16);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp815(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13, _a14, _a15, _a16) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13, _a14, _a15, _a16) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp815) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13, _a14, _a15, _a16)), \
+            WPP_RECORDER_SF_IIIDIII( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                34, \
+                WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13, _a14, _a15, _a16), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp815(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13, _a14, _a15, _a16) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13, _a14, _a15, _a16) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp815) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13, _a14, _a15, _a16)), \
+            WPP_SF_IIIDIII( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                34, \
+                WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13, _a14, _a15, _a16), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// WPP_CALL_AsioBufferObject_cpp831
+#ifndef WPP_LEVEL_FLAGS_PRE
+#  define WPP_LEVEL_FLAGS_PRE(LEVEL,FLAGS)
+#endif
+#ifndef WPP_LEVEL_FLAGS_POST
+#  define WPP_LEVEL_FLAGS_POST(LEVEL,FLAGS)
+#endif
+#if ENABLE_WPP_RECORDER
+#if ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp831(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    do {\
+        WPP_ANNOTATE(AsioBufferObject_cpp831) 0; \
+        BOOLEAN wppEnabled = WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS); \
+        BOOLEAN recorderEnabled = WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS); \
+        if (wppEnabled || recorderEnabled) { \
+            WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13)); \
+            WPP_RECORDER_AND_TRACE_SF_dddd( \
+                     WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                     wppEnabled, recorderEnabled, \
+                     WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                     35, \
+                     WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13);\
+        } \
+    } \
+    while(0) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#else // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp831(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp831) \
+    (( \
+        WPP_RECORDER_CHECK_INIT WPP_RECORDER_LEVEL_FLAGS_FILTER(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13)), \
+            WPP_RECORDER_SF_dddd( \
+                WPP_RECORDER_LEVEL_FLAGS_ARGS(LEVEL, FLAGS), \
+                35, \
+                WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_TRACE_FILTERING_WITH_WPP_RECORDER
+#else  // ENABLE_WPP_RECORDER
+#define WPP_CALL_AsioBufferObject_cpp831(LEVEL, FLAGS, MSG, _a10, _a11, _a12, _a13) \
+    WPP_LOG_ALWAYS(WPP_EX_LEVEL_FLAGS(LEVEL, FLAGS), MSG, _a10, _a11, _a12, _a13) \
+    WPP_LEVEL_FLAGS_PRE(LEVEL, FLAGS) \
+    WPP_ANNOTATE(AsioBufferObject_cpp831) \
+    (( \
+        WPP_CHECK_INIT WPP_LEVEL_FLAGS_ENABLED(LEVEL, FLAGS) \
+        ?   WPP_INVOKE_WPP_DEBUG((MSG, _a10, _a11, _a12, _a13)), \
+            WPP_SF_dddd( \
+                WPP_LEVEL_FLAGS_LOGGER(LEVEL, FLAGS) \
+                35, \
+                WPP_LOCAL_TraceGuids+0, _a10, _a11, _a12, _a13), \
+            1 \
+        :   0 \
+    )) \
+    WPP_LEVEL_FLAGS_POST(LEVEL, FLAGS)
+#endif // ENABLE_WPP_RECORDER
+
+// Functions
+#undef DoDebugTrace
+#ifdef __INTELLISENSE__
+#define DoDebugTrace(TRACELEVEL, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define DoDebugTrace WPP_(CALL)
+#endif
+#undef DoTraceMessage
+#ifdef __INTELLISENSE__
+#define DoTraceMessage(LEVEL, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define DoTraceMessage WPP_(CALL)
+#endif
+#undef DrvLogCritical
+#ifdef __INTELLISENSE__
+#define DrvLogCritical(IFRLOG, FLAGS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define DrvLogCritical WPP_(CALL)
+#endif
+#undef DrvLogError
+#ifdef __INTELLISENSE__
+#define DrvLogError(IFRLOG, FLAGS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define DrvLogError WPP_(CALL)
+#endif
+#undef DrvLogInfo
+#ifdef __INTELLISENSE__
+#define DrvLogInfo(IFRLOG, FLAGS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define DrvLogInfo WPP_(CALL)
+#endif
+#undef DrvLogVerbose
+#ifdef __INTELLISENSE__
+#define DrvLogVerbose(IFRLOG, FLAGS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define DrvLogVerbose WPP_(CALL)
+#endif
+#undef DrvLogWarning
+#ifdef __INTELLISENSE__
+#define DrvLogWarning(IFRLOG, FLAGS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define DrvLogWarning WPP_(CALL)
+#endif
+#undef RETURN_NTSTATUS_IF_FAILED_MSG
+#ifdef __INTELLISENSE__
+#define RETURN_NTSTATUS_IF_FAILED_MSG(RETSTATUS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define RETURN_NTSTATUS_IF_FAILED_MSG WPP_(CALL)
+#endif
+#undef RETURN_NTSTATUS_IF_TRUE_MSG
+#ifdef __INTELLISENSE__
+#define RETURN_NTSTATUS_IF_TRUE_MSG(POSCOND, RETSTATUS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define RETURN_NTSTATUS_IF_TRUE_MSG WPP_(CALL)
+#endif
+#undef RETURN_NTSTATUS_MSG
+#ifdef __INTELLISENSE__
+#define RETURN_NTSTATUS_MSG(RETSTATUS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define RETURN_NTSTATUS_MSG WPP_(CALL)
+#endif
+#undef TRACE_HRESULT
+#ifdef __INTELLISENSE__
+#define TRACE_HRESULT(LEVEL, FLAGS, HR, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define TRACE_HRESULT WPP_(CALL)
+#endif
+#undef TRACE_LINE
+#ifdef __INTELLISENSE__
+#define TRACE_LINE(LEVEL, FLAGS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define TRACE_LINE WPP_(CALL)
+#endif
+#undef TRACE_METHOD_LINE
+#ifdef __INTELLISENSE__
+#define TRACE_METHOD_LINE(LEVEL, FLAGS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define TRACE_METHOD_LINE WPP_(CALL)
+#endif
+#undef Trace
+#ifdef __INTELLISENSE__
+#define Trace(LEVEL, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define Trace WPP_(CALL)
+#endif
+#undef TraceEvents
+#ifdef __INTELLISENSE__
+#define TraceEvents(LEVEL, FLAGS, MSG, ...) ((void)(MSG, ## __VA_ARGS__))
+#else
+#define TraceEvents WPP_(CALL)
+#endif
+#undef DrvLogEnter
+#ifdef __INTELLISENSE__
+#define DrvLogEnter(IFRLOG) ((void)0)
+#else
+#define DrvLogEnter WPP_(CALL)
+#endif
+#undef DrvLogExit
+#ifdef __INTELLISENSE__
+#define DrvLogExit(IFRLOG) ((void)0)
+#else
+#define DrvLogExit WPP_(CALL)
+#endif
+#undef RETURN_IF_FAILED
+#ifdef __INTELLISENSE__
+#define RETURN_IF_FAILED(RETSTATUS) ((void)0)
+#else
+#define RETURN_IF_FAILED WPP_(CALL)
+#endif
+#undef RETURN_NTSTATUS
+#ifdef __INTELLISENSE__
+#define RETURN_NTSTATUS(RETSTATUS) ((void)0)
+#else
+#define RETURN_NTSTATUS WPP_(CALL)
+#endif
+#undef RETURN_NTSTATUS_IF_FAILED
+#ifdef __INTELLISENSE__
+#define RETURN_NTSTATUS_IF_FAILED(RETSTATUS) ((void)0)
+#else
+#define RETURN_NTSTATUS_IF_FAILED WPP_(CALL)
+#endif
+#undef RETURN_NTSTATUS_IF_FAILED_UNLESS_ALLOWED
+#ifdef __INTELLISENSE__
+#define RETURN_NTSTATUS_IF_FAILED_UNLESS_ALLOWED(RETSTATUS, ALLOWEDSTATUS) ((void)0)
+#else
+#define RETURN_NTSTATUS_IF_FAILED_UNLESS_ALLOWED WPP_(CALL)
+#endif
+#undef RETURN_NTSTATUS_IF_FALSE
+#ifdef __INTELLISENSE__
+#define RETURN_NTSTATUS_IF_FALSE(RETSTATUS, NEGCOND) ((void)0)
+#else
+#define RETURN_NTSTATUS_IF_FALSE WPP_(CALL)
+#endif
+#undef RETURN_NTSTATUS_IF_NULL
+#ifdef __INTELLISENSE__
+#define RETURN_NTSTATUS_IF_NULL(RETSTATUS, RETPTR) ((void)0)
+#else
+#define RETURN_NTSTATUS_IF_NULL WPP_(CALL)
+#endif
+#undef RETURN_NTSTATUS_IF_NULL_ALLOC
+#ifdef __INTELLISENSE__
+#define RETURN_NTSTATUS_IF_NULL_ALLOC(RETPTR) ((void)0)
+#else
+#define RETURN_NTSTATUS_IF_NULL_ALLOC WPP_(CALL)
+#endif
+#undef RETURN_NTSTATUS_IF_TRUE
+#ifdef __INTELLISENSE__
+#define RETURN_NTSTATUS_IF_TRUE(POSCOND, RETSTATUS) ((void)0)
+#else
+#define RETURN_NTSTATUS_IF_TRUE WPP_(CALL)
+#endif
+#undef TRACE_FAILURE_INFO
+#ifdef __INTELLISENSE__
+#define TRACE_FAILURE_INFO(LEVEL, FLAGS, FI) ((void)0)
+#else
+#define TRACE_FAILURE_INFO WPP_(CALL)
+#endif
+#undef TRACE_FUNCTION_ENTRY
+#ifdef __INTELLISENSE__
+#define TRACE_FUNCTION_ENTRY(LEVEL, FLAGS) ((void)0)
+#else
+#define TRACE_FUNCTION_ENTRY WPP_(CALL)
+#endif
+#undef TRACE_FUNCTION_EXIT
+#ifdef __INTELLISENSE__
+#define TRACE_FUNCTION_EXIT(LEVEL, FLAGS) ((void)0)
+#else
+#define TRACE_FUNCTION_EXIT WPP_(CALL)
+#endif
+#undef TRACE_FUNCTION_EXIT_DWORD
+#ifdef __INTELLISENSE__
+#define TRACE_FUNCTION_EXIT_DWORD(LEVEL, FLAGS, RETVAL) ((void)0)
+#else
+#define TRACE_FUNCTION_EXIT_DWORD WPP_(CALL)
+#endif
+#undef TRACE_FUNCTION_EXIT_HR
+#ifdef __INTELLISENSE__
+#define TRACE_FUNCTION_EXIT_HR(LEVEL, FLAGS, HR) ((void)0)
+#else
+#define TRACE_FUNCTION_EXIT_HR WPP_(CALL)
+#endif
+#undef TRACE_FUNCTION_EXIT_PTR
+#ifdef __INTELLISENSE__
+#define TRACE_FUNCTION_EXIT_PTR(LEVEL, FLAGS, RETVAL) ((void)0)
+#else
+#define TRACE_FUNCTION_EXIT_PTR WPP_(CALL)
+#endif
+#undef TRACE_FUNCTION_EXIT_STATUS
+#ifdef __INTELLISENSE__
+#define TRACE_FUNCTION_EXIT_STATUS(LEVEL, FLAGS, STATUS) ((void)0)
+#else
+#define TRACE_FUNCTION_EXIT_STATUS WPP_(CALL)
+#endif
+#undef TRACE_METHOD_ENTRY
+#ifdef __INTELLISENSE__
+#define TRACE_METHOD_ENTRY(LEVEL, FLAGS) ((void)0)
+#else
+#define TRACE_METHOD_ENTRY WPP_(CALL)
+#endif
+#undef TRACE_METHOD_EXIT
+#ifdef __INTELLISENSE__
+#define TRACE_METHOD_EXIT(LEVEL, FLAGS) ((void)0)
+#else
+#define TRACE_METHOD_EXIT WPP_(CALL)
+#endif
+#undef TRACE_METHOD_EXIT_DWORD
+#ifdef __INTELLISENSE__
+#define TRACE_METHOD_EXIT_DWORD(LEVEL, FLAGS, RETVAL) ((void)0)
+#else
+#define TRACE_METHOD_EXIT_DWORD WPP_(CALL)
+#endif
+#undef TRACE_METHOD_EXIT_HR
+#ifdef __INTELLISENSE__
+#define TRACE_METHOD_EXIT_HR(LEVEL, FLAGS, HR) ((void)0)
+#else
+#define TRACE_METHOD_EXIT_HR WPP_(CALL)
+#endif
+#undef TRACE_METHOD_EXIT_PTR
+#ifdef __INTELLISENSE__
+#define TRACE_METHOD_EXIT_PTR(LEVEL, FLAGS, RETVAL) ((void)0)
+#else
+#define TRACE_METHOD_EXIT_PTR WPP_(CALL)
+#endif
+#undef TRACE_METHOD_EXIT_STATUS
+#ifdef __INTELLISENSE__
+#define TRACE_METHOD_EXIT_STATUS(LEVEL, FLAGS, STATUS) ((void)0)
+#else
+#define TRACE_METHOD_EXIT_STATUS WPP_(CALL)
+#endif
+
+#ifdef __cplusplus
+} // extern "C"
+#endif
+

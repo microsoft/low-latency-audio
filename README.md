@@ -2,17 +2,21 @@
 
 ## Acknowledgements
 
-This driver has been developed in partnership with Yamaha Corporation of Japan, and Qualcomm
+This driver has been developed in partnership with Yamaha Corporation of Japan, and Qualcomm.
 
 ## Project Details
 
-This project includes a new USB Audio Class 2 driver, optimized for low-latency musician scenarios, as well as an ASIO interface to the driver.
+This project includes a new USB Audio Class 2 (UAC2) driver, optimized for low-latency musician scenarios, as well as an ASIO interface to the UAC2 driver. This driver, and its supporting components, will be shipped in Windows.
 
 ### Steinberg ASIO SDK
 
-The projects in this repo require the Steinberg ASIO SDK to compile. Use of the source here does not grant any license for the Steinberg ASIO SDK. All contributors to the project, and anyone compiling from source, is required to have an agreement with Steinberg and obtain the ASIO SDK directly from them.
+ASIO is a trademark and software of Steinberg Media Technologies GmbH.
 
-ASIO is a trademark and software of Steinberg Media Technologies GmbH
+Microsoft has a license with Steinberg specifically for the use of ASIO in Windows, when shipped from/by Microsoft for Windows.
+
+The projects in this repo require the Steinberg ASIO SDK to compile. Use of the source here does not grant any license for the Steinberg ASIO SDK. All contributors to the project, and anyone compiling from source, is required to have an agreement with Steinberg and obtain the ASIO SDK directly from them. 
+
+In the case that asio SDK files are (incorrectly) included in a pull request or other location in this repo, they are excluded from the MIT license that governs this repo. Nothing in this repo shall be construed as impacting or modifying the Steinberg license agreement for the ASIO SDK.
 
 ## Related Projects
 

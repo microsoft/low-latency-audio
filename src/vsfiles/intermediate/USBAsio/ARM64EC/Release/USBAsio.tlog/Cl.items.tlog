@@ -1,0 +1,6 @@
+G:\Github\microsoft\low-latency-audio\src\uac2-asio\asio\combase.cpp;G:\Github\microsoft\low-latency-audio\src\vsfiles\intermediate\USBAsio\ARM64EC\Release\combase.obj
+G:\Github\microsoft\low-latency-audio\src\uac2-asio\dllmain.cpp;G:\Github\microsoft\low-latency-audio\src\vsfiles\intermediate\USBAsio\ARM64EC\Release\dllmain.obj
+G:\Github\microsoft\low-latency-audio\src\uac2-asio\print_.cpp;G:\Github\microsoft\low-latency-audio\src\vsfiles\intermediate\USBAsio\ARM64EC\Release\print_.obj
+G:\Github\microsoft\low-latency-audio\src\uac2-asio\Register.cpp;G:\Github\microsoft\low-latency-audio\src\vsfiles\intermediate\USBAsio\ARM64EC\Release\Register.obj
+G:\Github\microsoft\low-latency-audio\src\uac2-asio\USBAsio.cpp;G:\Github\microsoft\low-latency-audio\src\vsfiles\intermediate\USBAsio\ARM64EC\Release\USBAsio.obj
+G:\Github\microsoft\low-latency-audio\src\uac2-asio\USBDevice.cpp;G:\Github\microsoft\low-latency-audio\src\vsfiles\intermediate\USBAsio\ARM64EC\Release\USBDevice.obj

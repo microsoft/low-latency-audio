@@ -1,0 +1,8 @@
+# You must obtain the ASIO SDK directly from Steinberg, and have 
+# a license with Steinberg.
+# https://www.steinberg.net/developers/
+#
+# The ASIO SDK files must not be uploaded to this repo
+
+*.h
+*.cpp
