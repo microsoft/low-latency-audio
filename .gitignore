@@ -25,6 +25,6 @@
 # Compiled Static libraries
 *.lib
 
-# Executables
+# Executables and Installers
 *.exe
 *.msi
