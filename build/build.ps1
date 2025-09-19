@@ -10,7 +10,7 @@ $installerProjectFolder = $sourceRoot + "installer\"
 
 $asioSolution = $sourceRoot + "uac2-asio\USBAsio.sln"
 $acxSolution =  $sourceRoot + "uac2-driver\USBAudioAcxDriver.sln"
-$controlPanelProject =  $sourceRoot + "asio-control-panel\USBAsioControlPanel.sln"
+$controlPanelSolution =  $sourceRoot + "asio-control-panel\USBAsioControlPanel.sln"
 $installerProject = $installerProjectFolder + "asio-installer.sln"
 
 
@@ -105,31 +105,31 @@ foreach($configuration in $configurations)
 
     # build ASIO Control Panel dialog for x64 and Arm64
 
-#    nuget.exe restore $controlPanelProject
-#
-#    foreach($controlPanelPlatform in ("x64", "Arm64"))
-#    {
-#        Write-Host "Building Control Panel:  $configuration|$controlPanelPlatform"
-#        msbuild.exe -p:Platform=$controlPanelPlatform -p:Configuration=$configuration -verbosity:normal -target:Rebuild $controlPanelProject
-#
-#        # this is where the ASIO files (dll, pdb) are output to
-#        $controlPanelOutputFolder = "$vsfilesFolderOut\USBAsioControlPanel\$controlPanelPlatform\$configuration\"
-#        Write-Host $controlPanelOutputFolder
-#
-#        # ensure the destination folders exist. We need to map the destination folder
-#        # because Arm64X puts the output in Arm64EC output folder
-#
-#        $stagingTargetFolder = "$stagingFolder\$controlPanelPlatform\$configuration\"
-#
-#        #New-Item -Path $stagingTargetFolder -ItemType Directory
-#
-#            # copy output files to staging
-#        Copy-Item -Path "$controlPanelOutputFolder*.exe" -Destination $stagingTargetFolder
-#
-#        Write-Host
-#
-#        #Copy-Item -Path "$sourceRoot\USBAsioControlPanel\USBAsioControlPanel.exe" -Destination $stagingTargetFolder
-#    }
+    msbuild.exe -t:restore $controlPanelSolution -p:RestorePackagesConfig=true
+
+    foreach($controlPanelPlatform in ("x64", "Arm64"))
+    {
+        Write-Host "Building Control Panel:  $configuration|$controlPanelPlatform"
+        msbuild.exe -p:Platform=$controlPanelPlatform -p:Configuration=$configuration -verbosity:normal -target:Rebuild $controlPanelSolution
+
+        # this is where the ASIO files (dll, pdb) are output to
+        $controlPanelOutputFolder = "$vsfilesFolderOut\USBAsioControlPanel\$controlPanelPlatform\$configuration\"
+        Write-Host $controlPanelOutputFolder
+
+        # ensure the destination folders exist. We need to map the destination folder
+        # because Arm64X puts the output in Arm64EC output folder
+
+        $stagingTargetFolder = "$stagingFolder\$controlPanelPlatform\$configuration\"
+
+        #New-Item -Path $stagingTargetFolder -ItemType Directory
+
+            # copy output files to staging
+        Copy-Item -Path "$controlPanelOutputFolder*.exe" -Destination $stagingTargetFolder
+
+        Write-Host
+
+        #Copy-Item -Path "$sourceRoot\USBAsioControlPanel\USBAsioControlPanel.exe" -Destination $stagingTargetFolder
+    }
 
     # build installers
     Write-Host "Building installers..."
