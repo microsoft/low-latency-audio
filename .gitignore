@@ -1,10 +1,18 @@
 # compile output folder
 src/vsfiles/**/*.*
 
+staging/**/*.*
 
+src/**/.vs/**/*.*
+src/**/packages/**/*.*
+
+src/installer/obj/**/*.*
 
 # Compiled Object files
 *.obj
+
+# debug symbols
+*.pdb
 
 # Precompiled Headers
 *.gch
