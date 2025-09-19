@@ -93,13 +93,13 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64EC'">
     <BuildAsX>true</BuildAsX>
-    <OutDir>$(RepositorySourceRoot)\vsfiles\out\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(RepositorySourceRoot)\vsfiles\intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+    <OutDir>$(SolutionDir)..\vsfiles\out\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)..\vsfiles\intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <BuildAsX>true</BuildAsX>
-    <OutDir>$(RepositorySourceRoot)\vsfiles\out\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(RepositorySourceRoot)\vsfiles\intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+    <OutDir>$(SolutionDir)..\vsfiles\out\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)..\vsfiles\intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64EC'">
     <BuildAsX>true</BuildAsX>
@@ -112,8 +112,8 @@
     <IntDir>$(SolutionDir)..\vsfiles\intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(RepositorySourceRoot)\vsfiles\out\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
-    <IntDir>$(RepositorySourceRoot)\vsfiles\intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+    <OutDir>$(SolutionDir)..\vsfiles\out\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)..\vsfiles\intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <OutDir>$(SolutionDir)..\vsfiles\out\$(ProjectName)\$(Platform)\$(Configuration)\</OutDir>
@@ -128,7 +128,7 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <AssemblerOutput>AssemblyAndSourceCode</AssemblerOutput>
-      <AdditionalIncludeDirectories>..\Inc;asio</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\shared;asio</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>26495</DisableSpecificWarnings>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
@@ -152,7 +152,7 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <AssemblerOutput>AssemblyAndSourceCode</AssemblerOutput>
-      <AdditionalIncludeDirectories>..\Inc;asio</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\shared;asio</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>26495</DisableSpecificWarnings>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
@@ -176,7 +176,7 @@
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <AssemblerOutput>AssemblyAndSourceCode</AssemblerOutput>
-      <AdditionalIncludeDirectories>..\Inc;asio</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\shared;asio</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>26495</DisableSpecificWarnings>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
