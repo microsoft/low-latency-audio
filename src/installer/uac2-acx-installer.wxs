@@ -1,0 +1,51 @@
+﻿<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <?define StagingSourceRootFolder=G:\Github\microsoft\low-latency-audio\build\staging ?>
+  <?define StagingVersionIncludeFile=$(StagingSourceRootFolder)\version\BundleInfo.wxi ?>
+
+  <Package
+        Name="Microsoft Windows USB ASIO Control Panel $(var.Platform)-$(var.Configuration) Preview"
+        Manufacturer="Microsoft Corporation"
+        Version="1.0.0.0"
+        UpgradeCode="3b1e7eb9-37c7-44a4-ad9a-c686db7639b8"
+        UpgradeStrategy="majorUpgrade"
+        >
+
+      <MediaTemplate EmbedCab="yes" />
+
+      <StandardDirectory Id="ProgramFiles64Folder">
+          <Directory Id="ROOTINSTALLFOLDER" Name="Windows ASIO">
+          </Directory>
+      </StandardDirectory>
+        
+      <Component Id="Driver"
+                  Permanent="no"
+                  Bitness="always64"
+                  Directory="ROOTINSTALLFOLDER"
+                  Guid="e6398e99-7a97-4a43-8310-f332cded5065">
+
+        <!-- UAC2 Driver -->
+        <!--
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\USBAudio2-ACX.sys" Vital="true" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\USBAudio2-ACX.inf" Vital="true" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\USBAudio2-ACX.cat" Vital="true" />
+        -->
+        
+        <!-- ASIO Components. For these, the Arm64 build is Arm64X and is included in the Arm64EC folder. 
+             We stage it in the Arm64 platform staging folder to keep the installer simple-->
+
+        <!--
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\USBAsio.dll" Vital="true" SelfRegCost="1"/>
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\USBAsio.pdb" />
+        -->
+        
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\USBAsioControlPanel.exe" Vital="true" />
+
+      </Component>
+
+      <Feature Id="UsbAcxAndAsioDriver">
+          <ComponentRef Id="Driver" />
+      </Feature>
+
+  </Package>
+</Wix>

@@ -1,0 +1,9 @@
+LIBRARY			usbasio
+SECTIONS
+				.interprocess			READ WRITE SHARED
+EXPORTS	
+				DllMain
+				DllGetClassObject		PRIVATE
+				DllCanUnloadNow			PRIVATE
+				DllRegisterServer		PRIVATE
+				DllUnregisterServer		PRIVATE

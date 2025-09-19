@@ -1,32 +1,30 @@
-# Prerequisites
-*.d
+# compile output folder
+/src/vsfiles/**/*.*
+
+/build/staging/**/*.*
+
+/src/**/.vs/**/*.*
+/src/**/packages/**/*.*
+
+/src/installer/obj/**/*.*
+/src/installer/bin/**/*.*
 
 # Compiled Object files
-*.slo
-*.lo
-*.o
 *.obj
+
+# debug symbols
+*.pdb
 
 # Precompiled Headers
 *.gch
 *.pch
 
 # Compiled Dynamic libraries
-*.so
-*.dylib
 *.dll
 
-# Fortran module files
-*.mod
-*.smod
-
 # Compiled Static libraries
-*.lai
-*.la
-*.a
 *.lib
 
-# Executables
+# Executables and Installers
 *.exe
-*.out
-*.app
+*.msi

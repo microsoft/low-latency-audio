@@ -1,0 +1,13 @@
+﻿<Project Sdk="WixToolset.Sdk/6.0.0">
+  <PropertyGroup>
+    <OutputName>MicrosoftUAC2ASIODriver</OutputName>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <SuppressValidation>true</SuppressValidation>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|Arm64' ">
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <SuppressValidation>true</SuppressValidation>
+  </PropertyGroup>
+</Project>

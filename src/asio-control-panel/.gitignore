@@ -1,0 +1,13 @@
+# Remove this when the ASIO Control Panel is ready to put on github
+
+*.cpp
+*.h
+*.rc
+*.bmp
+*.rc2
+*.sln
+*.user
+*.vcxproj
+*.filters
+
+res\*.*
