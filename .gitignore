@@ -1,12 +1,12 @@
 # compile output folder
-src/vsfiles/**/*.*
+/src/vsfiles/**/*.*
 
-staging/**/*.*
+/build/staging/**/*.*
 
-src/**/.vs/**/*.*
-src/**/packages/**/*.*
+/src/**/.vs/**/*.*
+/src/**/packages/**/*.*
 
-src/installer/obj/**/*.*
+/src/installer/obj/**/*.*
 
 # Compiled Object files
 *.obj
