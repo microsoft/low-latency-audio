@@ -1,1 +1,0 @@
-G:\Github\microsoft\low-latency-audio\src\installer\obj\x64\Release\Uac2AcxInstaller.wixproj.CoreCompileInputs.cache

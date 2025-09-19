@@ -1,2 +1,0 @@
-PlatformToolSet=WindowsKernelModeDriver10.0:VCToolArchitecture=Native32Bit:VCToolsVersion=14.44.35207:TargetPlatformVersion=10.0.26100.0:VcpkgTriplet=ARM64-windows:
-Release|ARM64|G:\Github\microsoft\low-latency-audio\src\uac2-driver\|
