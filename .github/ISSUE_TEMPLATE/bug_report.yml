@@ -129,7 +129,7 @@ body:
   id: glitch-link
   attributes:
     label: Link to glitch trace
-    description: "If this is an audio glitch bug, please provide a link to the feedback hub entry, or contact us privately to share a glitch trace captured from CollectAudioLogs at https://github.com/microsoft/audio. Do not link to that here.""
+    description: "If this is an audio glitch bug, please provide a link to the feedback hub entry, or contact us privately to share a glitch trace captured from CollectAudioLogs at https://github.com/microsoft/audio. Do not link to that here."
   validations:
     required: false
 
