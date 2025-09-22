@@ -1,0 +1,160 @@
+name: "🕷️ Bug Report"
+description: "File a bug report for the low-latency audio driver in this repo. Use this when a device or app is not working with the new driver."
+type: Bug
+title: "[BUG]: "
+labels:
+  - "bug :lady_beetle:"
+  - "needs triage :ambulance:"
+assignees: ["Psychlist1972"]
+
+body:
+- type: markdown
+  attributes:
+    value: "Thank you for filing a bug report for Low-Latency Audio on Windows. Please be sure to [search for existing issues](https://github.com/microsoft/low-latency-audio/issues) before filing a new bug. If this bug is not for this specific audio driver, please instead file the issue through Feedback Hub. Issues for third-party or other Windows drivers will be closed without action."
+
+- type: markdown
+  attributes:
+    value: "If this is for an audio glitch, please file a Feedback Hub report and have the link handy, or use CollectAudioLogs from https://github.com/microsoft/audio and be prepared to send us a link to the captured files privately."
+
+- type: input
+  id: windows-version
+  attributes:
+    label: Windows Version
+    description: "Version of Windows in use. For Insider builds, this is at the bottom right of the screen. Example: 27950.br_release"
+  validations:
+    required: true
+
+- type: input
+  id: pc-info
+  attributes:
+    label: PC Information
+    description: Brand, name, and model of the PC in use. If self-built, the brand and model of the motherboard.
+  validations:
+    required: true
+
+- type: dropdown
+  id: pc-arch
+  attributes:
+    label: Processor Architecture
+    description: Please also indicate processor architecture (x64, Arm64) if known.
+    multiple: false
+    options:
+      - Unknown or unsure
+      - Arm64 (Qualcomm, etc.)
+      - x64 (AMD / Intel etc.)
+  validations:
+    required: true   
+
+- type: input
+  id: audio-device
+  attributes:
+    label: Audio Interface
+    description: Brand, name, and model of the audio interface in use. Please be specific. This information is often on the back panel or underside of the audio interface.
+  validations:
+    required: true
+
+- type: dropdown
+  id: audio-device-connection
+  attributes:
+    label: Audio Interface Connection
+    description: How was the audio interface physically connected?
+    multiple: false
+    options:
+      - Unknown or unsure
+      - Directly to the USB port on a laptop or tablet
+      - Through a USB hub
+      - Through a USB dock (please include brand/model in the notes)
+      - Display's built-in USB hub
+      - Desktop case USB connection not directly on the motherboard back panel
+      - Other (please indicate in notes)
+  validations:
+    required: true  
+
+- type: input
+  id: audio-sample-rate
+  attributes:
+    label: Sample Rate
+    description: The sample rate (44.1khz, 96khz, etc.) that you were using when encountering the bug
+  validations:
+    required: false
+
+- type: input
+  id: audio-buffer-size
+  attributes:
+    label: Buffer Size
+    description: The buffer size you were using when encountering the bug
+  validations:
+    required: false
+
+- type: input
+  id: application-name
+  attributes:
+    label: Application in use
+    description: The application you were using when encountering the issue
+  validations:
+    required: false
+
+- type: dropdown
+  id: application-audio-mode
+  attributes:
+    label: Audio Mode
+    description: Mode the application was using to communicate with the driver, if known
+    multiple: false
+    options:
+      - Unknown or unsure
+      - Windows Audio (WASAPI etc.)
+      - ASIO
+  validations:
+    required: true   
+
+- type: dropdown
+  id: bug-type
+  attributes:
+    label: Type of bug
+    description: How would you classify this bug report? (Please provide details in notes as appropriate)
+    multiple: true
+    options:
+      - Application Crash
+      - Windows Crash or green/blue/black Screen
+      - Driver does not recognize device, or fails to start with this device
+      - Audio interface appears in Windows/Apps, but doesn't capture and/or output audio
+      - Expected number of inputs/outputs not available
+      - Expected sample rates or bit depths not available
+      - Audio glitching
+      - Other (please indicate in additional notes section below)
+  validations:
+    required: true   
+
+- type: input
+  id: glitch-link
+  attributes:
+    label: Link to glitch trace
+    description: "If this is an audio glitch bug, please provide a link to the feedback hub entry, or contact us privately to share a glitch trace captured from CollectAudioLogs at https://github.com/microsoft/audio. Do not link to that here.""
+  validations:
+    required: false
+
+- type: textarea
+  id: repro-steps
+  attributes:
+    label: Steps to reproduce
+    description: Please include screenshots when possible
+    placeholder: Detailed steps to reproduct the bug
+  validations:
+    required: true
+
+- type: textarea
+  id: expected-behavior
+  attributes:
+    label: Expected behavior            
+    placeholder: What were you expecting to happen?
+  validations:
+    required: false 
+
+- type: textarea
+  id: additional-notes
+  attributes:
+    label: Additional notes
+    description: Any additional notes or information which may be relevant
+    placeholder: Any additional notes or information which may be relevant
+  validations:
+    required: false
