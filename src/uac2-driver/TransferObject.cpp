@@ -1160,7 +1160,18 @@ ULONG TransferObject::GetFeedbackSum(ULONG & validFeedback)
     {
 
         PUCHAR inBuffer = (PUCHAR)(m_dataBuffer) + m_urb->UrbIsochronousTransfer.IsoPacket[i].Offset;
-        ULONG  feedbackValue = *(PULONG)inBuffer;
+        ULONG  feedbackValue = 0;
+
+        if (m_urb->UrbIsochronousTransfer.IsoPacket[i].Length == 3)
+        {
+            // If the length is 3 bytes, the value is treated as a 24-bit fixed-point number in 10.14 format.
+            feedbackValue = ((ULONG)inBuffer[0]) | (((ULONG)inBuffer[1]) << 8) | (((ULONG)inBuffer[2]) << 16);
+        }
+        else
+        {
+            // If the length is any other value, the value is treated as a 32-bit fixed-point number in 16.16 format.
+            feedbackValue = *(PULONG)inBuffer;
+        }
         if (m_lockDelayCount != 0)
         {
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "feedback frame %u, value %08x, LOCK DELAY ENABLED.", m_urb->UrbIsochronousTransfer.StartFrame, feedbackValue);

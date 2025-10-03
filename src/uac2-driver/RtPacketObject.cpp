@@ -575,7 +575,7 @@ RtPacketObject::CopyFromRtPacketToOutputData(
         ULONGLONG completedRtPacket = (ULONG)InterlockedIncrement((PLONG)&rtPacketInfo->RtPacketCurrentPacket) - 1;
         InterlockedExchange64((LONG64 *)&rtPacketInfo->LastPacketStartQpcPosition, estimatedQPCPosition);
 
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - completedRtPacket, estimatedQPCPosition, qpcPosition, PeriodQPCPosition, bytesCopiedUpToBoundary, TransferredBytesInThisIrp, %llu, %llu, %llu, %llu, %u, %u", completedRtPacket, estimatedQPCPosition, transferObject->GetQPCPosition(), transferObject->GetPeriodQPCPosition(), bytesCopiedUpToBoundary, transferObject->GetTransferredBytesInThisIrp());
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - index, completedRtPacket, estimatedQPCPosition, qpcPosition, PeriodQPCPosition, bytesCopiedUpToBoundary, TransferredBytesInThisIrp, %d, %llu, %llu, %llu, %llu, %u, %u", transferObject->GetIndex(), completedRtPacket, estimatedQPCPosition, transferObject->GetQPCPosition(), transferObject->GetPeriodQPCPosition(), bytesCopiedUpToBoundary, transferObject->GetTransferredBytesInThisIrp());
 
         // Tell ACX we've completed the packet.
         if ((m_deviceContext->RenderStreamEngine[deviceIndex] != nullptr) && (m_deviceContext->RenderStreamEngine[deviceIndex]->GetACXStream() != nullptr))
@@ -965,17 +965,23 @@ RtPacketObject::AssignDevices(
         }
     });
 
-    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.ParentObject = m_deviceContext->Device;
+    if (numOfInputDevices != 0)
+    {
+        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+        attributes.ParentObject = m_deviceContext->Device;
 
-    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(RT_PACKET_INFO) * numOfInputDevices, &inputRtPacketInfoMemory, (PVOID *)&inputRtPacketInfo));
-    RtlZeroMemory(inputRtPacketInfo, sizeof(RT_PACKET_INFO) * numOfInputDevices);
+        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(RT_PACKET_INFO) * numOfInputDevices, &inputRtPacketInfoMemory, (PVOID *)&inputRtPacketInfo));
+        RtlZeroMemory(inputRtPacketInfo, sizeof(RT_PACKET_INFO) * numOfInputDevices);
+    }
 
-    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.ParentObject = m_deviceContext->Device;
+    if (numOfOutputDevices != 0)
+    {
+        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+        attributes.ParentObject = m_deviceContext->Device;
 
-    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(RT_PACKET_INFO) * numOfOutputDevices, &outputRtPacketInfoMemory, (PVOID *)&outputRtPacketInfo));
-    RtlZeroMemory(outputRtPacketInfo, sizeof(RT_PACKET_INFO) * numOfOutputDevices);
+        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(RT_PACKET_INFO) * numOfOutputDevices, &outputRtPacketInfoMemory, (PVOID *)&outputRtPacketInfo));
+        RtlZeroMemory(outputRtPacketInfo, sizeof(RT_PACKET_INFO) * numOfOutputDevices);
+    }
 
     m_inputRtPacketInfo = inputRtPacketInfo;
     m_outputRtPacketInfo = outputRtPacketInfo;
@@ -986,7 +992,7 @@ RtPacketObject::AssignDevices(
     inputRtPacketInfo = outputRtPacketInfo = nullptr;
     inputRtPacketInfoMemory = outputRtPacketInfoMemory = nullptr;
 
-    if (m_numOfInputDevices == 0)
+    if ((m_numOfInputDevices == 0) && (numOfInputDevices != 0))
     {
         m_numOfInputDevices = numOfInputDevices;
 
@@ -998,7 +1004,7 @@ RtPacketObject::AssignDevices(
         }
     }
 
-    if (m_numOfOutputDevices == 0)
+    if ((m_numOfOutputDevices == 0) && (numOfOutputDevices != 0))
     {
         m_numOfOutputDevices = numOfOutputDevices;
 

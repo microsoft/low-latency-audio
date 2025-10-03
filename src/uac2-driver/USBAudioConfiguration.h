@@ -550,6 +550,10 @@ class USBAudioStreamInterface : public USBAudioInterface
     PAGED_CODE_SEG
     virtual ULONG GetLockDelay();
 
+    virtual bool HasInputIsochronousEndpoint() = 0;
+
+    virtual bool HasOutputIsochronousEndpoint() = 0;
+
     virtual bool HasFeedbackEndpoint() = 0;
 
     virtual UCHAR GetFeedbackEndpointAddress() = 0;
@@ -798,6 +802,14 @@ class USBAudio1StreamInterface : public USBAudioStreamInterface
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     virtual UCHAR GetBytesPerSample();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual bool HasInputIsochronousEndpoint();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual bool HasOutputIsochronousEndpoint();
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -1161,6 +1173,14 @@ class USBAudio2StreamInterface : public USBAudioStreamInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    virtual bool HasInputIsochronousEndpoint();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual bool HasOutputIsochronousEndpoint();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     virtual bool HasFeedbackEndpoint();
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1250,7 +1270,15 @@ class USBAudioInterfaceInfo
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    NTSTATUS StoreInterface(USBAudioInterface * interface);
+    NTSTATUS StoreInterface(
+        _In_ USBAudioInterface * interface
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS GetInterfaceNumber(
+        _Out_ ULONG & interfaceNumber
+    );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -1499,6 +1527,13 @@ class USBAudioConfiguration
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS
+    GetNearestSupportedSampleRate(
+        _Inout_ ULONG & sampleRate
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     USBAudioDataFormatManager *
     GetUSBAudioDataFormatManager(
         _In_ bool isInput
@@ -1513,6 +1548,18 @@ class USBAudioConfiguration
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     bool isUSBAudio2() const;
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    bool hasInputIsochronousInterface() const;
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    bool hasOutputIsochronousInterface() const;
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    bool hasInputAndOutputIsochronousInterfaces() const;
 
     static __drv_maxIRQL(DISPATCH_LEVEL)
     PAGED_CODE_SEG
@@ -1648,6 +1695,8 @@ class USBAudioConfiguration
     USBAudioInterfaceInfo **      m_usbAudioInterfaceInfoes{nullptr};
     WDFMEMORY                     m_usbAudioInterfaceInfoesMemory{nullptr};
     bool                          m_isUSBAudio2{false};
+    bool                          m_isInputIsochronousInterfaceExists{false};
+    bool                          m_isOutputIsochronousInterfaceExists{false};
     USBAudioDataFormatManager     m_inputUsbAudioDataFormatManager;
     USBAudioDataFormatManager     m_outputUsbAudioDataFormatManager;
 };

@@ -582,7 +582,7 @@ ASIOError CUSBAsio::getSampleRate(ASIOSampleRate * sampleRate)
         *sampleRate = m_sampleRate;
     }
     // info_print_("getSampleRate\n");
-    // info_print_("current %lf Hz, device current %u Hz\n",this->m_sampleRate,m_audioProperty.sampleRate);
+    // info_print_("current %lf Hz, device current %u Hz\n",this->m_sampleRate,m_audioProperty.SampleRate);
     return ASE_OK;
 }
 

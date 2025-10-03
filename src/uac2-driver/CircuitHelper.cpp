@@ -42,7 +42,7 @@ const ULONG _DSP_STREAM_PROPERTY_UI4_VALUE = 1;
 const ULONG c_SampleRateList[] = {
     11025, 22050, 32000, 44100, 48000, 88200, 96000, 176400, 192000, 352800, 384000, 705600, 768000
 };
-const ULONG c_SampleRateCount = sizeof(c_SampleRateList) / sizeof(c_SampleRateList[0]);
+const ULONG c_SampleRateCount = SIZEOF_ARRAY(c_SampleRateList);
 
 PAGED_CODE_SEG
 NTSTATUS AllocateFormat(
