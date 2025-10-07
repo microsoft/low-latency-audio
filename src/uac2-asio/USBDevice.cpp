@@ -109,7 +109,7 @@ static HANDLE OpenUsbDeviceCore(
                             {
                                 UAC_AUDIO_PROPERTY audioProp;
                                 result = GetAudioProperty(targetHandle, &audioProp);
-                                if (result && (audioProp.OutputAsioChannels != 0))
+                                if (result && !((audioProp.OutputAsioChannels == 0) && (audioProp.InputAsioChannels == 0)))
                                 {
                                     info_print_("successfully opened %s\n", deviceInterfaceDetailData->DevicePath);
                                     delete[] (BYTE *)deviceInterfaceDetailData;

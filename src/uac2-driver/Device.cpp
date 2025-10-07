@@ -877,21 +877,29 @@ Return Value:
             }
         }
 
+        RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetNearestSupportedSampleRate(desiredSampleRate));
+
         ULONG inputBytesPerSample = 0;
         ULONG inputValidBitsPerSample = 0;
         ULONG outputBytesPerSample = 0;
         ULONG outputValidBitsPerSample = 0;
 
-        RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample));
-        RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample));
+        if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
+        {
+            RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample));
+        }
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
+        {
+            RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample));
+        }
 
         RETURN_NTSTATUS_IF_FAILED(ActivateAudioInterface(deviceContext, desiredSampleRate, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample, outputBytesPerSample, outputValidBitsPerSample, true));
 
-        if (deviceContext->OutputInterfaceAndPipe.SelectedAlternateSetting != 0)
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
         {
             RETURN_NTSTATUS_IF_FAILED(SelectAlternateInterface(IsoDirection::Out, deviceContext, deviceContext->AudioProperty.OutputInterfaceNumber, 0));
         }
-        if (deviceContext->InputInterfaceAndPipe.SelectedAlternateSetting != 0)
+        if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
         {
             RETURN_NTSTATUS_IF_FAILED(SelectAlternateInterface(IsoDirection::In, deviceContext, deviceContext->AudioProperty.InputInterfaceNumber, 0));
         }
@@ -902,18 +910,24 @@ Return Value:
 
         RETURN_NTSTATUS_IF_FAILED(deviceContext->RtPacketObject->AssignDevices(numOfInputDevices, numOfOutputDevices));
 
-        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-        attributes.ParentObject = deviceContext->Device;
+        if (numOfInputDevices != 0)
+        {
+            WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+            attributes.ParentObject = deviceContext->Device;
 
-        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(CStreamEngine *) * numOfInputDevices, &deviceContext->CaptureStreamEngineMemory, (PVOID *)&deviceContext->CaptureStreamEngine));
-        RtlZeroMemory(deviceContext->CaptureStreamEngine, sizeof(CStreamEngine *) * numOfInputDevices);
+            RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(CStreamEngine *) * numOfInputDevices, &deviceContext->CaptureStreamEngineMemory, (PVOID *)&deviceContext->CaptureStreamEngine));
+            RtlZeroMemory(deviceContext->CaptureStreamEngine, sizeof(CStreamEngine *) * numOfInputDevices);
+        }
         deviceContext->NumOfInputDevices = numOfInputDevices;
 
-        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-        attributes.ParentObject = deviceContext->Device;
+        if (numOfOutputDevices != 0)
+        {
+            WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+            attributes.ParentObject = deviceContext->Device;
 
-        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(CStreamEngine *) * numOfOutputDevices, &deviceContext->RenderStreamEngineMemory, (PVOID *)&deviceContext->RenderStreamEngine));
-        RtlZeroMemory(deviceContext->RenderStreamEngine, sizeof(CStreamEngine *) * numOfOutputDevices);
+            RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(CStreamEngine *) * numOfOutputDevices, &deviceContext->RenderStreamEngineMemory, (PVOID *)&deviceContext->RenderStreamEngine));
+            RtlZeroMemory(deviceContext->RenderStreamEngine, sizeof(CStreamEngine *) * numOfOutputDevices);
+        }
         deviceContext->NumOfOutputDevices = numOfOutputDevices;
     }
     ReportInternalParameters(deviceContext);
@@ -2446,7 +2460,7 @@ ActivateAudioInterface(
 
     BuildChannelMap(deviceContext);
 
-    if (audioProp->InputBytesPerBlock != 0 && audioProp->OutputBytesPerBlock != 0)
+    if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface() || deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
     {
         status = STATUS_SUCCESS;
     }
@@ -2658,82 +2672,89 @@ NTSTATUS SetPipeInformation(
     // deviceContext->PipeInformationOut      = nullptr;
     // deviceContext->PipeInformationFeedback = nullptr;
     bool failed = false;
-    status = SelectAlternateInterface(IsoDirection::Out, deviceContext, deviceContext->AudioProperty.OutputInterfaceNumber, deviceContext->AudioProperty.OutputAlternateSetting);
 
-    if (NT_SUCCESS(status))
+    if (deviceContext->AudioProperty.OutputInterfaceNumber != 0)
     {
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputInterfaceAndPipe.NumberConfiguredPipes %u", deviceContext->OutputInterfaceAndPipe.NumberConfiguredPipes);
-        for (UCHAR pipeIndex = 0; pipeIndex < deviceContext->OutputInterfaceAndPipe.NumberConfiguredPipes; pipeIndex++)
-        {
-            WDFUSBPIPE               pipe;
-            WDF_USB_PIPE_INFORMATION pipeInfo;
+        status = SelectAlternateInterface(IsoDirection::Out, deviceContext, deviceContext->AudioProperty.OutputInterfaceNumber, deviceContext->AudioProperty.OutputAlternateSetting);
 
-            pipe = WdfUsbInterfaceGetConfiguredPipe(deviceContext->OutputInterfaceAndPipe.UsbInterface, pipeIndex, nullptr);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u] %p", pipeIndex, pipe);
-            if (pipe != nullptr)
+        if (NT_SUCCESS(status))
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputInterfaceAndPipe.NumberConfiguredPipes %u", deviceContext->OutputInterfaceAndPipe.NumberConfiguredPipes);
+            for (UCHAR pipeIndex = 0; pipeIndex < deviceContext->OutputInterfaceAndPipe.NumberConfiguredPipes; pipeIndex++)
             {
+                WDFUSBPIPE               pipe;
+                WDF_USB_PIPE_INFORMATION pipeInfo;
+
+                pipe = WdfUsbInterfaceGetConfiguredPipe(deviceContext->OutputInterfaceAndPipe.UsbInterface, pipeIndex, nullptr);
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u] %p", pipeIndex, pipe);
+                if (pipe != nullptr)
+                {
+                    WDF_USB_PIPE_INFORMATION_INIT(&pipeInfo);
+                    WdfUsbTargetPipeGetInformation(pipe, &pipeInfo);
+                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u], EndpointAddress 0x%x OutputEndpointNumber 0x%x", pipeIndex, pipeInfo.EndpointAddress, deviceContext->AudioProperty.OutputEndpointNumber);
+                    if (pipeInfo.EndpointAddress == deviceContext->AudioProperty.OutputEndpointNumber)
+                    {
+                        deviceContext->OutputInterfaceAndPipe.Pipe = pipe;
+                        deviceContext->OutputInterfaceAndPipe.PipeInfo = pipeInfo;
+                        PPIPE_CONTEXT pipeContext = GetPipeContext(pipe);
+                        pipeContext->SelectedInterfaceAndPipe = &(deviceContext->OutputInterfaceAndPipe);
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - set OutputInterfaceAndPipe.Pipe");
+                    }
+                    else if (pipeInfo.EndpointAddress == deviceContext->FeedbackProperty.FeedbackEndpointNumber)
+                    {
+                        deviceContext->FeedbackInterfaceAndPipe.InterfaceDescriptor = deviceContext->OutputInterfaceAndPipe.InterfaceDescriptor;
+                        deviceContext->FeedbackInterfaceAndPipe.UsbInterface = deviceContext->OutputInterfaceAndPipe.UsbInterface;
+                        deviceContext->FeedbackInterfaceAndPipe.SelectedAlternateSetting = deviceContext->OutputInterfaceAndPipe.SelectedAlternateSetting;
+                        deviceContext->FeedbackInterfaceAndPipe.NumberConfiguredPipes = deviceContext->OutputInterfaceAndPipe.NumberConfiguredPipes;
+                        deviceContext->FeedbackInterfaceAndPipe.MaximumTransferSize = deviceContext->OutputInterfaceAndPipe.MaximumTransferSize;
+                        deviceContext->FeedbackInterfaceAndPipe.Pipe = pipe;
+                        deviceContext->FeedbackInterfaceAndPipe.PipeInfo = pipeInfo;
+                        PPIPE_CONTEXT pipeContext = GetPipeContext(pipe);
+                        pipeContext->SelectedInterfaceAndPipe = &(deviceContext->FeedbackInterfaceAndPipe);
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - set FeedbackInterfaceAndPipe.Pipe");
+                    }
+                }
+            }
+        }
+        else
+        {
+            failed = true;
+        }
+    }
+
+    if (deviceContext->AudioProperty.InputInterfaceNumber != 0)
+    {
+        status = SelectAlternateInterface(IsoDirection::In, deviceContext, deviceContext->AudioProperty.InputInterfaceNumber, deviceContext->AudioProperty.InputAlternateSetting);
+
+        if (NT_SUCCESS(status))
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputInterfaceAndPipe.NumberConfiguredPipes %u", deviceContext->InputInterfaceAndPipe.NumberConfiguredPipes);
+            for (UCHAR pipeIndex = 0; pipeIndex < deviceContext->InputInterfaceAndPipe.NumberConfiguredPipes; pipeIndex++)
+            {
+                WDFUSBPIPE               pipe;
+                WDF_USB_PIPE_INFORMATION pipeInfo;
+
                 WDF_USB_PIPE_INFORMATION_INIT(&pipeInfo);
-                WdfUsbTargetPipeGetInformation(pipe, &pipeInfo);
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u], EndpointAddress 0x%x OutputEndpointNumber 0x%x", pipeIndex, pipeInfo.EndpointAddress, deviceContext->AudioProperty.OutputEndpointNumber);
-                if (pipeInfo.EndpointAddress == deviceContext->AudioProperty.OutputEndpointNumber)
+                pipe = WdfUsbInterfaceGetConfiguredPipe(deviceContext->InputInterfaceAndPipe.UsbInterface, pipeIndex, &pipeInfo);
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u] %p", pipeIndex, pipe);
+                if (pipe != nullptr)
                 {
-                    deviceContext->OutputInterfaceAndPipe.Pipe = pipe;
-                    deviceContext->OutputInterfaceAndPipe.PipeInfo = pipeInfo;
-                    PPIPE_CONTEXT pipeContext = GetPipeContext(pipe);
-                    pipeContext->SelectedInterfaceAndPipe = &(deviceContext->OutputInterfaceAndPipe);
-                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - set OutputInterfaceAndPipe.Pipe");
-                }
-                else if (pipeInfo.EndpointAddress == deviceContext->FeedbackProperty.FeedbackEndpointNumber)
-                {
-                    deviceContext->FeedbackInterfaceAndPipe.InterfaceDescriptor = deviceContext->OutputInterfaceAndPipe.InterfaceDescriptor;
-                    deviceContext->FeedbackInterfaceAndPipe.UsbInterface = deviceContext->OutputInterfaceAndPipe.UsbInterface;
-                    deviceContext->FeedbackInterfaceAndPipe.SelectedAlternateSetting = deviceContext->OutputInterfaceAndPipe.SelectedAlternateSetting;
-                    deviceContext->FeedbackInterfaceAndPipe.NumberConfiguredPipes = deviceContext->OutputInterfaceAndPipe.NumberConfiguredPipes;
-                    deviceContext->FeedbackInterfaceAndPipe.MaximumTransferSize = deviceContext->OutputInterfaceAndPipe.MaximumTransferSize;
-                    deviceContext->FeedbackInterfaceAndPipe.Pipe = pipe;
-                    deviceContext->FeedbackInterfaceAndPipe.PipeInfo = pipeInfo;
-                    PPIPE_CONTEXT pipeContext = GetPipeContext(pipe);
-                    pipeContext->SelectedInterfaceAndPipe = &(deviceContext->FeedbackInterfaceAndPipe);
-                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - set FeedbackInterfaceAndPipe.Pipe");
+                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u], EndpointAddress 0x%x OutputEndpointNumber 0x%x", pipeIndex, pipeInfo.EndpointAddress, deviceContext->AudioProperty.InputEndpointNumber);
+                    if (pipeInfo.EndpointAddress == deviceContext->AudioProperty.InputEndpointNumber)
+                    {
+                        deviceContext->InputInterfaceAndPipe.Pipe = pipe;
+                        deviceContext->InputInterfaceAndPipe.PipeInfo = pipeInfo;
+                        PPIPE_CONTEXT pipeContext = GetPipeContext(pipe);
+                        pipeContext->SelectedInterfaceAndPipe = &(deviceContext->InputInterfaceAndPipe);
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - set InputInterfaceAndPipe.Pipe");
+                    }
                 }
             }
         }
-    }
-    else
-    {
-        failed = true;
-    }
-
-    status = SelectAlternateInterface(IsoDirection::In, deviceContext, deviceContext->AudioProperty.InputInterfaceNumber, deviceContext->AudioProperty.InputAlternateSetting);
-
-    if (NT_SUCCESS(status))
-    {
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputInterfaceAndPipe.NumberConfiguredPipes %u", deviceContext->InputInterfaceAndPipe.NumberConfiguredPipes);
-        for (UCHAR pipeIndex = 0; pipeIndex < deviceContext->InputInterfaceAndPipe.NumberConfiguredPipes; pipeIndex++)
+        else
         {
-            WDFUSBPIPE               pipe;
-            WDF_USB_PIPE_INFORMATION pipeInfo;
-
-            WDF_USB_PIPE_INFORMATION_INIT(&pipeInfo);
-            pipe = WdfUsbInterfaceGetConfiguredPipe(deviceContext->InputInterfaceAndPipe.UsbInterface, pipeIndex, &pipeInfo);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u] %p", pipeIndex, pipe);
-            if (pipe != nullptr)
-            {
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u], EndpointAddress 0x%x OutputEndpointNumber 0x%x", pipeIndex, pipeInfo.EndpointAddress, deviceContext->AudioProperty.InputEndpointNumber);
-                if (pipeInfo.EndpointAddress == deviceContext->AudioProperty.InputEndpointNumber)
-                {
-                    deviceContext->InputInterfaceAndPipe.Pipe = pipe;
-                    deviceContext->InputInterfaceAndPipe.PipeInfo = pipeInfo;
-                    PPIPE_CONTEXT pipeContext = GetPipeContext(pipe);
-                    pipeContext->SelectedInterfaceAndPipe = &(deviceContext->InputInterfaceAndPipe);
-                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - set InputInterfaceAndPipe.Pipe");
-                }
-            }
+            failed = true;
         }
-    }
-    else
-    {
-        failed = true;
     }
 
     if (failed)
@@ -3479,35 +3500,43 @@ NTSTATUS USBAudioAcxDriverGetCurrentDataFormat(
 
     RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannels(isInput, numOfChannels));
 
+	RtlZeroMemory(&dataFormat, sizeof(dataFormat));
+
     if (isInput)
     {
         ASSERT(deviceContext->Capture != nullptr);
 
-        RETURN_NTSTATUS_IF_FAILED(USBAudioDataFormat::BuildWaveFormatExtensible(
-            deviceContext->AudioProperty.SampleRate,
-            numOfChannels,
-            (UCHAR)deviceContext->AudioProperty.InputBytesPerSample,
-            (UCHAR)deviceContext->AudioProperty.InputValidBitsPerSample,
-            deviceContext->AudioProperty.InputFormatType,
-            deviceContext->AudioProperty.InputFormat,
-            pcmWaveFormatExtensible
-        ));
-        RETURN_NTSTATUS_IF_FAILED(AllocateFormat(pcmWaveFormatExtensible, deviceContext->Capture, deviceContext->Device, &dataFormat));
+        if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
+        {
+            RETURN_NTSTATUS_IF_FAILED(USBAudioDataFormat::BuildWaveFormatExtensible(
+                deviceContext->AudioProperty.SampleRate,
+                numOfChannels,
+                (UCHAR)deviceContext->AudioProperty.InputBytesPerSample,
+                (UCHAR)deviceContext->AudioProperty.InputValidBitsPerSample,
+                deviceContext->AudioProperty.InputFormatType,
+                deviceContext->AudioProperty.InputFormat,
+                pcmWaveFormatExtensible
+            ));
+            RETURN_NTSTATUS_IF_FAILED(AllocateFormat(pcmWaveFormatExtensible, deviceContext->Capture, deviceContext->Device, &dataFormat));
+        }
     }
     else
     {
         ASSERT(deviceContext->Render != nullptr);
 
-        RETURN_NTSTATUS_IF_FAILED(USBAudioDataFormat::BuildWaveFormatExtensible(
-            deviceContext->AudioProperty.SampleRate,
-            numOfChannels,
-            (UCHAR)deviceContext->AudioProperty.OutputBytesPerSample,
-            (UCHAR)deviceContext->AudioProperty.OutputValidBitsPerSample,
-            deviceContext->AudioProperty.OutputFormatType,
-            deviceContext->AudioProperty.OutputFormat,
-            pcmWaveFormatExtensible
-        ));
-        RETURN_NTSTATUS_IF_FAILED(AllocateFormat(pcmWaveFormatExtensible, deviceContext->Render, deviceContext->Device, &dataFormat));
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
+        {
+            RETURN_NTSTATUS_IF_FAILED(USBAudioDataFormat::BuildWaveFormatExtensible(
+                deviceContext->AudioProperty.SampleRate,
+                numOfChannels,
+                (UCHAR)deviceContext->AudioProperty.OutputBytesPerSample,
+                (UCHAR)deviceContext->AudioProperty.OutputValidBitsPerSample,
+                deviceContext->AudioProperty.OutputFormatType,
+                deviceContext->AudioProperty.OutputFormat,
+                pcmWaveFormatExtensible
+            ));
+            RETURN_NTSTATUS_IF_FAILED(AllocateFormat(pcmWaveFormatExtensible, deviceContext->Render, deviceContext->Device, &dataFormat));
+        }
     }
 
     return STATUS_SUCCESS;
@@ -3713,7 +3742,7 @@ VOID EvtUSBAudioAcxDriverGetChannelInfo(
     {
         PUAC_GET_CHANNEL_INFO_CONTEXT channelInfo = static_cast<PUAC_GET_CHANNEL_INFO_CONTEXT>(params.Parameters.Property.Value);
         channelInfo->NumChannels = numChannels;
-        BOOL  input = TRUE;
+        BOOL  input = deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface() ? TRUE : FALSE;
         ULONG asioCh = 0;
         for (ULONG i = 0; i < numChannels; ++i)
         {
@@ -3726,7 +3755,7 @@ VOID EvtUSBAudioAcxDriverGetChannelInfo(
             ++asioCh;
             if (input && asioCh >= deviceContext->AudioProperty.InputAsioChannels)
             {
-                input = false;
+                input = FALSE;
                 asioCh = 0;
             }
         }
@@ -4253,12 +4282,16 @@ VOID EvtUSBAudioAcxDriverChangeSampleRate(
     ACXDATAFORMAT inputDataFormatAfterChange = nullptr;
     ACXDATAFORMAT outputDataFormatAfterChange = nullptr;
 
-    status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatBeforeChange);
-    IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-    status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatBeforeChange);
-    IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
+    if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
+    {
+        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatBeforeChange);
+        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+    }
+    if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
+    {
+        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatBeforeChange);
+        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+    }
     if (NT_SUCCESS(status))
     {
         ULONG desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
@@ -4279,18 +4312,22 @@ VOID EvtUSBAudioAcxDriverChangeSampleRate(
 
     IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
 
-    status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatAfterChange);
-    IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+    if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface() && (outputDataFormatBeforeChange != nullptr))
+    {
+        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatAfterChange);
+        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
 
-    status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatAfterChange);
-    IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+        status = NotifyAllPinsDataFormatChange(false, deviceContext, outputDataFormatBeforeChange, outputDataFormatAfterChange);
+        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+    }
+    if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface() && (inputDataFormatBeforeChange != nullptr))
+    {
+        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatAfterChange);
+        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
 
-    status = NotifyAllPinsDataFormatChange(false, deviceContext, outputDataFormatBeforeChange, outputDataFormatAfterChange);
-    IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-    status = NotifyAllPinsDataFormatChange(true, deviceContext, inputDataFormatBeforeChange, inputDataFormatAfterChange);
-    IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
+        status = NotifyAllPinsDataFormatChange(true, deviceContext, inputDataFormatBeforeChange, inputDataFormatAfterChange);
+        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+    }
     status = STATUS_SUCCESS;
 
 Exit_BeforeWaitLockRelease:
@@ -4373,12 +4410,16 @@ Return Value:
 
         WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
 
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatBeforeChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatBeforeChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
+        if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
+        {
+            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatBeforeChange);
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+        }
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
+        {
+            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatBeforeChange);
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+        }
         status = USBAudioDataFormat::ConvertFormatToSampleFormat(deviceContext->AudioProperty.CurrentSampleFormat, desiredFormatType, desiredFormat);
         IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
 
@@ -4388,12 +4429,16 @@ Return Value:
             desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
             desiredFormat = NS_USBAudio0200::IEEE_FLOAT;
         }
-        status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
+        if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
+        {
+            status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample);
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+        }
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
+        {
+            status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample);
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+        }
         //
         // When using ASIO, the maximum bit depth is used independently for input and output.
         //
@@ -4415,18 +4460,22 @@ Return Value:
         {
             status = STATUS_INVALID_DEVICE_REQUEST;
         }
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface() && (outputDataFormatBeforeChange != nullptr))
+        {
+            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatAfterChange);
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
 
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+            status = NotifyAllPinsDataFormatChange(false, deviceContext, outputDataFormatBeforeChange, outputDataFormatAfterChange);
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+        }
+        if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface() && (inputDataFormatBeforeChange != nullptr))
+        {
+            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatAfterChange);
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
 
-        status = NotifyAllPinsDataFormatChange(false, deviceContext, outputDataFormatBeforeChange, outputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        status = NotifyAllPinsDataFormatChange(true, deviceContext, inputDataFormatBeforeChange, inputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
+            status = NotifyAllPinsDataFormatChange(true, deviceContext, inputDataFormatBeforeChange, inputDataFormatAfterChange);
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+        }
     Exit_BeforeWaitLockRelease:
         WdfWaitLockRelease(deviceContext->StreamWaitLock);
     }
@@ -4792,35 +4841,48 @@ Return Value:
         ACXDATAFORMAT inputDataFormatAfterChange = nullptr;
         ACXDATAFORMAT outputDataFormatAfterChange = nullptr;
 
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatBeforeChange);
-        IF_FAILED_JUMP(status, Exit);
-
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatBeforeChange);
-        IF_FAILED_JUMP(status, Exit);
-
+        if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
+        {
+            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatBeforeChange);
+            IF_FAILED_JUMP(status, Exit);
+        }
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
+        {
+            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatBeforeChange);
+            IF_FAILED_JUMP(status, Exit);
+        }
         status = USBAudioDataFormat::ConvertFormatToSampleFormat(deviceContext->SampleFormatBackup, desiredFormatType, desiredFormat);
         IF_FAILED_JUMP(status, Exit);
 
-        status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample);
-        IF_FAILED_JUMP(status, Exit);
-
-        status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample);
-        IF_FAILED_JUMP(status, Exit);
-
+        if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
+        {
+            status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample);
+            IF_FAILED_JUMP(status, Exit);
+        }
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
+        {
+            status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample);
+            IF_FAILED_JUMP(status, Exit);
+        }
         status = ActivateAudioInterface(deviceContext, deviceContext->AudioProperty.SampleRate, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample, outputBytesPerSample, outputValidBitsPerSample);
         IF_FAILED_JUMP(status, Exit);
 
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit);
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface() && (outputDataFormatBeforeChange != nullptr))
+        {
+            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatAfterChange);
+            IF_FAILED_JUMP(status, Exit);
 
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit);
+            status = NotifyAllPinsDataFormatChange(false, deviceContext, outputDataFormatBeforeChange, outputDataFormatAfterChange);
+            IF_FAILED_JUMP(status, Exit);
+        }
+        if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface() && (inputDataFormatBeforeChange != nullptr))
+        {
+            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatAfterChange);
+            IF_FAILED_JUMP(status, Exit);
 
-        status = NotifyAllPinsDataFormatChange(false, deviceContext, outputDataFormatBeforeChange, outputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit);
-
-        status = NotifyAllPinsDataFormatChange(true, deviceContext, inputDataFormatBeforeChange, inputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit);
+            status = NotifyAllPinsDataFormatChange(true, deviceContext, inputDataFormatBeforeChange, inputDataFormatAfterChange);
+            IF_FAILED_JUMP(status, Exit);
+        }
     }
 
 Exit:
@@ -5104,7 +5166,19 @@ NTSTATUS StartIsoStream(
     }
     RETURN_NTSTATUS_IF_FAILED(status);
 
-    deviceContext->StreamObject = StreamObject::Create(deviceContext);
+    if ((deviceContext->OutputInterfaceAndPipe.Pipe != nullptr) && (deviceContext->InputInterfaceAndPipe.Pipe == nullptr))
+    { // output only
+        deviceContext->StreamObject = StreamObject::Create(deviceContext, StreamStatuses::OutputStable, StreamStatuses::OutputStreaming, (StreamStatuses)(toInt(StreamStatuses::OutputStable) | toInt(StreamStatuses::OutputStreaming)));
+    }
+    else if ((deviceContext->OutputInterfaceAndPipe.Pipe == nullptr) && (deviceContext->InputInterfaceAndPipe.Pipe != nullptr))
+    { // input only
+        deviceContext->StreamObject = StreamObject::Create(deviceContext, StreamStatuses::InputStable, StreamStatuses::InputStreaming, (StreamStatuses)(toInt(StreamStatuses::InputStable) | toInt(StreamStatuses::InputStreaming)));
+    }
+    else
+    {
+        deviceContext->StreamObject = StreamObject::Create(deviceContext, StreamStatuses::IoStable, StreamStatuses::IoStreaming, StreamStatuses::IoSteady);
+    }
+
     RETURN_NTSTATUS_IF_TRUE_ACTION(deviceContext->StreamObject == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, status);
 
     deviceContext->StreamObject->ResetNextMeasureFrames(deviceContext->AudioProperty.PacketsPerSec);
@@ -5139,7 +5213,10 @@ NTSTATUS StartIsoStream(
             status = StartTransfer(deviceContext, deviceContext->StreamObject, i, IsoDirection::In);
             RETURN_NTSTATUS_IF_FAILED(status);
         }
-        status = StartTransfer(deviceContext, deviceContext->StreamObject, i, IsoDirection::Out);
+        if (deviceContext->OutputInterfaceAndPipe.Pipe != nullptr)
+        {
+            status = StartTransfer(deviceContext, deviceContext->StreamObject, i, IsoDirection::Out);
+        }
         RETURN_NTSTATUS_IF_FAILED(status);
     }
 
@@ -5583,10 +5660,14 @@ NTSTATUS StopIsoStream(
         delete deviceContext->StreamObject;
         deviceContext->StreamObject = nullptr;
 
-        SelectAlternateInterface(IsoDirection::Out, deviceContext, deviceContext->AudioProperty.OutputInterfaceNumber, 0);
-
-        SelectAlternateInterface(IsoDirection::In, deviceContext, deviceContext->AudioProperty.InputInterfaceNumber, 0);
-
+        if (deviceContext->AudioProperty.OutputInterfaceNumber != 0)
+        {
+            SelectAlternateInterface(IsoDirection::Out, deviceContext, deviceContext->AudioProperty.OutputInterfaceNumber, 0);
+        }
+        if (deviceContext->AudioProperty.InputInterfaceNumber != 0)
+        {
+            SelectAlternateInterface(IsoDirection::In, deviceContext, deviceContext->AudioProperty.InputInterfaceNumber, 0);
+        }
         WdfDeviceResumeIdle(deviceContext->Device);
     }
 

@@ -102,12 +102,14 @@ class AsioBufferObject
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     bool EvaluatePositionAndNotifyIfNeeded(
-        _In_ ULONGLONG currentTimePCUs,
-        _In_ ULONGLONG lastAsioNotifyPCUs,
-        _In_ ULONGLONG asioNotifyCount,
-        _In_ LONG      prevAsioMeasuredPeriodUs,
-        _In_ LONG      curClientProcessingTimeUs,
-        _Out_ LONG &   curAsioMeasuredPeriodUs
+        _In_ ULONGLONG  currentTimePCUs,
+        _In_ ULONGLONG  lastAsioNotifyPCUs,
+        _In_ ULONGLONG  asioNotifyCount,
+        _In_ LONG       prevAsioMeasuredPeriodUs,
+        _In_ LONG       curClientProcessingTimeUs,
+        _Out_ LONG &    curAsioMeasuredPeriodUs,
+        _In_ const bool hasInputIsochronousInterface,
+        _In_ const bool hasOutputIsochronousInterface
     );
 
     __drv_maxIRQL(DISPATCH_LEVEL)

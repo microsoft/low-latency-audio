@@ -215,9 +215,8 @@ AsioBufferObject::SetBuffer(
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->AsioDriverVersion != UAC_ASIO_DRIVER_VERSION, status = STATUS_REVISION_MISMATCH, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->HeaderLength != sizeof(UAC_ASIO_PLAY_BUFFER_HEADER), status = STATUS_INVALID_BUFFER_SIZE, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->PlayChannels > UAC_MAX_ASIO_CHANNELS, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->PlayChannels < UAC_MIN_ASIO_CHANNELS, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->RecChannels > UAC_MAX_ASIO_CHANNELS, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->RecChannels < UAC_MIN_ASIO_CHANNELS, status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION((m_playHeader->RecChannels < UAC_MIN_ASIO_CHANNELS) && (m_playHeader->PlayChannels < UAC_MIN_ASIO_CHANNELS), status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->PeriodSamples > UAC_MAX_ASIO_PERIOD_SAMPLES, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->PeriodSamples < UAC_MIN_ASIO_PERIOD_SAMPLES, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION((m_playHeader->RecChannels > m_deviceContext->AudioProperty.InputAsioChannels) || (m_playHeader->PlayChannels > m_deviceContext->AudioProperty.OutputAsioChannels), status = STATUS_INVALID_PARAMETER, status);
@@ -794,12 +793,14 @@ void AsioBufferObject::SetRecDeviceStatus(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 bool AsioBufferObject::EvaluatePositionAndNotifyIfNeeded(
-    ULONGLONG currentTimePCUs,
-    ULONGLONG lastAsioNotifyPCUs,
-    ULONGLONG asioNotifyCount,
-    LONG      prevAsioMeasuredPeriodUs,
-    LONG      curClientProcessingTimeUs,
-    LONG &    curAsioMeasuredPeriodUs
+    ULONGLONG  currentTimePCUs,
+    ULONGLONG  lastAsioNotifyPCUs,
+    ULONGLONG  asioNotifyCount,
+    LONG       prevAsioMeasuredPeriodUs,
+    LONG       curClientProcessingTimeUs,
+    LONG &     curAsioMeasuredPeriodUs,
+    const bool hasInputIsochronousInterface,
+    const bool hasOutputIsochronousInterface
 )
 {
     bool     asioNotify = false;
@@ -809,8 +810,22 @@ bool AsioBufferObject::EvaluatePositionAndNotifyIfNeeded(
 
     curAsioMeasuredPeriodUs = 0;
 
-    if (((m_writePosition - asioNotifyPosition) >= m_bufferPeriod) &&
-        ((m_readPosition - asioNotifyPosition) >= m_bufferPeriod))
+    if (hasInputIsochronousInterface && hasOutputIsochronousInterface)
+    {
+        asioNotify = ((m_writePosition - asioNotifyPosition) >= m_bufferPeriod) && ((m_readPosition - asioNotifyPosition) >= m_bufferPeriod);
+    }
+    else if (!hasInputIsochronousInterface)
+    {
+        // output only
+        asioNotify = ((m_readPosition - asioNotifyPosition) >= m_bufferPeriod);
+    }
+    else if (!hasOutputIsochronousInterface)
+    {
+        // input only
+        asioNotify = ((m_writePosition - asioNotifyPosition) >= m_bufferPeriod);
+    }
+
+    if (asioNotify)
     {
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ASIO, " - asio notify: write position %llu, read position %llu, notify position %llu, buffer period %u, current time %llu us, last asio notify %llu us, notify count %llu", m_writePosition, m_readPosition, m_notifyPosition, m_bufferPeriod, currentTimePCUs, lastAsioNotifyPCUs, asioNotifyCount);
         asioNotify = true;

@@ -127,7 +127,12 @@ class StreamObject
   public:
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    StreamObject(_In_ PDEVICE_CONTEXT deviceContext);
+    StreamObject(
+        _In_ PDEVICE_CONTEXT      deviceContext,
+        _In_ const StreamStatuses ioStable,
+        _In_ const StreamStatuses ioStreaming,
+        _In_ const StreamStatuses ioSteady
+    );
 
     virtual __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -319,7 +324,10 @@ class StreamObject
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     StreamObject * Create(
-        _In_ PDEVICE_CONTEXT deviceContext
+        _In_ PDEVICE_CONTEXT      deviceContext,
+        _In_ const StreamStatuses ioStable,
+        _In_ const StreamStatuses ioStreaming,
+        _In_ const StreamStatuses ioSteady
     );
 
   private:
@@ -425,9 +433,14 @@ class StreamObject
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     bool
-    IsOutputPacketAtEstimatedPosition(
+    IsOutputPacketOverlapWithEstimatePosition(
         _In_ ULONG inOffset
     );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    bool
+    IsOutputPacketAtEstimatedPosition();
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -587,6 +600,10 @@ class StreamObject
 
     BUFFER_PROPERTY m_inputBuffers[UAC_MAX_IRP_NUMBER * UAC_MAX_CLASSIC_FRAMES_PER_IRP * 8]{};
     BUFFER_PROPERTY m_outputBuffers[UAC_MAX_IRP_NUMBER * UAC_MAX_CLASSIC_FRAMES_PER_IRP * 8]{};
+
+    const StreamStatuses c_ioStable;
+    const StreamStatuses c_ioStreaming;
+    const StreamStatuses c_ioSteady;
 };
 
 #endif

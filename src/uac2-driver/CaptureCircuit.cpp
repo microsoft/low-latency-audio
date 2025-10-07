@@ -394,7 +394,7 @@ Return Value:
     UCHAR                           muteUnitID = USBAudioConfiguration::InvalidID;
     ULONG                           numOfDevices = 0;
     ULONG                           numOfConnections = 0;
-    ULONG                           numOfRemainingChannels;
+    ULONG                           numOfRemainingChannels = 0;
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
@@ -427,6 +427,11 @@ Return Value:
     RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannelInfo(true, numOfChannels, terminalType, volumeUnitID, muteUnitID));
     RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamDevices(true, numOfDevices));
     numOfRemainingChannels = numOfChannels;
+
+    if (numOfChannels == 0)
+    {
+        return STATUS_SUCCESS;
+    }
 
     USBAudioDataFormatManager * usbAudioDataFormatManager = deviceContext->UsbAudioConfiguration->GetUSBAudioDataFormatManager(true);
     RETURN_NTSTATUS_IF_TRUE_ACTION(usbAudioDataFormatManager == nullptr, status = STATUS_INVALID_PARAMETER, status);

@@ -112,6 +112,14 @@ ContiguousMemory::Allocate(
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - this, m_contiguousMemory, %p, %p", this, m_contiguousMemory);
     for (ULONG direction = 0; direction < toULONG(IsoDirection::NumOfIsoDirection); ++direction)
     {
+        if ((static_cast<IsoDirection>(direction) == IsoDirection::In) && !usbAudioConfiguration->hasInputIsochronousInterface())
+        {
+            continue;
+        }
+        if ((static_cast<IsoDirection>(direction) == IsoDirection::Out) && !usbAudioConfiguration->hasOutputIsochronousInterface())
+        {
+            continue;
+        }
         ULONG maxPacketSize = GetMaxPacketSize(usbAudioConfiguration, static_cast<IsoDirection>(direction));
         if (maxPacketSize == 0)
         {
@@ -121,7 +129,7 @@ ContiguousMemory::Allocate(
 
         // >>comment-001<<
         m_contiguousMemorySize[direction] = maxPacketSize * maxBurstOverride * maxClassicFramesPerIrp * framesPerMs;
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Max Contiguous Memory Size = = %d", m_contiguousMemorySize[direction]);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Max Contiguous Memory Size = %d", m_contiguousMemorySize[direction]);
 
         for (ULONG index = 0; index < UAC_MAX_IRP_NUMBER; ++index)
         {

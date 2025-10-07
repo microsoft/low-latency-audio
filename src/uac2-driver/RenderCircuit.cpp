@@ -681,7 +681,7 @@ Return Value:
     UCHAR                          muteUnitID = 0;
     ULONG                          numOfDevices = 0;
     ULONG                          numOfConnections = 0;
-    ULONG                          numOfRemainingChannels;
+    ULONG                          numOfRemainingChannels = 0;
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
@@ -711,8 +711,9 @@ Return Value:
     deviceContext = GetDeviceContext(Device);
     ASSERT(deviceContext != nullptr);
 
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannelInfo(false, numOfChannels, terminalType, volumeUnitID, muteUnitID));
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamDevices(false, numOfDevices));
+    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannelInfoAdjusted(false, numOfChannels, terminalType, volumeUnitID, muteUnitID));
+    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamDevicesAdjusted(false, numOfDevices));
+
     numOfRemainingChannels = numOfChannels;
 
     USBAudioDataFormatManager * usbAudioDataFormatManager = deviceContext->UsbAudioConfiguration->GetUSBAudioDataFormatManager(false);
@@ -950,7 +951,6 @@ Return Value:
             //
             RETURN_NTSTATUS_IF_FAILED(AcxPinCreate(circuit, &attributes, &pinCfg, &pins[index * CodecRenderPinCount + CodecRenderHostPin]));
 
-            ASSERT(pins[index * CodecRenderPinCount + CodecRenderHostPin] != nullptr);
             pinContext = GetCodecPinContext(pins[index * CodecRenderPinCount + CodecRenderHostPin]);
             ASSERT(pinContext);
             pinContext->Device = Device;
@@ -1001,7 +1001,6 @@ Return Value:
             //
             RETURN_NTSTATUS_IF_FAILED(AcxPinCreate(circuit, &attributes, &pinCfg, &pins[index * CodecRenderPinCount + CodecRenderBridgePin]));
 
-            ASSERT(pins[index * CodecRenderPinCount + CodecRenderBridgePin] != nullptr);
             pinContext = GetCodecPinContext(pins[index * CodecRenderPinCount + CodecRenderBridgePin]);
             ASSERT(pinContext);
             pinContext->Device = Device;
@@ -1043,7 +1042,10 @@ Return Value:
             RETURN_NTSTATUS_IF_FAILED(AcxPinAddJacks(pins[index * CodecRenderPinCount + CodecRenderBridgePin], &jack, 1));
         }
 
-        RETURN_NTSTATUS_IF_FAILED(Render_AllocateSupportedFormats(Device, pins[index * CodecRenderPinCount + CodecRenderHostPin], circuit, SupportedSampleRate, numOfChannelsPerDevice, usbAudioDataFormatManager));
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
+        {
+            RETURN_NTSTATUS_IF_FAILED(Render_AllocateSupportedFormats(Device, pins[index * CodecRenderPinCount + CodecRenderHostPin], circuit, SupportedSampleRate, numOfChannelsPerDevice, usbAudioDataFormatManager));
+        }
     }
 
     //
