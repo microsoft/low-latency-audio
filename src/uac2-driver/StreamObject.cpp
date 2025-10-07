@@ -736,7 +736,7 @@ StreamStatuses StreamObject::GetStreamStatuses(bool & isProcessIo)
     WdfSpinLockAcquire(m_positionSpinLock);
 
     status = static_cast<StreamStatuses>(m_streamStatus);
-    if (m_deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
+    if (m_deviceContext->UsbAudioConfiguration->hasInputAndOutputIsochronousInterfaces())
     {
         isProcessIo = m_inputLastProcessedIrpIndex == m_outputLastProcessedIrpIndex;
     }
@@ -1033,7 +1033,7 @@ bool StreamObject::CreateCompletedInputPacketList(
         {
             inputBuffers[i] = *inputRemainder;
             inProcessRemainder = true;
-            // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - in process remainder true, transfer object %p", inputBuffers[i].transferObject);
+            // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - in process remainder true, transfer object %p", inputBuffers[i].TransferObject);
         }
         else
         {

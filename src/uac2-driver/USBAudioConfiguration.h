@@ -1465,7 +1465,26 @@ class USBAudioConfiguration
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     NTSTATUS
+    GetStreamChannelInfoAdjusted(
+        _In_ bool      isInput,
+        _Out_ UCHAR &  numOfChannels,
+        _Out_ USHORT & terminalType,
+        _Out_ UCHAR &  volumeUnitID,
+        _Out_ UCHAR &  muteUnitID
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
     GetStreamDevices(
+        _In_ bool     isInput,
+        _Out_ ULONG & numOfDevices
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    GetStreamDevicesAdjusted(
         _In_ bool     isInput,
         _Out_ ULONG & numOfDevices
     );

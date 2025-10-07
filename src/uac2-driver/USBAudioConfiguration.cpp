@@ -4901,7 +4901,18 @@ USBAudioConfiguration::ParseDescriptors(PUSB_CONFIGURATION_DESCRIPTOR usbConfigu
 
     if (NT_SUCCESS(status))
     {
-        m_deviceContext->AudioProperty.SupportedSampleFormats = GetUSBAudioDataFormatManager(true)->GetSupportedSampleFormats() & GetUSBAudioDataFormatManager(false)->GetSupportedSampleFormats();
+        if (hasInputAndOutputIsochronousInterfaces())
+        {
+            m_deviceContext->AudioProperty.SupportedSampleFormats = GetUSBAudioDataFormatManager(true)->GetSupportedSampleFormats() & GetUSBAudioDataFormatManager(false)->GetSupportedSampleFormats();
+        }
+        else if (hasInputIsochronousInterface())
+        {
+            m_deviceContext->AudioProperty.SupportedSampleFormats = GetUSBAudioDataFormatManager(true)->GetSupportedSampleFormats();
+        }
+        else
+        {
+            m_deviceContext->AudioProperty.SupportedSampleFormats = GetUSBAudioDataFormatManager(false)->GetSupportedSampleFormats();
+        }
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
@@ -5979,6 +5990,29 @@ USBAudioConfiguration::GetStreamChannelInfo(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
+USBAudioConfiguration::GetStreamChannelInfoAdjusted(
+    bool     isInput,
+    UCHAR &  numOfChannels,
+    USHORT & terminalType,
+    UCHAR &  volumeUnitID,
+    UCHAR &  muteUnitID
+)
+{
+    PAGED_CODE();
+
+    RETURN_NTSTATUS_IF_FAILED(GetStreamChannelInfo(isInput, numOfChannels, terminalType, volumeUnitID, muteUnitID));
+
+    if (numOfChannels == 0)
+    {
+        numOfChannels = 1;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
 USBAudioConfiguration::GetStreamDevices(
     bool    isInput,
     ULONG & numOfDevices
@@ -5993,6 +6027,25 @@ USBAudioConfiguration::GetStreamDevices(
 
     RETURN_NTSTATUS_IF_FAILED(GetStreamChannelInfo(isInput, numOfChannels, terminalType, volumeUnitID, muteUnitID));
     numOfDevices = (numOfChannels / 2) + (numOfChannels % 2); // stereo or stereo + mono
+
+    return STATUS_SUCCESS;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
+USBAudioConfiguration::GetStreamDevicesAdjusted(
+    bool    isInput,
+    ULONG & numOfDevices
+)
+{
+    PAGED_CODE();
+
+    RETURN_NTSTATUS_IF_FAILED(GetStreamDevices(isInput, numOfDevices));
+    if (numOfDevices == 0)
+    {
+        numOfDevices = 1;
+    }
 
     return STATUS_SUCCESS;
 }

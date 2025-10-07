@@ -711,33 +711,31 @@ Return Value:
     deviceContext = GetDeviceContext(Device);
     ASSERT(deviceContext != nullptr);
 
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannelInfo(false, numOfChannels, terminalType, volumeUnitID, muteUnitID));
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamDevices(false, numOfDevices));
+    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannelInfoAdjusted(false, numOfChannels, terminalType, volumeUnitID, muteUnitID));
+    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamDevicesAdjusted(false, numOfDevices));
+
     numOfRemainingChannels = numOfChannels;
 
     USBAudioDataFormatManager * usbAudioDataFormatManager = deviceContext->UsbAudioConfiguration->GetUSBAudioDataFormatManager(false);
     RETURN_NTSTATUS_IF_TRUE_ACTION(usbAudioDataFormatManager == nullptr, status = STATUS_INVALID_PARAMETER, status);
 
-    if (numOfDevices != 0)
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+    attributes.ParentObject = Device;
+    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXPIN) * CodecRenderPinCount * numOfDevices, &pinsMemory, (PVOID *)&pins));
+    RtlZeroMemory(pins, sizeof(ACXPIN) * CodecRenderPinCount * numOfDevices);
+
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+    attributes.ParentObject = Device;
+    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXELEMENT) * RenderElementCount * numOfDevices, &elementsMemory, (PVOID *)&elements));
+    RtlZeroMemory(elements, sizeof(ACXELEMENT) * RenderElementCount * numOfDevices);
+
+    numOfConnections = (RenderElementCount + 1) * numOfDevices;
+    connections = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) ACX_CONNECTION[numOfConnections];
+    if (connections == nullptr)
     {
-        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-        attributes.ParentObject = Device;
-        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXPIN) * CodecRenderPinCount * numOfDevices, &pinsMemory, (PVOID *)&pins));
-        RtlZeroMemory(pins, sizeof(ACXPIN) * CodecRenderPinCount * numOfDevices);
-
-        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-        attributes.ParentObject = Device;
-        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXELEMENT) * RenderElementCount * numOfDevices, &elementsMemory, (PVOID *)&elements));
-        RtlZeroMemory(elements, sizeof(ACXELEMENT) * RenderElementCount * numOfDevices);
-
-        numOfConnections = (RenderElementCount + 1) * numOfDevices;
-        connections = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) ACX_CONNECTION[numOfConnections];
-        if (connections == nullptr)
-        {
-            RETURN_NTSTATUS_IF_FAILED(STATUS_INSUFFICIENT_RESOURCES);
-        }
-        RtlZeroMemory(connections, sizeof(ACX_CONNECTION) * numOfConnections);
+        RETURN_NTSTATUS_IF_FAILED(STATUS_INSUFFICIENT_RESOURCES);
     }
+    RtlZeroMemory(connections, sizeof(ACX_CONNECTION) * numOfConnections);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - num of channels = %u, num of connections = %u", numOfChannels, numOfConnections);
     //
     // Init output value.
@@ -821,18 +819,16 @@ Return Value:
         circuitContext = GetRenderCircuitContext(circuit);
         ASSERT(circuitContext);
 
-        if (numOfDevices != 0)
-        {
-            WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-            attributes.ParentObject = circuit;
-            RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXELEMENT) * numOfDevices, &(circuitContext->VolumeElementsMemory), (PVOID *)&(circuitContext->VolumeElements)));
-            RtlZeroMemory(circuitContext->VolumeElements, sizeof(ACXVOLUME) * numOfDevices);
+        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+        attributes.ParentObject = circuit;
+        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXELEMENT) * numOfDevices, &(circuitContext->VolumeElementsMemory), (PVOID *)&(circuitContext->VolumeElements)));
+        RtlZeroMemory(circuitContext->VolumeElements, sizeof(ACXVOLUME) * numOfDevices);
 
-            WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-            attributes.ParentObject = circuit;
-            RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXELEMENT) * numOfDevices, &(circuitContext->MuteElementsMemory), (PVOID *)&(circuitContext->MuteElements)));
-            RtlZeroMemory(circuitContext->MuteElements, sizeof(ACXMUTE) * numOfDevices);
-        }
+        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+        attributes.ParentObject = circuit;
+        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXELEMENT) * numOfDevices, &(circuitContext->MuteElementsMemory), (PVOID *)&(circuitContext->MuteElements)));
+        RtlZeroMemory(circuitContext->MuteElements, sizeof(ACXMUTE) * numOfDevices);
+
         circuitInitScope.release();
     }
 
@@ -931,7 +927,6 @@ Return Value:
         //
         // Create the pins for the circuit.
         //
-        if (numOfDevices != 0)
         {
             ACX_PIN_CONFIG      pinCfg;
             CODEC_PIN_CONTEXT * pinContext;
@@ -956,7 +951,6 @@ Return Value:
             //
             RETURN_NTSTATUS_IF_FAILED(AcxPinCreate(circuit, &attributes, &pinCfg, &pins[index * CodecRenderPinCount + CodecRenderHostPin]));
 
-            ASSERT(pins[index * CodecRenderPinCount + CodecRenderHostPin] != nullptr);
             pinContext = GetCodecPinContext(pins[index * CodecRenderPinCount + CodecRenderHostPin]);
             ASSERT(pinContext);
             pinContext->Device = Device;
@@ -1007,7 +1001,6 @@ Return Value:
             //
             RETURN_NTSTATUS_IF_FAILED(AcxPinCreate(circuit, &attributes, &pinCfg, &pins[index * CodecRenderPinCount + CodecRenderBridgePin]));
 
-            ASSERT(pins[index * CodecRenderPinCount + CodecRenderBridgePin] != nullptr);
             pinContext = GetCodecPinContext(pins[index * CodecRenderPinCount + CodecRenderBridgePin]);
             ASSERT(pinContext);
             pinContext->Device = Device;
@@ -1022,7 +1015,6 @@ Return Value:
         // Add audio jack to bridge pin.
         // For more information on audio jack see: https://docs.microsoft.com/en-us/windows/win32/api/devicetopology/ns-devicetopology-ksjack_description
         //
-        if (numOfDevices != 0)
         {
             ACX_JACK_CONFIG jackCfg;
             ACXJACK         jack;
@@ -1050,7 +1042,10 @@ Return Value:
             RETURN_NTSTATUS_IF_FAILED(AcxPinAddJacks(pins[index * CodecRenderPinCount + CodecRenderBridgePin], &jack, 1));
         }
 
-        RETURN_NTSTATUS_IF_FAILED(Render_AllocateSupportedFormats(Device, pins[index * CodecRenderPinCount + CodecRenderHostPin], circuit, SupportedSampleRate, numOfChannelsPerDevice, usbAudioDataFormatManager));
+        if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
+        {
+            RETURN_NTSTATUS_IF_FAILED(Render_AllocateSupportedFormats(Device, pins[index * CodecRenderPinCount + CodecRenderHostPin], circuit, SupportedSampleRate, numOfChannelsPerDevice, usbAudioDataFormatManager));
+        }
     }
 
     //
@@ -1064,10 +1059,9 @@ Return Value:
     //
     // The driver uses this DDI post circuit creation to add ACXPINs.
     //
-    if (numOfDevices != 0)
-    {
-        RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddPins(circuit, pins, CodecRenderPinCount * numOfDevices));
+    RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddPins(circuit, pins, CodecRenderPinCount * numOfDevices));
 
+    {
         ULONG connectionIndex = 0;
         //              Circuit layout
         //           +---------------------------+
