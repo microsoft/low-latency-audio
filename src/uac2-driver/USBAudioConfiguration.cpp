@@ -1235,6 +1235,17 @@ NTSTATUS USBAudio1ControlInterface::GetCurrentSampleFrequency(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+bool USBAudio1ControlInterface::CanSetSampleFrequency(
+    bool /* isInput */
+)
+{
+    PAGED_CODE();
+
+    return false;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 NTSTATUS USBAudio1ControlInterface::GetCurrentSupportedSampleFrequency(
     PDEVICE_CONTEXT /* deviceContext */,
     ULONG & /* supportedSampleRate */
@@ -1829,6 +1840,37 @@ NTSTATUS USBAudio2ControlInterface::SetSampleRateConverter(const NS_USBAudio::PC
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+NTSTATUS USBAudio2ControlInterface::QuerySampleFrequencyControls(
+    UCHAR   clockSourceID,
+    UCHAR & controls
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    PAGED_CODE();
+
+    controls = 0;
+
+    ULONG numOfAcClockSourceInfo = m_acClockSourceInfo.GetNumOfArray();
+
+    for (ULONG index = 0; index < numOfAcClockSourceInfo; index++)
+    {
+        NS_USBAudio0200::PCS_AC_CLOCK_SOURCE_DESCRIPTOR clockSourceDescriptor = nullptr;
+        if (NT_SUCCESS(m_acClockSourceInfo.Get(index, clockSourceDescriptor)))
+        {
+            if (clockSourceDescriptor->bClockID == clockSourceID)
+            {
+                controls = clockSourceDescriptor->bmControls;
+                return status;
+            }
+        }
+    }
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 NTSTATUS USBAudio2ControlInterface::QueryCurrentSampleFrequency(
     PDEVICE_CONTEXT deviceContext
 )
@@ -1848,6 +1890,10 @@ NTSTATUS USBAudio2ControlInterface::QueryCurrentSampleFrequency(
     RETURN_NTSTATUS_IF_FAILED(SetCurrentClockSourceInternal(deviceContext));
 
     RETURN_NTSTATUS_IF_FAILED(GetCurrentClockSourceID(deviceContext, inputClockSourceID, outputClockSourceID));
+
+    RETURN_NTSTATUS_IF_FAILED(QuerySampleFrequencyControls(inputClockSourceID, m_inputSampleFrequencyControls));
+
+    RETURN_NTSTATUS_IF_FAILED(QuerySampleFrequencyControls(outputClockSourceID, m_outputSampleFrequencyControls));
 
     if (inputClockSourceID == outputClockSourceID)
     {
@@ -1989,6 +2035,27 @@ NTSTATUS USBAudio2ControlInterface::GetCurrentSampleFrequency(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+bool USBAudio2ControlInterface::CanSetSampleFrequency(
+    bool isInput
+)
+{
+    bool canSetSampleFrequency = false;
+    PAGED_CODE();
+
+    if (isInput)
+    {
+        canSetSampleFrequency = ((m_inputSampleFrequencyControls & NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_MASK) == NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_READ_WRITE);
+    }
+    else
+    {
+        canSetSampleFrequency = ((m_outputSampleFrequencyControls & NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_MASK) == NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_READ_WRITE);
+    }
+
+    return canSetSampleFrequency;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 NTSTATUS USBAudio2ControlInterface::GetCurrentSupportedSampleFrequency(
     PDEVICE_CONTEXT deviceContext,
     UCHAR           clockSourceID,
@@ -1997,13 +2064,23 @@ NTSTATUS USBAudio2ControlInterface::GetCurrentSupportedSampleFrequency(
 {
     NTSTATUS                                                status = STATUS_SUCCESS;
     WDFMEMORY                                               memory = nullptr;
+    ULONG                                                   sampleRate = 0;
     NS_USBAudio0200::PCONTROL_RANGE_PARAMETER_BLOCK_LAYOUT3 parameterBlock = nullptr;
+    UCHAR                                                   clockFrequencyControl = 0;
 
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
     supportedSampleRate = 0;
+
+    RETURN_NTSTATUS_IF_FAILED(QuerySampleFrequencyControls(clockSourceID, clockFrequencyControl));
+
+    if ((clockFrequencyControl & NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_MASK) == NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_READ)
+    {
+        RETURN_NTSTATUS_IF_FAILED(GetCurrentSampleFrequency(deviceContext, sampleRate));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - interface %u, clock id %u, sample frequency control is read only. sample frequency %u", GetInterfaceNumber(), clockSourceID, sampleRate);
+    }
 
     status = ControlRequestGetSampleFrequencyRange(deviceContext, GetInterfaceNumber(), clockSourceID, memory, parameterBlock);
     if (NT_SUCCESS(status))
@@ -2015,7 +2092,7 @@ NTSTATUS USBAudio2ControlInterface::GetCurrentSupportedSampleFrequency(
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - interface %u, clock id %u, sample frequency range [%u] min %u, max %u,  res %u", GetInterfaceNumber(), clockSourceID, rangeIndex, parameterBlock->subrange[rangeIndex].dMIN, parameterBlock->subrange[rangeIndex].dMAX, parameterBlock->subrange[rangeIndex].dRES);
             for (ULONG sampleRateListIndex = 0; sampleRateListIndex < c_SampleRateCount; ++sampleRateListIndex)
             {
-                if ((c_SampleRateList[sampleRateListIndex] >= parameterBlock->subrange[rangeIndex].dMIN) && (c_SampleRateList[sampleRateListIndex] <= parameterBlock->subrange[rangeIndex].dMAX))
+                if ((c_SampleRateList[sampleRateListIndex] >= parameterBlock->subrange[rangeIndex].dMIN) && (c_SampleRateList[sampleRateListIndex] <= parameterBlock->subrange[rangeIndex].dMAX) && ((sampleRate == 0) || (sampleRate == c_SampleRateList[sampleRateListIndex])))
                 {
                     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " <PID %04x>", deviceContext->AudioProperty.ProductId);
                     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - supporting %u Hz", c_SampleRateList[sampleRateListIndex]);
@@ -4182,6 +4259,26 @@ USBAudioInterfaceInfo::GetCurrentSampleFrequency(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
+bool USBAudioInterfaceInfo::CanSetSampleFrequency(
+    bool isInput
+)
+{
+    USBAudioInterface * usbAudioInterface = nullptr;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    if (NT_SUCCESS(m_usbAudioAlternateInterfaces.Get(0, usbAudioInterface)))
+    {
+        return ((USBAudioControlInterface *)usbAudioInterface)->CanSetSampleFrequency(isInput);
+    }
+
+    return false;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
 NTSTATUS USBAudioInterfaceInfo::SearchOutputTerminalFromInputTerminal(
     UCHAR    terminalLink,
     UCHAR &  numOfChannels,
@@ -4642,6 +4739,34 @@ USBAudioConfiguration::GetCurrentSampleFrequency(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+bool USBAudioConfiguration::CanSetSampleFrequency()
+{
+    PAGED_CODE();
+
+    for (ULONG interfaceIndex = 0; interfaceIndex < m_usbConfigurationDescriptor->bNumInterfaces; interfaceIndex++)
+    {
+        if (m_usbAudioInterfaceInfoes[interfaceIndex]->IsControlInterface())
+        {
+            if (hasInputAndOutputIsochronousInterfaces() || hasInputIsochronousInterface())
+            {
+                return m_usbAudioInterfaceInfoes[interfaceIndex]->CanSetSampleFrequency(true);
+            }
+            else if (hasOutputIsochronousInterface())
+            {
+                return m_usbAudioInterfaceInfoes[interfaceIndex]->CanSetSampleFrequency(false);
+            }
+            else
+            {
+                return false;
+            }
+        }
+    }
+
+    return false;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 NTSTATUS
 USBAudioConfiguration::SelectAlternateInterface(
     PDEVICE_CONTEXT deviceContext,
@@ -5090,7 +5215,7 @@ Return Value:
     // Set the desiredSampleRate for the device.
     RETURN_NTSTATUS_IF_FAILED(GetCurrentSampleFrequency(m_deviceContext, sampleRate));
 
-    if ((sampleRate != desiredSampleRate) || (forceSetSampleRate))
+    if (((sampleRate != desiredSampleRate) || (forceSetSampleRate)) && CanSetSampleFrequency())
     {
         // Ignore the return value since some devices may fail to set the sample rate.
         status = SetCurrentSampleFrequency(m_deviceContext, desiredSampleRate);
