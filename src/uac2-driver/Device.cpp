@@ -3093,26 +3093,7 @@ USBAudioAcxDriverStreamSetDataFormat(
     {
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - data format %u, %llu, %u, %u, %u, %u, %u, %u, %u", AcxDataFormatGetChannelsCount(dataFormat), AcxDataFormatGetChannelMask(dataFormat), AcxDataFormatGetSampleSize(dataFormat), AcxDataFormatGetBitsPerSample(dataFormat), AcxDataFormatGetValidBitsPerSample(dataFormat), AcxDataFormatGetSamplesPerBlock(dataFormat), AcxDataFormatGetBlockAlign(dataFormat), AcxDataFormatGetSampleRate(dataFormat), AcxDataFormatGetAverageBytesPerSec(dataFormat));
 
-        {
-            PWAVEFORMATEXTENSIBLE waveFormatExtensible = (PWAVEFORMATEXTENSIBLE)AcxDataFormatGetWaveFormatExtensible(dataFormat);
-
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Format.wFormatTag           = %u\n", waveFormatExtensible->Format.wFormatTag);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Format.nChannels            = %u\n", waveFormatExtensible->Format.nChannels);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Format.nSamplesPerSec       = %u\n", waveFormatExtensible->Format.nSamplesPerSec);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Format.nAvgBytesPerSec      = %u\n", waveFormatExtensible->Format.nAvgBytesPerSec);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Format.nBlockAlign          = %u\n", waveFormatExtensible->Format.nBlockAlign);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Format.wBitsPerSample       = %u\n", waveFormatExtensible->Format.wBitsPerSample);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Format.cbSize               = %u\n", waveFormatExtensible->Format.cbSize);
-            if (waveFormatExtensible->Format.wBitsPerSample != 0)
-            {
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Samples.wValidBitsPerSample = %u\n", waveFormatExtensible->Samples.wValidBitsPerSample);
-            }
-            else
-            {
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Samples.wSamplesPerBlock    = %u\n", waveFormatExtensible->Samples.wSamplesPerBlock); /* valid if wBitsPerSample==0 */
-            }
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - dwChannelMask               = 0x%x\n", waveFormatExtensible->dwChannelMask);
-        }
+        TraceAcxDataFormat(TRACE_LEVEL_VERBOSE, dataFormat);
 
         status = deviceContext->RtPacketObject->SetDataFormat(isInput, dataFormat);
         IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
@@ -3491,16 +3472,26 @@ NTSTATUS USBAudioAcxDriverGetCurrentDataFormat(
     ACXDATAFORMAT & dataFormat
 )
 {
-    UCHAR                             numOfChannels = 0;
-    KSDATAFORMAT_WAVEFORMATEXTENSIBLE pcmWaveFormatExtensible{};
+    UCHAR                               numOfChannels = 0;
+    KSDATAFORMAT_WAVEFORMATEXTENSIBLE * ksDataFormatWaveFormatExtensible = nullptr;
+    WDFMEMORY                           ksDataFormatWaveFormatExtensibleMemory = nullptr;
 
     PAGED_CODE();
 
     ASSERT(deviceContext->Device != nullptr);
 
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannels(isInput, numOfChannels));
+    auto createInterfaceScope = wil::scope_exit([&]() {
+        if (ksDataFormatWaveFormatExtensibleMemory != nullptr)
+        {
+            WdfObjectDelete(ksDataFormatWaveFormatExtensibleMemory);
+            ksDataFormatWaveFormatExtensibleMemory = nullptr;
+        }
+        ksDataFormatWaveFormatExtensible = nullptr;
+    });
 
-	RtlZeroMemory(&dataFormat, sizeof(dataFormat));
+    RtlZeroMemory(&dataFormat, sizeof(dataFormat));
+
+    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannels(isInput, numOfChannels));
 
     if (isInput)
     {
@@ -3509,15 +3500,18 @@ NTSTATUS USBAudioAcxDriverGetCurrentDataFormat(
         if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
         {
             RETURN_NTSTATUS_IF_FAILED(USBAudioDataFormat::BuildWaveFormatExtensible(
+                deviceContext->UsbDevice,
                 deviceContext->AudioProperty.SampleRate,
                 numOfChannels,
                 (UCHAR)deviceContext->AudioProperty.InputBytesPerSample,
                 (UCHAR)deviceContext->AudioProperty.InputValidBitsPerSample,
                 deviceContext->AudioProperty.InputFormatType,
                 deviceContext->AudioProperty.InputFormat,
-                pcmWaveFormatExtensible
+                ksDataFormatWaveFormatExtensible,
+                ksDataFormatWaveFormatExtensibleMemory
             ));
-            RETURN_NTSTATUS_IF_FAILED(AllocateFormat(pcmWaveFormatExtensible, deviceContext->Capture, deviceContext->Device, &dataFormat));
+            ASSERT(ksDataFormatWaveFormatExtensible != nullptr);
+            RETURN_NTSTATUS_IF_FAILED(AllocateFormat(ksDataFormatWaveFormatExtensible, deviceContext->Capture, deviceContext->Device, &dataFormat));
         }
     }
     else
@@ -3527,15 +3521,18 @@ NTSTATUS USBAudioAcxDriverGetCurrentDataFormat(
         if (deviceContext->UsbAudioConfiguration->hasOutputIsochronousInterface())
         {
             RETURN_NTSTATUS_IF_FAILED(USBAudioDataFormat::BuildWaveFormatExtensible(
+                deviceContext->UsbDevice,
                 deviceContext->AudioProperty.SampleRate,
                 numOfChannels,
                 (UCHAR)deviceContext->AudioProperty.OutputBytesPerSample,
                 (UCHAR)deviceContext->AudioProperty.OutputValidBitsPerSample,
                 deviceContext->AudioProperty.OutputFormatType,
                 deviceContext->AudioProperty.OutputFormat,
-                pcmWaveFormatExtensible
+                ksDataFormatWaveFormatExtensible,
+                ksDataFormatWaveFormatExtensibleMemory
             ));
-            RETURN_NTSTATUS_IF_FAILED(AllocateFormat(pcmWaveFormatExtensible, deviceContext->Render, deviceContext->Device, &dataFormat));
+            ASSERT(ksDataFormatWaveFormatExtensible != nullptr);
+            RETURN_NTSTATUS_IF_FAILED(AllocateFormat(ksDataFormatWaveFormatExtensible, deviceContext->Render, deviceContext->Device, &dataFormat));
         }
     }
 
@@ -4407,6 +4404,8 @@ Return Value:
         ACXDATAFORMAT outputDataFormatBeforeChange = nullptr;
         ACXDATAFORMAT inputDataFormatAfterChange = nullptr;
         ACXDATAFORMAT outputDataFormatAfterChange = nullptr;
+        const ULONG   sampleFormatsTypeI = USBAudioDataFormat::GetSampleFormatsTypeI();
+        const ULONG   sampleFormatsTypeIII = USBAudioDataFormat::GetSampleFormatsTypeIII();
 
         WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
 
@@ -4423,12 +4422,33 @@ Return Value:
         status = USBAudioDataFormat::ConvertFormatToSampleFormat(deviceContext->AudioProperty.CurrentSampleFormat, desiredFormatType, desiredFormat);
         IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
 
+        //
+        // If the device supports only USB Audio Data Format Type III,
+        // ASIO is treated as unsupported.
+        //
+        // If the device supports both USB Audio Data Format Type III and Type I,
+        // ASIO will operate by switching to USB Audio Data Format Type I.
+        //
+
+        if (((deviceContext->AudioProperty.SupportedSampleFormats & sampleFormatsTypeIII) != 0) && (deviceContext->AudioProperty.SupportedSampleFormats & sampleFormatsTypeI) == 0)
+        {
+            status = STATUS_INVALID_DEVICE_REQUEST;
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+        }
+
         if (deviceContext->AudioProperty.SupportedSampleFormats & (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT)))
         {
             deviceContext->SampleFormatBackup = deviceContext->AudioProperty.CurrentSampleFormat;
             desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
             desiredFormat = NS_USBAudio0200::IEEE_FLOAT;
         }
+        else if (deviceContext->AudioProperty.SupportedSampleFormats & (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_PCM)))
+        {
+            deviceContext->SampleFormatBackup = deviceContext->AudioProperty.CurrentSampleFormat;
+            desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
+            desiredFormat = NS_USBAudio0200::PCM;
+        }
+
         if (deviceContext->UsbAudioConfiguration->hasInputIsochronousInterface())
         {
             status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample);

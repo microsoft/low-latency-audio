@@ -55,10 +55,10 @@ typedef EVT_KSATTRIBUTES_VISITOR * PFN_KSATTRIBUTES_VISITOR;
 
 PAGED_CODE_SEG
 NTSTATUS AllocateFormat(
-    _In_ KSDATAFORMAT_WAVEFORMATEXTENSIBLE WaveFormat,
-    _In_ ACXCIRCUIT                        Circuit,
-    _In_ WDFDEVICE                         Device,
-    _Out_ ACXDATAFORMAT *                  Format
+    _In_ KSDATAFORMAT_WAVEFORMATEXTENSIBLE * WaveFormat,
+    _In_ ACXCIRCUIT                          Circuit,
+    _In_ WDFDEVICE                           Device,
+    _Out_ ACXDATAFORMAT *                    Format
 );
 
 PAGED_CODE_SEG
@@ -132,9 +132,13 @@ NTSTATUS SplitAcxDataFormatByDeviceChannels(
 );
 
 PAGED_CODE_SEG
-VOID TraceAcxDataFormat(
+const char * GetKsDataFormatSubTypeString(
+    _In_ GUID     ksDataFormatSubType
+	);
+
+PAGED_CODE_SEG
+void TraceAcxDataFormat(
     _In_ UCHAR         DebugPrintLevel,
-    _In_ LPCSTR        Label,
-    _In_ ACXPIN        Pin,
     _In_ ACXDATAFORMAT DataFormat
 );
+

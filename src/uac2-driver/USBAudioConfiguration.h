@@ -1267,6 +1267,7 @@ class USBAudio2StreamInterface : public USBAudioStreamInterface
     ULONG                                                              m_validAlternateSettingMap{0};                        // valid only when alternate interface is 0
     ULONG                                                              m_formatType{NS_USBAudio0200::FORMAT_TYPE_UNDEFINED}; // valid only when alternate interface is not 0
     ULONG                                                              m_audioDataFormat{NS_USBAudio0200::PCM};              // valid only when alternate interface is not 0
+    ULONG                                                              m_currentAudioDataFormat{NS_USBAudio0200::PCM};       // valid only when alternate interface is not 0
     bool                                                               m_enableGetFormatType{false};
     USBAudioDataFormat *                                               m_usbAudioDataFormat{nullptr};
     NS_USBAudio0200::PCS_AS_TYPE_I_FORMAT_TYPE_DESCRIPTOR              m_formatITypeDescriptor{nullptr};
@@ -1502,6 +1503,13 @@ class USBAudioConfiguration
         _Out_ USHORT & terminalType,
         _Out_ UCHAR &  volumeUnitID,
         _Out_ UCHAR &  muteUnitID
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    bool
+    IsDeviceSplittable(
+        _In_ bool isInput
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1748,6 +1756,7 @@ class USBAudioConfiguration
     PUSB_CONFIGURATION_DESCRIPTOR m_usbConfigurationDescriptor{nullptr};
     USBAudioInterfaceInfo **      m_usbAudioInterfaceInfoes{nullptr};
     WDFMEMORY                     m_usbAudioInterfaceInfoesMemory{nullptr};
+    ULONG                         m_numOfUsbAudioInterfaceInfo{0};
     bool                          m_isUSBAudio2{false};
     bool                          m_isInputIsochronousInterfaceExists{false};
     bool                          m_isOutputIsochronousInterfaceExists{false};

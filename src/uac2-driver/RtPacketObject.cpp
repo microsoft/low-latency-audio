@@ -124,9 +124,39 @@ RtPacketObject::SetDataFormat(
     PWAVEFORMATEX                  waveFormatEx = static_cast<PWAVEFORMATEX>(AcxDataFormatGetWaveFormatEx(dataFormat));
     PWAVEFORMATEXTENSIBLE          waveFormatExtensible = static_cast<PWAVEFORMATEXTENSIBLE>(AcxDataFormatGetWaveFormatExtensible(dataFormat));
     PWAVEFORMATEXTENSIBLE_IEC61937 waveFormatExtensibleIEC61937 = static_cast<PWAVEFORMATEXTENSIBLE_IEC61937>(AcxDataFormatGetWaveFormatExtensibleIec61937(dataFormat));
+    ULONG                          avgBytesPerSec = 0;
+    ULONG                          bytesPerSample = 0;
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - waveFormatEx = %p, waveFormatExtensible = %p, waveFormatExtensibleIEC61937 = %p", waveFormatEx, waveFormatExtensible, waveFormatExtensibleIEC61937);
 
+    if (waveFormatExtensibleIEC61937)
+    {
+        bytesPerSample = waveFormatExtensibleIEC61937->FormatExt.Format.wBitsPerSample / 8;
+        avgBytesPerSec = waveFormatExtensibleIEC61937->FormatExt.Format.nAvgBytesPerSec;
+    }
+    else if (waveFormatExtensible)
+    {
+        bytesPerSample = waveFormatExtensible->Format.wBitsPerSample / 8;
+        avgBytesPerSec = waveFormatExtensible->Format.nAvgBytesPerSec;
+    }
+    else if (waveFormatEx)
+    {
+        bytesPerSample = waveFormatEx->wBitsPerSample / 8;
+        avgBytesPerSec = waveFormatEx->nAvgBytesPerSec;
+    }
+
+    if (isInput)
+    {
+        m_inputBytesPerSample = bytesPerSample;
+        m_inputAvgBytesPerSec = avgBytesPerSec;
+    }
+    else
+    {
+        m_outputBytesPerSample = bytesPerSample;
+        m_outputAvgBytesPerSec = avgBytesPerSec;
+    }
+
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - waveFormatEx = %p, waveFormatExtensible = %p, waveFormatExtensibleIEC61937 = %p", waveFormatEx, waveFormatExtensible, waveFormatExtensibleIEC61937);
     if (waveFormatEx)
     {
         // Free the previously allocated waveformat
@@ -144,14 +174,6 @@ RtPacketObject::SetDataFormat(
         if (waveFormat)
         {
             RtlCopyMemory(waveFormat, waveFormatEx, (waveFormatEx->wFormatTag == WAVE_FORMAT_PCM) ? sizeof(PCMWAVEFORMAT) : sizeof(WAVEFORMATEX) + waveFormatEx->cbSize);
-            if (isInput)
-            {
-                m_inputBytesPerSample = waveFormat->wBitsPerSample / 8;
-            }
-            else
-            {
-                m_outputBytesPerSample = waveFormat->wBitsPerSample / 8;
-            }
             // m_channels = AcxDataFormatGetChannelsCount(dataFormat);
 
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - wFormatTag      = 0x%x", waveFormat->wFormatTag);
@@ -561,6 +583,57 @@ RtPacketObject::CopyFromRtPacketToOutputData(
             }
         }
     }
+    break;
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_AC_3:
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_MPEG_2_AAC_ADTS:
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_DTS_I:
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_DTS_II:
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_DTS_III:
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_TYPE_III_WMA: {
+        ASSERT(m_outputBytesPerSample = 2);
+        for (ULONG acxCh = 0; acxCh < rtPacketInfo->channels; acxCh++)
+        {
+            ULONG rtPacketIndex = (rtPacketInfo->RtPacketPosition / rtPacketInfo->RtPacketSize) % rtPacketInfo->RtPacketsCount;
+            ULONG srcIndexInRtPacket = rtPacketInfo->RtPacketPosition % rtPacketInfo->RtPacketSize + acxCh * m_outputBytesPerSample;
+            PBYTE srcData = (PBYTE)rtPacketInfo->RtPackets[rtPacketIndex];
+            PBYTE dstData = (PBYTE)buffer;
+
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - acxCh, rtPacketIndex, srcIndexInRtPacket, %u, %u, %u", acxCh, rtPacketIndex, srcIndexInRtPacket);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - dstData, buffer, length = %p, %p, %u", dstData, buffer, length);
+
+            for (ULONG dstIndex = (acxCh + rtPacketInfo->usbChannel) * usbBytesPerSample; dstIndex < length;)
+            {
+                // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - srcIndexInRtPacket, dstIndex = %u, %u", srcIndexInRtPacket, dstIndex);
+
+                // To accommodate differing specifications between the bytesPerSample of the device and ACX audio, the following code modifications are necessary.
+                if (m_outputBytesPerSample == 2)
+                {
+                    PSHORT outSample = (PSHORT)(dstData + dstIndex);
+                    *outSample = *(PSHORT)(srcData + srcIndexInRtPacket);
+                }
+                dstIndex += (usbBytesPerSample * usbChannels);
+                srcIndexInRtPacket += m_outputBytesPerSample * rtPacketInfo->channels;
+                bytesCopiedDstData += m_outputBytesPerSample;
+                bytesCopiedSrcData += m_outputBytesPerSample;
+                if (srcIndexInRtPacket >= rtPacketInfo->RtPacketSize)
+                {
+                    // {
+                    // 	CHAR outputString[100] = "";
+                    // 	sprintf_s(outputString, sizeof(outputString), "DumpByteArray rtPackets[%d]", rtPacketIndex);
+                    // 	DumpByteArray(outputString, (UCHAR*)rtPacketInfo->RtPackets[rtPacketIndex], rtPacketInfo->RtPacketSize);
+                    // }
+                    bytesCopiedUpToBoundary = totalProcessedBytesSoFar + bytesCopiedDstData;
+                    fedRtPacket = true;
+                    srcIndexInRtPacket = acxCh * m_outputBytesPerSample;
+                    rtPacketIndex++;
+                    rtPacketIndex %= rtPacketInfo->RtPacketsCount;
+                    srcData = ((PBYTE)rtPacketInfo->RtPackets[rtPacketIndex]);
+                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - acxCh, rtPacketIndex, srcIndexInRtPacket, %u, %u, %u", acxCh, rtPacketIndex, srcIndexInRtPacket);
+                }
+            }
+        }
+    }
+    break;
     default:
         break;
     }
@@ -704,6 +777,50 @@ RtPacketObject::CopyToRtPacketFromInputData(
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - dstIndexInRtPacket, dstIndex = %u, %u", dstIndexInRtPacket, srcIndex);
 
                 *((float *)(dstData + dstIndexInRtPacket)) = *((float *)(srcData + srcIndex));
+                srcIndex += (usbBytesPerSample * usbChannels);
+                dstIndexInRtPacket += m_inputBytesPerSample * rtPacketInfo->channels;
+                bytesCopiedDstData += m_inputBytesPerSample;
+                bytesCopiedSrcData += m_inputBytesPerSample;
+                if (dstIndexInRtPacket >= rtPacketInfo->RtPacketSize)
+                {
+                    bytesCopiedUpToBoundary = totalProcessedBytesSoFar + bytesCopiedSrcData;
+                    filledRtPacket = true;
+                    dstIndexInRtPacket = acxCh * m_inputBytesPerSample;
+                    rtPacketIndex++;
+                    rtPacketIndex %= rtPacketInfo->RtPacketsCount;
+                    dstData = ((PBYTE)rtPacketInfo->RtPackets[rtPacketIndex]);
+                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - acxCh, rtPacketIndex, dstIndexInRtPacket, %u, %u, %u", acxCh, rtPacketIndex, dstIndexInRtPacket);
+                }
+            }
+        }
+    }
+    break;
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_AC_3:
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_MPEG_2_AAC_ADTS:
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_DTS_I:
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_DTS_II:
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_DTS_III:
+    case UACSampleFormat::UAC_SAMPLE_FORMAT_TYPE_III_WMA: {
+        ASSERT(m_inputBytesPerSample = 2);
+        for (ULONG acxCh = 0; acxCh < rtPacketInfo->channels; acxCh++)
+        {
+            ULONG rtPacketIndex = (rtPacketInfo->RtPacketPosition / rtPacketInfo->RtPacketSize) % rtPacketInfo->RtPacketsCount;
+            ULONG dstIndexInRtPacket = rtPacketInfo->RtPacketPosition % rtPacketInfo->RtPacketSize + acxCh * m_inputBytesPerSample;
+            PBYTE srcData = (PBYTE)buffer;
+            PBYTE dstData = (PBYTE)rtPacketInfo->RtPackets[rtPacketIndex];
+
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - acxCh, rtPacketIndex, dstIndexInRtPacket, %u, %u, %u", acxCh, rtPacketIndex, dstIndexInRtPacket);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - srcData, buffer, length = %p, %p, %u", srcData, buffer, length);
+
+            for (ULONG srcIndex = (acxCh + rtPacketInfo->usbChannel) * usbBytesPerSample; srcIndex < length;)
+            {
+                // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - dstIndexInRtPacket, dstIndex = %u, %u", dstIndexInRtPacket, srcIndex);
+
+                // To accommodate differing specifications between the bytesPerSample of the device and ACX audio, the following code modifications are necessary.
+                if (m_inputBytesPerSample == 2)
+                {
+                    *(PSHORT)(dstData + dstIndexInRtPacket) = *(PSHORT)(srcData + srcIndex);
+                }
                 srcIndex += (usbBytesPerSample * usbChannels);
                 dstIndexInRtPacket += m_inputBytesPerSample * rtPacketInfo->channels;
                 bytesCopiedDstData += m_inputBytesPerSample;
@@ -905,15 +1022,17 @@ RtPacketObject::GetPresentationPosition(
     ULONGLONG lastPacketStartQpcPosition = InterlockedCompareExchange64((LONG64 *)&rtPacketInfo[deviceIndex].LastPacketStartQpcPosition, -1, -1);
     ULONG     bytesPerSecond = (isInput ? m_deviceContext->AudioProperty.InputMeasuredSampleRate : m_deviceContext->AudioProperty.OutputMeasuredSampleRate) * blockAlign;
 
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - bytesPerSample, channels ,bytePerSecond, %u, %u %u", bytesPerSample, rtPacketInfo[deviceIndex].channels, bytesPerSecond);
+
     if (bytesPerSecond == 0)
     {
         if (isInput)
         {
-            bytesPerSecond = m_inputWaveFormat->nAvgBytesPerSec;
+            bytesPerSecond = m_inputAvgBytesPerSec;
         }
         else
         {
-            bytesPerSecond = m_outputWaveFormat->nAvgBytesPerSec;
+            bytesPerSecond = m_outputAvgBytesPerSec;
         }
     }
 

@@ -205,6 +205,8 @@ class RtPacketObject
     ULONG         m_outputBytesPerSample{0};   // The number of bytes per sample per channel in Acx Audio. 3 for samples packed in 24bit.
     ULONG         m_inputPaddingBytes{0};
     ULONG         m_outputPaddingBytes{0};
+	DWORD		  m_inputAvgBytesPerSec{0};
+	DWORD		  m_outputAvgBytesPerSec{0};
 };
 
 #endif

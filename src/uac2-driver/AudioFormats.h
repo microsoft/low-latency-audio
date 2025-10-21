@@ -877,6 +877,62 @@ KSDATAFORMAT_WAVEFORMATEXTENSIBLE DolbyMAT21 =
     }
 };
 
+static
+KSDATAFORMAT_WAVEFORMATEXTENSIBLE AacAdts =
+{
+    {
+        sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
+        0,
+        0,
+        0,
+        STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+        STATICGUIDOF(KSDATAFORMAT_SUBTYPE_IEC61937_AAC),
+        STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+    },
+    {
+        {
+            WAVE_FORMAT_EXTENSIBLE,
+            2,
+            48000,
+            192000,
+            4,
+            16,
+            sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
+        },
+        16,
+        KSAUDIO_SPEAKER_STEREO,
+        STATICGUIDOF(KSDATAFORMAT_SUBTYPE_IEC61937_AAC)
+    }
+};
+
+static
+KSDATAFORMAT_WAVEFORMATEXTENSIBLE WMAPro =
+{
+    {
+        sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
+        0,
+        0,
+        0,
+        STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+        STATICGUIDOF(KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO),
+        STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+    },
+    {
+        {
+            WAVE_FORMAT_EXTENSIBLE,
+            2,
+            96000,
+            384000,
+            4,
+            16,
+            sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)
+        },
+        16,
+        KSAUDIO_SPEAKER_5POINT1,
+        STATICGUIDOF(KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO)
+    }
+};
+
 static 
 KSDATAFORMAT_WAVEFORMATEXTENSIBLE Pcm44100c2nomask =
 { 
