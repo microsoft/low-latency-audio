@@ -115,6 +115,11 @@ NTSTATUS ConvertAudioDataFormat(
 );
 
 PAGED_CODE_SEG
+NTSTATUS GetChannelsFromMask(
+    _In_ DWORD ChannelMask
+);
+
+PAGED_CODE_SEG
 NTSTATUS DuplicateAcxDataFormat(
     _In_ WDFDEVICE        Device,
     _In_ WDFOBJECT        ParentObject,
@@ -133,12 +138,11 @@ NTSTATUS SplitAcxDataFormatByDeviceChannels(
 
 PAGED_CODE_SEG
 const char * GetKsDataFormatSubTypeString(
-    _In_ GUID     ksDataFormatSubType
-	);
+    _In_ GUID ksDataFormatSubType
+);
 
 PAGED_CODE_SEG
 void TraceAcxDataFormat(
     _In_ UCHAR         DebugPrintLevel,
     _In_ ACXDATAFORMAT DataFormat
 );
-

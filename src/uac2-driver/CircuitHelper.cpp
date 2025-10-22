@@ -574,6 +574,27 @@ NTSTATUS ConvertAudioDataFormat(
 }
 
 PAGED_CODE_SEG
+NTSTATUS GetChannelsFromMask(
+    _In_ DWORD ChannelMask
+	)
+{
+    PAGED_CODE();
+
+    ULONG channels = 0;
+    ChannelMask &= ~SPEAKER_RESERVED;
+
+    for (; ChannelMask != 0; ChannelMask >>= 1) {
+        if (ChannelMask & 0x01) {
+			channels++;
+		}
+    }
+
+	ASSERT(channels != 0);
+
+	return channels;
+}
+
+PAGED_CODE_SEG
 NTSTATUS DuplicateAcxDataFormat(
     _In_ WDFDEVICE        Device,
     _In_ WDFOBJECT        ParentObject,

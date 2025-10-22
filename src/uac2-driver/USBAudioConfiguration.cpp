@@ -6229,7 +6229,7 @@ bool USBAudioConfiguration::IsDeviceSplittable(
     // the device will not be split.
     //
 
-    bool isDeviceSplittable = ((GetUSBAudioDataFormatManager(isInput)->GetSupportedSampleFormats() & USBAudioDataFormat::GetSampleFormatsTypeIII()) != 0);
+    bool isDeviceSplittable = ((GetUSBAudioDataFormatManager(isInput)->GetSupportedSampleFormats() & USBAudioDataFormat::GetSampleFormatsTypeIII()) == 0);
 
     return isDeviceSplittable;
 }
@@ -6251,7 +6251,7 @@ USBAudioConfiguration::GetStreamDevices(
 
     RETURN_NTSTATUS_IF_FAILED(GetStreamChannelInfo(isInput, numOfChannels, terminalType, volumeUnitID, muteUnitID));
 
-    if (IsDeviceSplittable(isInput))
+    if (!IsDeviceSplittable(isInput))
     {
         numOfDevices = 1;
     }
