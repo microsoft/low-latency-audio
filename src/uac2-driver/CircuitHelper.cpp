@@ -576,22 +576,24 @@ NTSTATUS ConvertAudioDataFormat(
 PAGED_CODE_SEG
 NTSTATUS GetChannelsFromMask(
     _In_ DWORD ChannelMask
-	)
+)
 {
     PAGED_CODE();
 
     ULONG channels = 0;
     ChannelMask &= ~SPEAKER_RESERVED;
 
-    for (; ChannelMask != 0; ChannelMask >>= 1) {
-        if (ChannelMask & 0x01) {
-			channels++;
-		}
+    for (; ChannelMask != 0; ChannelMask >>= 1)
+    {
+        if (ChannelMask & 0x01)
+        {
+            channels++;
+        }
     }
 
-	ASSERT(channels != 0);
+    ASSERT(channels != 0);
 
-	return channels;
+    return channels;
 }
 
 PAGED_CODE_SEG
@@ -663,52 +665,51 @@ NTSTATUS SplitAcxDataFormatByDeviceChannels(
 
 PAGED_CODE_SEG
 const char * GetKsDataFormatSubTypeString(
-    _In_ GUID     ksDataFormatSubType
-	)
+    _In_ GUID ksDataFormatSubType
+)
 {
     PAGED_CODE();
 
     if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_PCM))
     {
-		return "KSDATAFORMAT_SUBTYPE_PCM";
+        return "KSDATAFORMAT_SUBTYPE_PCM";
     }
     else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT))
     {
-		return "KSDATAFORMAT_SUBTYPE_IEEE_FLOAT";
+        return "KSDATAFORMAT_SUBTYPE_IEEE_FLOAT";
     }
     else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DOLBY_DIGITAL))
     {
-		return "KSDATAFORMAT_SUBTYPE_IEC61937_DOLBY_DIGITAL";
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_DOLBY_DIGITAL";
     }
     else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_AAC))
     {
-		return "KSDATAFORMAT_SUBTYPE_IEC61937_AAC";
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_AAC";
     }
     else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DTS))
     {
-		return "KSDATAFORMAT_SUBTYPE_IEC61937_DTS";
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_DTS";
     }
     else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DTS_HD))
     {
-		return "KSDATAFORMAT_SUBTYPE_IEC61937_DTS_HD";
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_DTS_HD";
     }
     else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DTSX_E1))
     {
-		return "KSDATAFORMAT_SUBTYPE_IEC61937_DTSX_E1";
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_DTSX_E1";
     }
     else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO))
     {
-		return "KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO";
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO";
     }
-	return "KSDATAFORMAT_SUBTYPE unknown";
+    return "KSDATAFORMAT_SUBTYPE unknown";
 }
 
 PAGED_CODE_SEG
-void
-TraceAcxDataFormat(
+void TraceAcxDataFormat(
     _In_ UCHAR         DebugPrintLevel,
-	_In_ ACXDATAFORMAT DataFormat
-	)
+    _In_ ACXDATAFORMAT DataFormat
+)
 {
     PAGED_CODE();
 
@@ -716,38 +717,43 @@ TraceAcxDataFormat(
     PWAVEFORMATEXTENSIBLE          waveFormatExtensible = static_cast<PWAVEFORMATEXTENSIBLE>(AcxDataFormatGetWaveFormatExtensible(DataFormat));
     PWAVEFORMATEXTENSIBLE_IEC61937 waveFormatExtensibleIEC61937 = static_cast<PWAVEFORMATEXTENSIBLE_IEC61937>(AcxDataFormatGetWaveFormatExtensibleIec61937(DataFormat));
 
-	if (waveFormatExtensibleIEC61937) {
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wFormatTag      0x%x", waveFormatExtensibleIEC61937->FormatExt.Format.wFormatTag);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nChannels       %u",   waveFormatExtensibleIEC61937->FormatExt.Format.nChannels);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nSamplesPerSec  %u",   waveFormatExtensibleIEC61937->FormatExt.Format.nSamplesPerSec);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nAvgBytesPerSec %u",   waveFormatExtensibleIEC61937->FormatExt.Format.nAvgBytesPerSec);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nBlockAlign     %u",   waveFormatExtensibleIEC61937->FormatExt.Format.nBlockAlign);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wBitsPerSample  %u",   waveFormatExtensibleIEC61937->FormatExt.Format.wBitsPerSample);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::cbSize          %u",   waveFormatExtensibleIEC61937->FormatExt.Format.cbSize);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::Samples.wValidBitsPerSample %u", waveFormatExtensibleIEC61937->FormatExt.Samples.wValidBitsPerSample);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::dwChannelMask               %u", waveFormatExtensibleIEC61937->FormatExt.dwChannelMask);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::SubFormat                   %s", GetKsDataFormatSubTypeString(waveFormatExtensibleIEC61937->FormatExt.SubFormat));
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE_IEC61937::dwEncodedSamplesPerSec %u",  waveFormatExtensibleIEC61937->dwEncodedSamplesPerSec);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE_IEC61937::dwEncodedChannelCount  %u",  waveFormatExtensibleIEC61937->dwEncodedChannelCount);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE_IEC61937::dwAverageBytesPerSec   %u",  waveFormatExtensibleIEC61937->dwAverageBytesPerSec);
-	} else if (waveFormatExtensible) {
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wFormatTag      0x%x", waveFormatExtensible->Format.wFormatTag);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nChannels       %u",   waveFormatExtensible->Format.nChannels);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nSamplesPerSec  %u",   waveFormatExtensible->Format.nSamplesPerSec);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nAvgBytesPerSec %u",   waveFormatExtensible->Format.nAvgBytesPerSec);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nBlockAlign     %u",   waveFormatExtensible->Format.nBlockAlign);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wBitsPerSample  %u",   waveFormatExtensible->Format.wBitsPerSample);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::cbSize          %u",   waveFormatExtensible->Format.cbSize);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::Samples.wValidBitsPerSample %u", waveFormatExtensible->Samples.wValidBitsPerSample);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::dwChannelMask               %u", waveFormatExtensible->dwChannelMask);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::SubFormat                   %s", GetKsDataFormatSubTypeString(waveFormatExtensible->SubFormat));
-	} else if (waveFormatEx) {
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wFormatTag      0x%x", waveFormatEx->wFormatTag);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nChannels       %u", waveFormatEx->nChannels);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nSamplesPerSec  %u", waveFormatEx->nSamplesPerSec);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nAvgBytesPerSec %u", waveFormatEx->nAvgBytesPerSec);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nBlockAlign     %u", waveFormatEx->nBlockAlign);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wBitsPerSample  %u", waveFormatEx->wBitsPerSample);
-		TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::cbSize          %u", waveFormatEx->cbSize);
-	}
+    if (waveFormatExtensibleIEC61937)
+    {
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wFormatTag      0x%x", waveFormatExtensibleIEC61937->FormatExt.Format.wFormatTag);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nChannels       %u", waveFormatExtensibleIEC61937->FormatExt.Format.nChannels);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nSamplesPerSec  %u", waveFormatExtensibleIEC61937->FormatExt.Format.nSamplesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nAvgBytesPerSec %u", waveFormatExtensibleIEC61937->FormatExt.Format.nAvgBytesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nBlockAlign     %u", waveFormatExtensibleIEC61937->FormatExt.Format.nBlockAlign);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wBitsPerSample  %u", waveFormatExtensibleIEC61937->FormatExt.Format.wBitsPerSample);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::cbSize          %u", waveFormatExtensibleIEC61937->FormatExt.Format.cbSize);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::Samples.wValidBitsPerSample %u", waveFormatExtensibleIEC61937->FormatExt.Samples.wValidBitsPerSample);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::dwChannelMask               %u", waveFormatExtensibleIEC61937->FormatExt.dwChannelMask);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::SubFormat                   %s", GetKsDataFormatSubTypeString(waveFormatExtensibleIEC61937->FormatExt.SubFormat));
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE_IEC61937::dwEncodedSamplesPerSec %u", waveFormatExtensibleIEC61937->dwEncodedSamplesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE_IEC61937::dwEncodedChannelCount  %u", waveFormatExtensibleIEC61937->dwEncodedChannelCount);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE_IEC61937::dwAverageBytesPerSec   %u", waveFormatExtensibleIEC61937->dwAverageBytesPerSec);
+    }
+    else if (waveFormatExtensible)
+    {
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wFormatTag      0x%x", waveFormatExtensible->Format.wFormatTag);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nChannels       %u", waveFormatExtensible->Format.nChannels);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nSamplesPerSec  %u", waveFormatExtensible->Format.nSamplesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nAvgBytesPerSec %u", waveFormatExtensible->Format.nAvgBytesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nBlockAlign     %u", waveFormatExtensible->Format.nBlockAlign);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wBitsPerSample  %u", waveFormatExtensible->Format.wBitsPerSample);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::cbSize          %u", waveFormatExtensible->Format.cbSize);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::Samples.wValidBitsPerSample %u", waveFormatExtensible->Samples.wValidBitsPerSample);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::dwChannelMask               %u", waveFormatExtensible->dwChannelMask);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::SubFormat                   %s", GetKsDataFormatSubTypeString(waveFormatExtensible->SubFormat));
+    }
+    else if (waveFormatEx)
+    {
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wFormatTag      0x%x", waveFormatEx->wFormatTag);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nChannels       %u", waveFormatEx->nChannels);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nSamplesPerSec  %u", waveFormatEx->nSamplesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nAvgBytesPerSec %u", waveFormatEx->nAvgBytesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nBlockAlign     %u", waveFormatEx->nBlockAlign);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wBitsPerSample  %u", waveFormatEx->wBitsPerSample);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::cbSize          %u", waveFormatEx->cbSize);
+    }
 }

@@ -1486,6 +1486,14 @@ class USBAudioConfiguration
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     NTSTATUS
+    GetCurrentTerminalLink(
+        _In_ bool     isInput,
+        _Out_ UCHAR & terminalLink
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
     GetStreamChannelInfo(
         _In_ bool      isInput,
         _Out_ UCHAR &  numOfChannels,

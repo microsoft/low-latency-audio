@@ -425,7 +425,7 @@ void StreamObject::CompleteRequest(
     periodQPCPosition = isoRequestCompletionTime.LastPeriodQPCPosition;
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - isoRequestCompletionTime.LastTimeUs, isoRequestCompletionTime.LastQPCPosition, %llu, %llu", isoRequestCompletionTime.LastTimeUs, isoRequestCompletionTime.LastQPCPosition);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - periodUs, periodQPCPosition, %llu, %llu", periodUs, periodQPCPosition);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - qpcPosition, periodUs, periodQPCPosition, %llu, %llu, %llu", qpcPosition, periodUs, periodQPCPosition);
 }
 
 _Use_decl_annotations_
