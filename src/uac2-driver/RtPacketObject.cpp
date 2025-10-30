@@ -936,7 +936,7 @@ RtPacketObject::GetCurrentPacket(
         // }
     }
 
-    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - deviceIndex, *currentPacket = %u, %u", deviceIndex, *currentPacket);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - deviceIndex, *currentPacket = %u, %u", deviceIndex, *currentPacket);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 
     return status;
@@ -1072,7 +1072,7 @@ RtPacketObject::GetPresentationPosition(
     }
     *qpcPosition = qpcPositionNow;
 
-    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - *qpcPosition, *positionInBlocks, rtPacketPosition, bytesPerSecond, blockAlign = %llu, %llu, %llu, %u, %u", *qpcPosition, *positionInBlocks, rtPacketPosition, bytesPerSecond, blockAlign);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - *qpcPosition, *positionInBlocks, rtPacketPosition, bytesPerSecond, blockAlign = %llu, %llu, %llu, %u, %u", *qpcPosition, *positionInBlocks, rtPacketPosition, bytesPerSecond, blockAlign);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 
