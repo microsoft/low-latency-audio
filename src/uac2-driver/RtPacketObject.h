@@ -185,6 +185,7 @@ class RtPacketObject
         ULONG       RtPacketsCount{0};  // This is retained regardless of Run/Stop.
         ULONG       RtPacketSize{0};    // This is retained regardless of Run/Stop.
         ULONGLONG   RtPacketPosition{0ULL};
+        ULONGLONG   RtPacketEstimatedPosition{0ULL};
         ULONG       RtPacketCurrentPacket{0};
         ULONGLONG   LastPacketStartQpcPosition{0ULL};
         ULONG       usbChannel{0}; // stereo 2nd strem will be 2
@@ -205,6 +206,8 @@ class RtPacketObject
     ULONG         m_outputBytesPerSample{0};   // The number of bytes per sample per channel in Acx Audio. 3 for samples packed in 24bit.
     ULONG         m_inputPaddingBytes{0};
     ULONG         m_outputPaddingBytes{0};
+    DWORD         m_inputAvgBytesPerSec{0};
+    DWORD         m_outputAvgBytesPerSec{0};
 };
 
 #endif

@@ -141,14 +141,24 @@ class USBAudioDataFormat
 
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    ULONG GetSampleFormatsTypeI();
+
+    static __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    ULONG GetSampleFormatsTypeIII();
+
+    static __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     NTSTATUS BuildWaveFormatExtensible(
-        _In_ ULONG                                sampleRate,
-        _In_ UCHAR                                channels,
-        _In_ UCHAR                                bytesPerSample,
-        _In_ UCHAR                                validBits,
-        _In_ ULONG                                formatType,
-        _In_ ULONG                                format,
-        _Out_ KSDATAFORMAT_WAVEFORMATEXTENSIBLE & pcmWaveFormatExtensible
+        _In_ WDFOBJECT                               parentObject,
+        _In_ ULONG                                   sampleRate,
+        _In_ UCHAR                                   channels,
+        _In_ UCHAR                                   bytesPerSample,
+        _In_ UCHAR                                   validBits,
+        _In_ ULONG                                   formatType,
+        _In_ ULONG                                   format,
+        _Inout_ PKSDATAFORMAT_WAVEFORMATEXTENSIBLE & ksDataFormatWaveFormatExtensible,
+        _Inout_ WDFMEMORY &                          ksDataFormatWaveFormatExtensibleMemory
     );
 
   protected:

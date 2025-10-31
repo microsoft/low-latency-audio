@@ -281,14 +281,24 @@ Capture_AllocateSupportedFormats(
     _In_ USBAudioDataFormatManager * UsbAudioDataFormatManager
 )
 {
-    NTSTATUS                          status = STATUS_SUCCESS;
-    ACXDATAFORMAT                     acxDataFormat{};
-    ACXDATAFORMATLIST                 formatList;
-    KSDATAFORMAT_WAVEFORMATEXTENSIBLE pcmWaveFormatExtensible{};
+    NTSTATUS                            status = STATUS_SUCCESS;
+    ACXDATAFORMAT                       acxDataFormat{};
+    ACXDATAFORMATLIST                   formatList;
+    KSDATAFORMAT_WAVEFORMATEXTENSIBLE * ksDataFormatWaveFormatExtensible = nullptr;
+    WDFMEMORY                           ksDataFormatWaveFormatExtensibleMemory = nullptr;
 
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
+
+    auto allocateSupportedFormatsScope = wil::scope_exit([&]() {
+        if (ksDataFormatWaveFormatExtensibleMemory != nullptr)
+        {
+            WdfObjectDelete(ksDataFormatWaveFormatExtensibleMemory);
+            ksDataFormatWaveFormatExtensibleMemory = nullptr;
+        }
+        ksDataFormatWaveFormatExtensible = nullptr;
+    });
 
     ///////////////////////////////////////////////////////////
     //
@@ -315,38 +325,40 @@ Capture_AllocateSupportedFormats(
             //
             for (ULONG formatIndex = 0; formatIndex < UsbAudioDataFormatManager->GetNumOfUSBAudioDataFormats(); formatIndex++)
             {
-                UCHAR        bytesPerSample = UsbAudioDataFormatManager->GetBytesPerSample(formatIndex);
-                UCHAR        validBits = UsbAudioDataFormatManager->GetValidBits(formatIndex);
-                const GUID * ksDataFormatSubType = ConvertAudioDataFormat(UsbAudioDataFormatManager->GetFormatType(formatIndex), UsbAudioDataFormatManager->GetFormat(formatIndex));
-                if (ksDataFormatSubType != nullptr)
+                UCHAR bytesPerSample = UsbAudioDataFormatManager->GetBytesPerSample(formatIndex);
+                UCHAR validBits = UsbAudioDataFormatManager->GetValidBits(formatIndex);
+
+                status = USBAudioDataFormat::BuildWaveFormatExtensible(
+                    Device,
+                    sampleRate,
+                    (UCHAR)Channels,
+                    bytesPerSample,
+                    validBits,
+                    UsbAudioDataFormatManager->GetFormatType(formatIndex),
+                    UsbAudioDataFormatManager->GetFormat(formatIndex),
+                    ksDataFormatWaveFormatExtensible,
+                    ksDataFormatWaveFormatExtensibleMemory
+                );
+
+                if (NT_SUCCESS(status))
                 {
-                    pcmWaveFormatExtensible.DataFormat.FormatSize = sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE);
-                    pcmWaveFormatExtensible.DataFormat.MajorFormat = KSDATAFORMAT_TYPE_AUDIO;
-                    pcmWaveFormatExtensible.DataFormat.SubFormat = *ksDataFormatSubType;
-                    pcmWaveFormatExtensible.DataFormat.Specifier = KSDATAFORMAT_SPECIFIER_WAVEFORMATEX;
+                    RETURN_NTSTATUS_IF_FAILED(AllocateFormat(ksDataFormatWaveFormatExtensible, Circuit, Device, &acxDataFormat));
 
-                    pcmWaveFormatExtensible.WaveFormatExt.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-                    pcmWaveFormatExtensible.WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
-                    pcmWaveFormatExtensible.WaveFormatExt.dwChannelMask = (Channels == 1 ? KSAUDIO_SPEAKER_MONO : KSAUDIO_SPEAKER_STEREO);
-                    pcmWaveFormatExtensible.WaveFormatExt.SubFormat = *ksDataFormatSubType;
-
-                    pcmWaveFormatExtensible.DataFormat.SampleSize = Channels * bytesPerSample;
-                    pcmWaveFormatExtensible.WaveFormatExt.Format.nChannels = static_cast<WORD>(Channels);
-                    pcmWaveFormatExtensible.WaveFormatExt.Format.nSamplesPerSec = sampleRate;
-                    pcmWaveFormatExtensible.WaveFormatExt.Format.nAvgBytesPerSec = Channels * bytesPerSample * sampleRate;
-                    pcmWaveFormatExtensible.WaveFormatExt.Format.nBlockAlign = static_cast<WORD>(Channels * bytesPerSample);
-                    pcmWaveFormatExtensible.WaveFormatExt.Format.wBitsPerSample = static_cast<WORD>(bytesPerSample * 8);
-                    pcmWaveFormatExtensible.WaveFormatExt.Samples.wValidBitsPerSample = validBits;
-
-                    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%u %u %u %u %u %u %u", pcmWaveFormatExtensible.DataFormat.SampleSize, pcmWaveFormatExtensible.WaveFormatExt.Format.nChannels, pcmWaveFormatExtensible.WaveFormatExt.Format.nSamplesPerSec, pcmWaveFormatExtensible.WaveFormatExt.Format.nAvgBytesPerSec, pcmWaveFormatExtensible.WaveFormatExt.Format.nBlockAlign, pcmWaveFormatExtensible.WaveFormatExt.Format.wBitsPerSample, pcmWaveFormatExtensible.WaveFormatExt.Samples.wValidBitsPerSample);
-
-                    RETURN_NTSTATUS_IF_FAILED(AllocateFormat(pcmWaveFormatExtensible, Circuit, Device, &acxDataFormat));
-                    //
                     // The driver uses this DDI to add data formats to the raw
                     // processing mode list associated with the current circuit.
-                    //
                     RETURN_NTSTATUS_IF_FAILED(AcxDataFormatListAddDataFormat(formatList, acxDataFormat));
                 }
+                else if (status != STATUS_NOT_SUPPORTED)
+                {
+                    RETURN_NTSTATUS_IF_FAILED(status);
+                }
+
+                if (ksDataFormatWaveFormatExtensibleMemory != nullptr)
+                {
+                    WdfObjectDelete(ksDataFormatWaveFormatExtensibleMemory);
+                    ksDataFormatWaveFormatExtensibleMemory = nullptr;
+                }
+                ksDataFormatWaveFormatExtensible = nullptr;
             }
         }
     }
@@ -553,7 +565,8 @@ Return Value:
     for (ULONG index = 0; index < numOfDevices; index++)
     {
         ULONG numOfChannelsPerDevice;
-        if (numOfRemainingChannels > 2)
+
+        if ((numOfRemainingChannels > 2) && deviceContext->UsbAudioConfiguration->IsDeviceSplittable(true))
         {
             numOfChannelsPerDevice = 2;
         }

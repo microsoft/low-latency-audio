@@ -46,21 +46,23 @@ const ULONG c_SampleRateCount = SIZEOF_ARRAY(c_SampleRateList);
 
 PAGED_CODE_SEG
 NTSTATUS AllocateFormat(
-    _In_ KSDATAFORMAT_WAVEFORMATEXTENSIBLE WaveFormat,
-    _In_ ACXCIRCUIT                        Circuit,
-    _In_ WDFDEVICE                         Device,
-    _Out_ ACXDATAFORMAT *                  Format
+    _In_ KSDATAFORMAT_WAVEFORMATEXTENSIBLE * WaveFormat,
+    _In_ ACXCIRCUIT                          Circuit,
+    _In_ WDFDEVICE                           Device,
+    _Out_ ACXDATAFORMAT *                    Format
 )
 {
     PAGED_CODE();
 
     NTSTATUS status = STATUS_SUCCESS;
 
+    RETURN_NTSTATUS_IF_TRUE(WaveFormat == nullptr, STATUS_INVALID_PARAMETER);
+
     WDF_OBJECT_ATTRIBUTES attributes;
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
 
     ACX_DATAFORMAT_CONFIG formatCfg;
-    ACX_DATAFORMAT_CONFIG_INIT_KS(&formatCfg, &WaveFormat);
+    ACX_DATAFORMAT_CONFIG_INIT_KS(&formatCfg, WaveFormat);
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, FORMAT_CONTEXT);
     attributes.ParentObject = Circuit;
 
@@ -473,25 +475,25 @@ const GUID * ConvertAudioDataFormat(
         }
         break;
     case NS_USBAudio0200::FORMAT_TYPE_III:
-        // WAVEFORMATEXTENSIBLE_IEC61937?
         switch (Format)
         {
         case NS_USBAudio0200::IEC61937_AC_3:
-            // TBD
-            // KSDATAFORMAT_SUBTYPE_AC3_AUDIO
-            // KSDATAFORMAT_SPECIFIER_AC3_AUDIO
+            ksDataFormatSubType = &KSDATAFORMAT_SUBTYPE_IEC61937_DOLBY_DIGITAL;
             break;
         case NS_USBAudio0200::IEC61937_MPEG_2_AAC_ADTS:
-            // TBD
+            ksDataFormatSubType = &KSDATAFORMAT_SUBTYPE_IEC61937_AAC;
             break;
         case NS_USBAudio0200::IEC61937_DTS_I:
+            ksDataFormatSubType = &KSDATAFORMAT_SUBTYPE_IEC61937_DTS;
+            break;
         case NS_USBAudio0200::IEC61937_DTS_II:
+            ksDataFormatSubType = &KSDATAFORMAT_SUBTYPE_IEC61937_DTS_HD;
+            break;
         case NS_USBAudio0200::IEC61937_DTS_III:
-            // TBD
-            // KSDATAFORMAT_SUBTYPE_IEC61937_DTS
+            ksDataFormatSubType = &KSDATAFORMAT_SUBTYPE_IEC61937_DTSX_E1;
             break;
         case NS_USBAudio0200::TYPE_III_WMA:
-            // TBD
+            ksDataFormatSubType = &KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO;
             break;
         default:
             break;
@@ -516,6 +518,9 @@ NTSTATUS ConvertAudioDataFormat(
 
     PAGED_CODE();
 
+    //
+    // https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/subformat-guids-for-compressed-audio-formats
+    //
     if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_PCM))
     {
         FormatType = NS_USBAudio0200::FORMAT_TYPE_I;
@@ -530,7 +535,6 @@ NTSTATUS ConvertAudioDataFormat(
     }
     else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DOLBY_DIGITAL))
     {
-        // TBD
         FormatType = NS_USBAudio0200::FORMAT_TYPE_III;
         Format = NS_USBAudio0200::IEC61937_AC_3;
         status = STATUS_SUCCESS;
@@ -546,16 +550,18 @@ NTSTATUS ConvertAudioDataFormat(
         FormatType = NS_USBAudio0200::FORMAT_TYPE_III;
         Format = NS_USBAudio0200::IEC61937_DTS_I;
         status = STATUS_SUCCESS;
-        // } else if (IsEqualGUIDAligned(ksDataFormatSubType, )) {
-        // 	// TBD
-        // 	FormatType = NS_USBAudio0200::FORMAT_TYPE_III;
-        // 	Format = NS_USBAudio0200::IEC61937_DTS_II;
-        //  status = STATUS_SUCCESS;
-        // } else if (IsEqualGUIDAligned(ksDataFormatSubType, )) {
-        // 	// TBD
-        // 	FormatType = NS_USBAudio0200::FORMAT_TYPE_III;
-        // 	Format = NS_USBAudio0200::IEC61937_DTS_III;
-        //  status = STATUS_SUCCESS;
+    }
+    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DTS_HD))
+    {
+        FormatType = NS_USBAudio0200::FORMAT_TYPE_III;
+        Format = NS_USBAudio0200::IEC61937_DTS_II;
+        status = STATUS_SUCCESS;
+    }
+    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DTSX_E1))
+    {
+        FormatType = NS_USBAudio0200::FORMAT_TYPE_III;
+        Format = NS_USBAudio0200::IEC61937_DTS_III;
+        status = STATUS_SUCCESS;
     }
     else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO))
     {
@@ -565,6 +571,29 @@ NTSTATUS ConvertAudioDataFormat(
     }
 
     return status;
+}
+
+PAGED_CODE_SEG
+NTSTATUS GetChannelsFromMask(
+    _In_ DWORD ChannelMask
+)
+{
+    PAGED_CODE();
+
+    ULONG channels = 0;
+    ChannelMask &= ~SPEAKER_RESERVED;
+
+    for (; ChannelMask != 0; ChannelMask >>= 1)
+    {
+        if (ChannelMask & 0x01)
+        {
+            channels++;
+        }
+    }
+
+    ASSERT(channels != 0);
+
+    return channels;
 }
 
 PAGED_CODE_SEG
@@ -611,6 +640,11 @@ NTSTATUS SplitAcxDataFormatByDeviceChannels(
     pcmWaveFormatExtensible.DataFormat.SubFormat = AcxDataFormatGetSubFormat(Source);
     pcmWaveFormatExtensible.DataFormat.Specifier = KSDATAFORMAT_SPECIFIER_WAVEFORMATEX;
 
+    //
+    // Compressed audio data formats such as IEC61937 are not supported.
+    //
+    ASSERT(IsEqualGUIDAligned(pcmWaveFormatExtensible.DataFormat.SubFormat, KSDATAFORMAT_SUBTYPE_PCM) || IsEqualGUIDAligned(pcmWaveFormatExtensible.DataFormat.SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT));
+
     pcmWaveFormatExtensible.WaveFormatExt.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
     pcmWaveFormatExtensible.WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
     pcmWaveFormatExtensible.WaveFormatExt.dwChannelMask = (NumOfChannelsPerDevice == 1 ? KSAUDIO_SPEAKER_MONO : KSAUDIO_SPEAKER_STEREO);
@@ -624,7 +658,102 @@ NTSTATUS SplitAcxDataFormatByDeviceChannels(
     pcmWaveFormatExtensible.WaveFormatExt.Format.wBitsPerSample = static_cast<WORD>(bytesPerSample * 8);
     pcmWaveFormatExtensible.WaveFormatExt.Samples.wValidBitsPerSample = validBits;
 
-    RETURN_NTSTATUS_IF_FAILED(AllocateFormat(pcmWaveFormatExtensible, Circuit, Device, &Destination));
+    RETURN_NTSTATUS_IF_FAILED(AllocateFormat(&pcmWaveFormatExtensible, Circuit, Device, &Destination));
 
     return STATUS_SUCCESS;
+}
+
+PAGED_CODE_SEG
+const char * GetKsDataFormatSubTypeString(
+    _In_ GUID ksDataFormatSubType
+)
+{
+    PAGED_CODE();
+
+    if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_PCM))
+    {
+        return "KSDATAFORMAT_SUBTYPE_PCM";
+    }
+    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT))
+    {
+        return "KSDATAFORMAT_SUBTYPE_IEEE_FLOAT";
+    }
+    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DOLBY_DIGITAL))
+    {
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_DOLBY_DIGITAL";
+    }
+    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_AAC))
+    {
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_AAC";
+    }
+    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DTS))
+    {
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_DTS";
+    }
+    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DTS_HD))
+    {
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_DTS_HD";
+    }
+    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DTSX_E1))
+    {
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_DTSX_E1";
+    }
+    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO))
+    {
+        return "KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO";
+    }
+    return "KSDATAFORMAT_SUBTYPE unknown";
+}
+
+PAGED_CODE_SEG
+void TraceAcxDataFormat(
+    _In_ UCHAR         DebugPrintLevel,
+    _In_ ACXDATAFORMAT DataFormat
+)
+{
+    PAGED_CODE();
+
+    PWAVEFORMATEX                  waveFormatEx = static_cast<PWAVEFORMATEX>(AcxDataFormatGetWaveFormatEx(DataFormat));
+    PWAVEFORMATEXTENSIBLE          waveFormatExtensible = static_cast<PWAVEFORMATEXTENSIBLE>(AcxDataFormatGetWaveFormatExtensible(DataFormat));
+    PWAVEFORMATEXTENSIBLE_IEC61937 waveFormatExtensibleIEC61937 = static_cast<PWAVEFORMATEXTENSIBLE_IEC61937>(AcxDataFormatGetWaveFormatExtensibleIec61937(DataFormat));
+
+    if (waveFormatExtensibleIEC61937)
+    {
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wFormatTag      0x%x", waveFormatExtensibleIEC61937->FormatExt.Format.wFormatTag);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nChannels       %u", waveFormatExtensibleIEC61937->FormatExt.Format.nChannels);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nSamplesPerSec  %u", waveFormatExtensibleIEC61937->FormatExt.Format.nSamplesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nAvgBytesPerSec %u", waveFormatExtensibleIEC61937->FormatExt.Format.nAvgBytesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nBlockAlign     %u", waveFormatExtensibleIEC61937->FormatExt.Format.nBlockAlign);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wBitsPerSample  %u", waveFormatExtensibleIEC61937->FormatExt.Format.wBitsPerSample);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::cbSize          %u", waveFormatExtensibleIEC61937->FormatExt.Format.cbSize);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::Samples.wValidBitsPerSample %u", waveFormatExtensibleIEC61937->FormatExt.Samples.wValidBitsPerSample);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::dwChannelMask               %u", waveFormatExtensibleIEC61937->FormatExt.dwChannelMask);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::SubFormat                   %s", GetKsDataFormatSubTypeString(waveFormatExtensibleIEC61937->FormatExt.SubFormat));
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE_IEC61937::dwEncodedSamplesPerSec %u", waveFormatExtensibleIEC61937->dwEncodedSamplesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE_IEC61937::dwEncodedChannelCount  %u", waveFormatExtensibleIEC61937->dwEncodedChannelCount);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE_IEC61937::dwAverageBytesPerSec   %u", waveFormatExtensibleIEC61937->dwAverageBytesPerSec);
+    }
+    else if (waveFormatExtensible)
+    {
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wFormatTag      0x%x", waveFormatExtensible->Format.wFormatTag);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nChannels       %u", waveFormatExtensible->Format.nChannels);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nSamplesPerSec  %u", waveFormatExtensible->Format.nSamplesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nAvgBytesPerSec %u", waveFormatExtensible->Format.nAvgBytesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nBlockAlign     %u", waveFormatExtensible->Format.nBlockAlign);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wBitsPerSample  %u", waveFormatExtensible->Format.wBitsPerSample);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::cbSize          %u", waveFormatExtensible->Format.cbSize);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::Samples.wValidBitsPerSample %u", waveFormatExtensible->Samples.wValidBitsPerSample);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::dwChannelMask               %u", waveFormatExtensible->dwChannelMask);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEXTENSIBLE::SubFormat                   %s", GetKsDataFormatSubTypeString(waveFormatExtensible->SubFormat));
+    }
+    else if (waveFormatEx)
+    {
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wFormatTag      0x%x", waveFormatEx->wFormatTag);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nChannels       %u", waveFormatEx->nChannels);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nSamplesPerSec  %u", waveFormatEx->nSamplesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nAvgBytesPerSec %u", waveFormatEx->nAvgBytesPerSec);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::nBlockAlign     %u", waveFormatEx->nBlockAlign);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wBitsPerSample  %u", waveFormatEx->wBitsPerSample);
+        TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::cbSize          %u", waveFormatEx->cbSize);
+    }
 }

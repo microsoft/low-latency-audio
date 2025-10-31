@@ -466,6 +466,10 @@ class USBAudioControlInterface : public USBAudioInterface
         _Out_ ULONG &        sampleRate
     ) = 0;
 
+    virtual bool CanSetSampleFrequency(
+        _In_ bool isInput
+    ) = 0;
+
     virtual NTSTATUS GetCurrentSupportedSampleFrequency(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ ULONG &         supportedSampleRate
@@ -479,8 +483,10 @@ class USBAudioControlInterface : public USBAudioInterface
 
     ULONG                                                                          m_inputCurrentSampleRate{0};
     ULONG                                                                          m_inputSupportedSampleRate{0};
+    UCHAR                                                                          m_inputSampleFrequencyControls{0};
     ULONG                                                                          m_outputCurrentSampleRate{0};
     ULONG                                                                          m_outputSupportedSampleRate{0};
+    UCHAR                                                                          m_outputSampleFrequencyControls{0};
     VariableArray<NS_USBAudio::PCS_GENERIC_AUDIO_DESCRIPTOR, MAX_AUDIO_DESCRIPTOR> m_genericAudioDescriptorInfo;
 };
 
@@ -698,6 +704,12 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
     virtual NTSTATUS GetCurrentSampleFrequency(
         _In_ PDEVICE_CONTEXT deviceContext,
         _Out_ ULONG &        sampleRate
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual bool CanSetSampleFrequency(
+        _In_ bool isInput
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -977,6 +989,12 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    virtual bool CanSetSampleFrequency(
+        _In_ bool isInput
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     virtual NTSTATUS GetCurrentSupportedSampleFrequency(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ ULONG &         supportedSampleRate
@@ -990,6 +1008,13 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     );
 
   protected:
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS QuerySampleFrequencyControls(
+        _In_ UCHAR    clockSouceID,
+        _Out_ UCHAR & controls
+    );
+
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     NTSTATUS QueryCurrentSampleFrequency(
@@ -1242,6 +1267,7 @@ class USBAudio2StreamInterface : public USBAudioStreamInterface
     ULONG                                                              m_validAlternateSettingMap{0};                        // valid only when alternate interface is 0
     ULONG                                                              m_formatType{NS_USBAudio0200::FORMAT_TYPE_UNDEFINED}; // valid only when alternate interface is not 0
     ULONG                                                              m_audioDataFormat{NS_USBAudio0200::PCM};              // valid only when alternate interface is not 0
+    ULONG                                                              m_currentAudioDataFormat{NS_USBAudio0200::PCM};       // valid only when alternate interface is not 0
     bool                                                               m_enableGetFormatType{false};
     USBAudioDataFormat *                                               m_usbAudioDataFormat{nullptr};
     NS_USBAudio0200::PCS_AS_TYPE_I_FORMAT_TYPE_DESCRIPTOR              m_formatITypeDescriptor{nullptr};
@@ -1365,6 +1391,12 @@ class USBAudioInterfaceInfo
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    virtual bool CanSetSampleFrequency(
+        _In_ bool isInput
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     NTSTATUS SelectAlternateInterface(
         _In_ PDEVICE_CONTEXT       deviceContext,
         _In_ bool                  isInput,
@@ -1454,6 +1486,14 @@ class USBAudioConfiguration
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     NTSTATUS
+    GetCurrentTerminalLink(
+        _In_ bool     isInput,
+        _Out_ UCHAR & terminalLink
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
     GetStreamChannelInfo(
         _In_ bool      isInput,
         _Out_ UCHAR &  numOfChannels,
@@ -1471,6 +1511,13 @@ class USBAudioConfiguration
         _Out_ USHORT & terminalType,
         _Out_ UCHAR &  volumeUnitID,
         _Out_ UCHAR &  muteUnitID
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    bool
+    IsDeviceSplittable(
+        _In_ bool isInput
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1647,6 +1694,10 @@ class USBAudioConfiguration
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    virtual bool CanSetSampleFrequency();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     NTSTATUS SelectAlternateInterface(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ bool            isInput,
@@ -1713,6 +1764,7 @@ class USBAudioConfiguration
     PUSB_CONFIGURATION_DESCRIPTOR m_usbConfigurationDescriptor{nullptr};
     USBAudioInterfaceInfo **      m_usbAudioInterfaceInfoes{nullptr};
     WDFMEMORY                     m_usbAudioInterfaceInfoesMemory{nullptr};
+    ULONG                         m_numOfUsbAudioInterfaceInfo{0};
     bool                          m_isUSBAudio2{false};
     bool                          m_isInputIsochronousInterfaceExists{false};
     bool                          m_isOutputIsochronousInterfaceExists{false};

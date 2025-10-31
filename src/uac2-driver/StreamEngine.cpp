@@ -28,6 +28,7 @@ Environment:
 #include "USBAudio.h"
 #include "StreamEngine.h"
 #include "Common.h"
+#include "CircuitHelper.h"
 #ifndef __INTELLISENSE__
 #include "StreamEngine.tmh"
 #endif
@@ -81,51 +82,7 @@ CStreamEngine::CStreamEngine(
     RtlZeroMemory(m_packets, sizeof(m_packets));
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, "this = %p, m_streamFormat = %p", this, m_streamFormat);
-    if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_PCM))
-    {
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - KSDATAFORMAT_SUBTYPE_PCM");
-    }
-    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT))
-    {
-        // NS_USBAudio0200::IEEE_FLOAT;
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - KSDATAFORMAT_SUBTYPE_IEEE_FLOAT");
-    }
-    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DOLBY_DIGITAL))
-    {
-        // NS_USBAudio0200::NS_USBAudio0200::IEC61937_AC_3;
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - KSDATAFORMAT_SUBTYPE_IEC61937_DOLBY_DIGITAL");
-    }
-    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_AAC))
-    {
-        // NS_USBAudio0200::IEC61937_MPEG_2_AAC_ADTS;
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - KSDATAFORMAT_SUBTYPE_IEC61937_AAC");
-    }
-    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_DTS))
-    {
-        // NS_USBAudio0200::IEC61937_DTS_I;
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - KSDATAFORMAT_SUBTYPE_IEC61937_DTS");
-    }
-    // else if (IsEqualGUIDAligned(ksDataFormatSubType, ))
-    // {
-    //     // NS_USBAudio0200::IEC61937_DTS_II;
-    //     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - KSDATAFORMAT_SUBTYPE_ ");
-    // }
-    // else if (IsEqualGUIDAligned(ksDataFormatSubType, ))
-    // {
-    //     // NS_USBAudio0200::FORMAT_TYPE_III;
-    //     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - KSDATAFORMAT_SUBTYPE_ ");
-    // }
-    else if (IsEqualGUIDAligned(ksDataFormatSubType, KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO))
-    {
-        // NS_USBAudio0200::TYPE_III_WMA;
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - KSDATAFORMAT_SUBTYPE_IEC61937_WMA_PRO");
-    }
-    else
-    {
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - KSDATAFORMAT_SUBTYPE unknown");
-    }
-
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - %u, %llu, %u, %u, %u, %u, %u, %u, %u", AcxDataFormatGetChannelsCount(m_streamFormat), AcxDataFormatGetChannelMask(m_streamFormat), AcxDataFormatGetSampleSize(m_streamFormat), AcxDataFormatGetBitsPerSample(m_streamFormat), AcxDataFormatGetValidBitsPerSample(m_streamFormat), AcxDataFormatGetSamplesPerBlock(m_streamFormat), AcxDataFormatGetBlockAlign(m_streamFormat), AcxDataFormatGetSampleRate(m_streamFormat), AcxDataFormatGetAverageBytesPerSec(m_streamFormat));
+    TraceAcxDataFormat(TRACE_LEVEL_VERBOSE, m_streamFormat);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 }
@@ -470,7 +427,15 @@ CStreamEngine::GetPresentationPosition(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Entry");
 
-    status = USBAudioAcxDriverStreamGetPresentationPosition(m_input, m_deviceIndex, m_deviceContext, PositionInBlocks, QPCPosition);
+    if (m_currentState == AcxStreamStateRun)
+    {
+        status = USBAudioAcxDriverStreamGetPresentationPosition(m_input, m_deviceIndex, m_deviceContext, PositionInBlocks, QPCPosition);
+    }
+    else
+    {
+        *PositionInBlocks = 0;
+        *QPCPosition = KeQueryPerformanceCounter(nullptr).QuadPart;
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit %!STATUS!", status);
     return status;

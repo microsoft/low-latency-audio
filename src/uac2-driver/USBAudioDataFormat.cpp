@@ -28,6 +28,7 @@ Environment:
 #include "Private.h"
 #include "Common.h"
 #include "DeviceControl.h"
+#include "AudioFormats.h"
 #include "ErrorStatistics.h"
 #include "USBAudioDataFormat.h"
 #include "CircuitHelper.h"
@@ -194,37 +195,56 @@ bool USBAudioDataFormat::IsSupportedFormat(
 
     PAGED_CODE();
 
-    switch (formatType)
+    for (ULONG formatMask = 0x01; (formatMask != 0) && !isSupportedFormat; formatMask <<= 1)
     {
-    case NS_USBAudio0200::FORMAT_TYPE_I:
-        switch (format)
+        switch (formatType)
         {
-        case NS_USBAudio0200::PCM:
-            isSupportedFormat = true;
+        case NS_USBAudio0200::FORMAT_TYPE_I:
+            switch (format & formatMask)
+            {
+            case NS_USBAudio0200::PCM:
+                isSupportedFormat = true;
+                break;
+            case NS_USBAudio0200::PCM8:
+                // TBD
+                break;
+            case NS_USBAudio0200::IEEE_FLOAT:
+                isSupportedFormat = true;
+                break;
+            default:
+                break;
+            }
             break;
-        case NS_USBAudio0200::PCM8:
-            // TBD
-            break;
-        case NS_USBAudio0200::IEEE_FLOAT:
-            isSupportedFormat = true;
-            break;
-        default:
-            break;
-        }
-        break;
-    case NS_USBAudio0200::FORMAT_TYPE_III:
-        switch (format)
-        {
-        case NS_USBAudio0200::IEC61937_AC_3:
-        case NS_USBAudio0200::IEC61937_MPEG_2_AAC_ADTS:
-        case NS_USBAudio0200::IEC61937_DTS_I:
-        case NS_USBAudio0200::IEC61937_DTS_II:
-        case NS_USBAudio0200::IEC61937_DTS_III:
-        case NS_USBAudio0200::TYPE_III_WMA:
-            isSupportedFormat = false;
-            break;
-        default:
-            break;
+        case NS_USBAudio0200::FORMAT_TYPE_III:
+#if 0
+            switch (format & formatMask)
+            {
+            case NS_USBAudio0200::IEC61937_AC_3:
+            case NS_USBAudio0200::IEC61937_MPEG_2_AAC_ADTS:
+            case NS_USBAudio0200::IEC61937_DTS_I:
+            case NS_USBAudio0200::IEC61937_DTS_II:
+            case NS_USBAudio0200::IEC61937_DTS_III:
+            case NS_USBAudio0200::TYPE_III_WMA:
+                isSupportedFormat = true;
+                break;
+            default:
+                break;
+            }
+#else
+            switch (format & formatMask)
+            {
+            case NS_USBAudio0200::IEC61937_AC_3:
+            // case NS_USBAudio0200::IEC61937_MPEG_2_AAC_ADTS:
+            case NS_USBAudio0200::IEC61937_DTS_I:
+            case NS_USBAudio0200::IEC61937_DTS_II:
+            case NS_USBAudio0200::IEC61937_DTS_III:
+            case NS_USBAudio0200::TYPE_III_WMA:
+                isSupportedFormat = true;
+                break;
+            default:
+                break;
+            }
+#endif
         }
     }
 
@@ -469,48 +489,266 @@ USBAudioDataFormat::ConverSampleTypeToBytesPerSample(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
+ULONG USBAudioDataFormat::GetSampleFormatsTypeI()
+{
+    PAGED_CODE();
+
+    return (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_PCM)) |
+           (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT));
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+ULONG USBAudioDataFormat::GetSampleFormatsTypeIII()
+{
+    PAGED_CODE();
+
+    return (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_AC_3)) |
+           (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_MPEG_2_AAC_ADTS)) |
+           (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_DTS_I)) |
+           (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_DTS_II)) |
+           (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEC61937_DTS_III)) |
+           (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_TYPE_III_WMA));
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
 NTSTATUS USBAudioDataFormat::BuildWaveFormatExtensible(
-    ULONG                               sampleRate,
-    UCHAR                               channels,
-    UCHAR                               bytesPerSample,
-    UCHAR                               validBits,
-    ULONG                               formatType,
-    ULONG                               format,
-    KSDATAFORMAT_WAVEFORMATEXTENSIBLE & pcmWaveFormatExtensible
+    WDFOBJECT                            parentObject,
+    ULONG                                sampleRate,
+    UCHAR                                channels,
+    UCHAR                                bytesPerSample,
+    UCHAR                                validBits,
+    ULONG                                formatType,
+    ULONG                                format,
+    PKSDATAFORMAT_WAVEFORMATEXTENSIBLE & ksDataFormatWaveFormatExtensible,
+    WDFMEMORY &                          ksDataFormatWaveFormatExtensibleMemory
 )
 {
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS              status = STATUS_INVALID_PARAMETER;
+    USHORT                size = 0;
+    WDF_OBJECT_ATTRIBUTES attributes{};
 
     PAGED_CODE();
 
-    // TBD
-    // NS_USBAudio0200::FORMAT_TYPE_III, WAVEFORMATEXTENSIBLE_IEC61937
-    // https://learn.microsoft.com/en-us/windows/win32/coreaudio/representing-formats-for-iec-61937-transmissions
-    const GUID * ksDataFormatSubType = ConvertAudioDataFormat(formatType, format);
-    if (ksDataFormatSubType != nullptr)
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC!, %u, %u, %u, %u, %u, 0x%x", sampleRate, channels, bytesPerSample, validBits, formatType, format);
+
+    ksDataFormatWaveFormatExtensible = nullptr;
+    ksDataFormatWaveFormatExtensibleMemory = nullptr;
+
+    auto configureDeviceScope = wil::scope_exit([&]() {
+        if (!NT_SUCCESS(status) && (ksDataFormatWaveFormatExtensibleMemory != nullptr))
+        {
+            WdfObjectDelete(ksDataFormatWaveFormatExtensibleMemory);
+            ksDataFormatWaveFormatExtensible = nullptr;
+            ksDataFormatWaveFormatExtensibleMemory = nullptr;
+        }
+    });
+
+    if (formatType == NS_USBAudio0200::FORMAT_TYPE_I)
     {
-        pcmWaveFormatExtensible.DataFormat.FormatSize = sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE);
-        pcmWaveFormatExtensible.DataFormat.MajorFormat = KSDATAFORMAT_TYPE_AUDIO;
-        pcmWaveFormatExtensible.DataFormat.SubFormat = *ksDataFormatSubType;
-        pcmWaveFormatExtensible.DataFormat.Specifier = KSDATAFORMAT_SPECIFIER_WAVEFORMATEX;
-
-        pcmWaveFormatExtensible.WaveFormatExt.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
-        pcmWaveFormatExtensible.WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
-        pcmWaveFormatExtensible.WaveFormatExt.dwChannelMask = (channels == 1 ? KSAUDIO_SPEAKER_MONO : KSAUDIO_SPEAKER_STEREO);
-        pcmWaveFormatExtensible.WaveFormatExt.SubFormat = *ksDataFormatSubType;
-
-        pcmWaveFormatExtensible.DataFormat.SampleSize = channels * bytesPerSample;
-        pcmWaveFormatExtensible.WaveFormatExt.Format.nChannels = static_cast<WORD>(channels);
-        pcmWaveFormatExtensible.WaveFormatExt.Format.nSamplesPerSec = sampleRate;
-        pcmWaveFormatExtensible.WaveFormatExt.Format.nAvgBytesPerSec = channels * bytesPerSample * sampleRate;
-        pcmWaveFormatExtensible.WaveFormatExt.Format.nBlockAlign = static_cast<WORD>(channels * bytesPerSample);
-        pcmWaveFormatExtensible.WaveFormatExt.Format.wBitsPerSample = static_cast<WORD>(bytesPerSample * 8);
-        pcmWaveFormatExtensible.WaveFormatExt.Samples.wValidBitsPerSample = validBits;
+        size = sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE);
+    }
+    else if (formatType == NS_USBAudio0200::FORMAT_TYPE_III)
+    {
+        size = sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE) + (sizeof(WAVEFORMATEXTENSIBLE_IEC61937) - sizeof(WAVEFORMATEXTENSIBLE));
     }
     else
     {
         status = STATUS_INVALID_PARAMETER;
+        return status;
     }
+
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+
+    attributes.ParentObject = parentObject;
+    status = WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, size, &ksDataFormatWaveFormatExtensibleMemory, (PVOID *)&ksDataFormatWaveFormatExtensible);
+    RETURN_NTSTATUS_IF_FAILED(status);
+
+    RtlZeroMemory(ksDataFormatWaveFormatExtensible, size);
+
+    const GUID * ksDataFormatSubType = ConvertAudioDataFormat(formatType, format);
+    if (ksDataFormatSubType != nullptr)
+    {
+        if (formatType == NS_USBAudio0200::FORMAT_TYPE_I)
+        {
+            static_assert((sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX)) == 22);
+            ksDataFormatWaveFormatExtensible->DataFormat.FormatSize = size;
+            ksDataFormatWaveFormatExtensible->DataFormat.MajorFormat = KSDATAFORMAT_TYPE_AUDIO;
+            ksDataFormatWaveFormatExtensible->DataFormat.SubFormat = *ksDataFormatSubType;
+            ksDataFormatWaveFormatExtensible->DataFormat.Specifier = KSDATAFORMAT_SPECIFIER_WAVEFORMATEX;
+            ksDataFormatWaveFormatExtensible->DataFormat.SampleSize = channels * bytesPerSample;
+            ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+            ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+            ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nChannels = static_cast<WORD>(channels);
+            ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nSamplesPerSec = sampleRate;
+            ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nAvgBytesPerSec = channels * bytesPerSample * sampleRate;
+            ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nBlockAlign = static_cast<WORD>(channels * bytesPerSample);
+            ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.wBitsPerSample = static_cast<WORD>(bytesPerSample * 8);
+            ksDataFormatWaveFormatExtensible->WaveFormatExt.Samples.wValidBitsPerSample = validBits;
+            ksDataFormatWaveFormatExtensible->WaveFormatExt.dwChannelMask = (channels == 1 ? KSAUDIO_SPEAKER_MONO : KSAUDIO_SPEAKER_STEREO);
+            ksDataFormatWaveFormatExtensible->WaveFormatExt.SubFormat = *ksDataFormatSubType;
+            status = STATUS_SUCCESS;
+        }
+        else if (formatType == NS_USBAudio0200::FORMAT_TYPE_III)
+        {
+            //
+            // https://learn.microsoft.com/en-us/windows/win32/coreaudio/representing-formats-for-iec-61937-transmissions
+            //
+            static_assert((sizeof(WAVEFORMATEXTENSIBLE_IEC61937) - sizeof(WAVEFORMATEX)) == 34);
+            if (bytesPerSample == 2)
+            {
+                switch (format)
+                {
+                case NS_USBAudio0200::IEC61937_AC_3:
+                    if (channels == 2)
+                    {
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - IEC61937_AC_3, %u, %u, %u, %u, %u, 0x%x", sampleRate, channels, bytesPerSample, validBits, formatType, format);
+                        *ksDataFormatWaveFormatExtensible = DolbyDigital;
+                        ksDataFormatWaveFormatExtensible->DataFormat.FormatSize = size;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE_IEC61937) - sizeof(WAVEFORMATEX);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nChannels = static_cast<WORD>(channels);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nSamplesPerSec = sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nAvgBytesPerSec = channels * bytesPerSample * sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nBlockAlign = static_cast<WORD>(channels * bytesPerSample);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.wBitsPerSample = static_cast<WORD>(bytesPerSample * 8);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedSamplesPerSec = sampleRate;
+                        // WaveFormatEx.FormatExt.dwChannelMask = KSAUDIO_SPEAKER_STEREO
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedChannelCount = GetChannelsFromMask(ksDataFormatWaveFormatExtensible->WaveFormatExt.dwChannelMask);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwAverageBytesPerSec = 0;
+                        status = STATUS_SUCCESS;
+                    }
+                    else
+                    {
+                        status = STATUS_NOT_SUPPORTED;
+                    }
+                    break;
+                case NS_USBAudio0200::IEC61937_MPEG_2_AAC_ADTS:
+                    if (channels == 2)
+                    {
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - IEC61937_MPEG_2_AAC_ADTS, %u, %u, %u, %u, %u, 0x%x", sampleRate, channels, bytesPerSample, validBits, formatType, format);
+                        *ksDataFormatWaveFormatExtensible = AacAdts;
+                        ksDataFormatWaveFormatExtensible->DataFormat.FormatSize = size;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE_IEC61937) - sizeof(WAVEFORMATEX);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nChannels = static_cast<WORD>(channels);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nSamplesPerSec = sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nAvgBytesPerSec = channels * bytesPerSample * sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nBlockAlign = static_cast<WORD>(channels * bytesPerSample);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.wBitsPerSample = static_cast<WORD>(bytesPerSample * 8);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedSamplesPerSec = sampleRate;
+                        // WaveFormatEx.FormatExt.dwChannelMask = KSAUDIO_SPEAKER_STEREO
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedChannelCount = GetChannelsFromMask(ksDataFormatWaveFormatExtensible->WaveFormatExt.dwChannelMask);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwAverageBytesPerSec = 0;
+                        status = STATUS_SUCCESS;
+                    }
+                    else
+                    {
+                        status = STATUS_NOT_SUPPORTED;
+                    }
+                    break;
+                case NS_USBAudio0200::IEC61937_DTS_I:
+                    if (channels == 2)
+                    {
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - IEC61937_DTS_I, %u, %u, %u, %u, %u, 0x%x", sampleRate, channels, bytesPerSample, validBits, formatType, format);
+                        *ksDataFormatWaveFormatExtensible = DtsSurround;
+                        ksDataFormatWaveFormatExtensible->DataFormat.FormatSize = size;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE_IEC61937) - sizeof(WAVEFORMATEX);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nChannels = static_cast<WORD>(channels);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nSamplesPerSec = sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nAvgBytesPerSec = channels * bytesPerSample * sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nBlockAlign = static_cast<WORD>(channels * bytesPerSample);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.wBitsPerSample = static_cast<WORD>(bytesPerSample * 8);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedSamplesPerSec = sampleRate;
+                        // WaveFormatEx.FormatExt.dwChannelMask = KSAUDIO_SPEAKER_STEREO
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedChannelCount = GetChannelsFromMask(ksDataFormatWaveFormatExtensible->WaveFormatExt.dwChannelMask);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwAverageBytesPerSec = 0;
+                        status = STATUS_SUCCESS;
+                    }
+                    else
+                    {
+                        status = STATUS_NOT_SUPPORTED;
+                    }
+                    break;
+                case NS_USBAudio0200::IEC61937_DTS_II:
+                    if (channels == 8)
+                    {
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - IEC61937_DTS_II, %u, %u, %u, %u, %u, 0x%x", sampleRate, channels, bytesPerSample, validBits, formatType, format);
+                        *ksDataFormatWaveFormatExtensible = DtsHD;
+                        ksDataFormatWaveFormatExtensible->DataFormat.FormatSize = size;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE_IEC61937) - sizeof(WAVEFORMATEX);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nChannels = static_cast<WORD>(channels);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nSamplesPerSec = sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nAvgBytesPerSec = channels * bytesPerSample * sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nBlockAlign = static_cast<WORD>(channels * bytesPerSample);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.wBitsPerSample = static_cast<WORD>(bytesPerSample * 8);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedSamplesPerSec = sampleRate;
+                        // WaveFormatEx.FormatExt.dwChannelMask = KSAUDIO_SPEAKER_7POINT1
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedChannelCount = GetChannelsFromMask(ksDataFormatWaveFormatExtensible->WaveFormatExt.dwChannelMask);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwAverageBytesPerSec = 0;
+                        status = STATUS_SUCCESS;
+                    }
+                    else
+                    {
+                        status = STATUS_NOT_SUPPORTED;
+                    }
+                    break;
+                case NS_USBAudio0200::IEC61937_DTS_III:
+                    if (channels == 8)
+                    {
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - IEC61937_DTS_III, %u, %u, %u, %u, %u, 0x%x", sampleRate, channels, bytesPerSample, validBits, formatType, format);
+                        *ksDataFormatWaveFormatExtensible = DtsXE1;
+                        ksDataFormatWaveFormatExtensible->DataFormat.FormatSize = size;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE_IEC61937) - sizeof(WAVEFORMATEX);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nChannels = static_cast<WORD>(channels);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nSamplesPerSec = sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nAvgBytesPerSec = channels * bytesPerSample * sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nBlockAlign = static_cast<WORD>(channels * bytesPerSample);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.wBitsPerSample = static_cast<WORD>(bytesPerSample * 8);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedSamplesPerSec = sampleRate;
+                        // WaveFormatEx.FormatExt.dwChannelMask = KSAUDIO_SPEAKER_7POINT1
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedChannelCount = GetChannelsFromMask(ksDataFormatWaveFormatExtensible->WaveFormatExt.dwChannelMask);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwAverageBytesPerSec = 0;
+                        status = STATUS_SUCCESS;
+                    }
+                    else
+                    {
+                        status = STATUS_NOT_SUPPORTED;
+                    }
+                    break;
+                case NS_USBAudio0200::TYPE_III_WMA:
+                    if (channels == 2)
+                    {
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - TYPE_III_WMA, %u, %u, %u, %u, %u, 0x%x", sampleRate, channels, bytesPerSample, validBits, formatType, format);
+                        *ksDataFormatWaveFormatExtensible = WMAPro;
+                        ksDataFormatWaveFormatExtensible->DataFormat.FormatSize = size;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE_IEC61937) - sizeof(WAVEFORMATEX);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nChannels = static_cast<WORD>(channels);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nSamplesPerSec = sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nAvgBytesPerSec = channels * bytesPerSample * sampleRate;
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.nBlockAlign = static_cast<WORD>(channels * bytesPerSample);
+                        ksDataFormatWaveFormatExtensible->WaveFormatExt.Format.wBitsPerSample = static_cast<WORD>(bytesPerSample * 8);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedSamplesPerSec = sampleRate;
+                        // WaveFormatEx.FormatExt.dwChannelMask = KSAUDIO_SPEAKER_5POINT1
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwEncodedChannelCount = GetChannelsFromMask(ksDataFormatWaveFormatExtensible->WaveFormatExt.dwChannelMask);
+                        ((WAVEFORMATEXTENSIBLE_IEC61937 *)&(ksDataFormatWaveFormatExtensible->WaveFormatExt))->dwAverageBytesPerSec = 0;
+                        status = STATUS_SUCCESS;
+                    }
+                    else
+                    {
+                        status = STATUS_NOT_SUPPORTED;
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+            else
+            {
+                status = STATUS_NOT_SUPPORTED;
+            }
+        }
+    }
+
     return status;
 }
 
@@ -552,31 +790,46 @@ USBAudioDataFormatManager::SetUSBAudioDataFormat(
 {
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry, %u, %u, %u, %u, %u, %u, %u", formatType, formats[0], formats[1], formats[2], formats[3], subslotSize, bitResolution);
 
-    usbAudioDataFormat = m_usbAudioDataFormat;
+    ULONG format = USBAudioDataFormat::ConverBmFormats(formats);
 
-    while (usbAudioDataFormat != nullptr)
+    for (ULONG formatMask = 0x01; formatMask != 0; formatMask <<= 1)
     {
-        if (!USBAudioDataFormat::IsSupportedFormat(formatType, USBAudioDataFormat::ConverBmFormats(formats)))
+        bool  append = true;
+        ULONG currentFormat = format & formatMask;
+        if (currentFormat && USBAudioDataFormat::IsSupportedFormat(formatType, currentFormat))
         {
-            return STATUS_SUCCESS;
-        }
-        if (usbAudioDataFormat->IsEqualFormat(formatType, formats, subslotSize, bitResolution))
-        {
-            return STATUS_SUCCESS;
-        }
-        usbAudioDataFormat = usbAudioDataFormat->GetNext();
-    }
-    usbAudioDataFormat = USBAudioDataFormat::Create(formatType, formats, subslotSize, bitResolution);
-    RETURN_NTSTATUS_IF_TRUE(usbAudioDataFormat == nullptr, STATUS_INSUFFICIENT_RESOURCES);
+            UCHAR formatArray[4] = {
+                currentFormat & 0xff, (currentFormat >> 8) & 0xff, (currentFormat >> 16) & 0xff, (currentFormat >> 24) & 0xff
+            };
+            usbAudioDataFormat = m_usbAudioDataFormat;
 
-    if (m_usbAudioDataFormat != nullptr)
-    {
-        usbAudioDataFormat->Append(m_usbAudioDataFormat);
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%u, %u, %u, %u, %u, %u", formatType, format, formatMask, currentFormat, subslotSize, bitResolution);
+
+            while (usbAudioDataFormat != nullptr)
+            {
+                if (usbAudioDataFormat->IsEqualFormat(formatType, formatArray, subslotSize, bitResolution))
+                {
+                    append = false;
+                    break;
+                }
+                usbAudioDataFormat = usbAudioDataFormat->GetNext();
+            }
+            if (append)
+            {
+                usbAudioDataFormat = USBAudioDataFormat::Create(formatType, formatArray, subslotSize, bitResolution);
+                RETURN_NTSTATUS_IF_TRUE(usbAudioDataFormat == nullptr, STATUS_INSUFFICIENT_RESOURCES);
+
+                if (m_usbAudioDataFormat != nullptr)
+                {
+                    usbAudioDataFormat->Append(m_usbAudioDataFormat);
+                }
+                m_usbAudioDataFormat = usbAudioDataFormat;
+                m_numOfFormats++;
+            }
+        }
     }
-    m_usbAudioDataFormat = usbAudioDataFormat;
-    m_numOfFormats++;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
 
