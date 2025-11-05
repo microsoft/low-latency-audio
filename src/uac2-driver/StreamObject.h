@@ -321,6 +321,10 @@ class StreamObject
         _In_ LONG nonFeedbackSamples
     );
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void SetTerminateStream();
+
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     StreamObject * Create(

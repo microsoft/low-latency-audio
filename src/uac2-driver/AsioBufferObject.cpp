@@ -410,6 +410,22 @@ AsioBufferObject::UnsetBuffer()
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+void AsioBufferObject::Clear()
+{
+    PAGED_CODE();
+
+    if ((m_playBuffer != nullptr) && (m_playBufferSize != 0))
+    {
+        RtlZeroMemory(m_playBuffer, m_playBufferSize);
+    }
+    if ((m_recBuffer != nullptr) && (m_recBufferSize != 0))
+    {
+        RtlZeroMemory(m_recBuffer, m_recBufferSize);
+    }
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 bool AsioBufferObject::IsRecBufferReady() const
 {
     PAGED_CODE();

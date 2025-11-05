@@ -1077,8 +1077,8 @@ NONPAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
 USBAudioAcxDriverEvtDeviceD0Entry(
-    WDFDEVICE device,
-    WDF_POWER_DEVICE_STATE /* previousState */
+    WDFDEVICE              device,
+    WDF_POWER_DEVICE_STATE previousState
 )
 {
     PDEVICE_CONTEXT deviceContext;
@@ -1086,14 +1086,14 @@ USBAudioAcxDriverEvtDeviceD0Entry(
     // PASSIVE_LEVEL, but you should not make this callback function pageable.
     // PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, FLAG_POWER, "%!FUNC! Entry, previousState = %u", previousState);
 
     deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
 
     deviceContext->AudioProperty.IsAccessible = TRUE;
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+    TraceEvents(TRACE_LEVEL_INFORMATION, FLAG_POWER, "%!FUNC! Exit");
 
     return STATUS_SUCCESS;
 }
@@ -1111,7 +1111,7 @@ USBAudioAcxDriverEvtDeviceD0Exit(
     PDEVICE_CONTEXT deviceContext;
 
     PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, FLAG_POWER, "%!FUNC! Entry, targetState = %u", targetState);
 
     powerAction = WdfDeviceGetSystemPowerAction(device);
 
@@ -1119,6 +1119,28 @@ USBAudioAcxDriverEvtDeviceD0Exit(
     ASSERT(deviceContext != nullptr);
 
     deviceContext->AudioProperty.IsAccessible = FALSE;
+
+    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
+    if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
+    {
+        if (deviceContext->StreamObject != nullptr)
+        {
+            deviceContext->StreamObject->SetTerminateStream();
+        }
+
+        if (deviceContext->AsioBufferObject != nullptr)
+        {
+            deviceContext->AsioBufferObject->Clear();
+        }
+        if (deviceContext->ContiguousMemory != nullptr)
+        {
+            deviceContext->ContiguousMemory->Clear();
+        }
+        TraceEvents(TRACE_LEVEL_INFORMATION, FLAG_POWER, "Stop USB isochronous transfer.");
+
+        StopIsoStream(deviceContext);
+    }
+    WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     //
     // Update the power policy D3-cold info for Connected Standby.
@@ -1153,7 +1175,7 @@ USBAudioAcxDriverEvtDeviceD0Exit(
         }
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
+    TraceEvents(TRACE_LEVEL_INFORMATION, FLAG_POWER, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
 }
@@ -1170,6 +1192,7 @@ Codec_SetPowerPolicy(
 
     PAGED_CODE();
 
+    TraceEvents(TRACE_LEVEL_INFORMATION, FLAG_POWER, "%!FUNC! Entry");
     deviceContext = GetDeviceContext(device);
     NT_ASSERT(deviceContext != nullptr);
 
@@ -1183,6 +1206,8 @@ Codec_SetPowerPolicy(
     idleSettings.ExcludeD3Cold = deviceContext->ExcludeD3Cold;
 
     RETURN_NTSTATUS_IF_FAILED(WdfDeviceAssignS0IdleSettings(device, &idleSettings));
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, FLAG_POWER, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
 }

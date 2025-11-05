@@ -1374,6 +1374,15 @@ bool StreamObject::IsTerminateStream()
 }
 
 _Use_decl_annotations_
+PAGED_CODE_SEG
+void StreamObject::SetTerminateStream()
+{
+    PAGED_CODE();
+
+    m_IsTerminateStream = true;
+}
+
+_Use_decl_annotations_
 NONPAGED_CODE_SEG
 ULONG StreamObject::CalculateDropoutThresholdTime()
 {
