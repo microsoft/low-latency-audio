@@ -84,8 +84,9 @@ VariableArray<T, I>::Set(
 
     if (index >= m_sizeOfArray)
     {
-        T *   arrayOld = m_array;
-        ULONG sizeOfArrayOld = m_sizeOfArray;
+        WDFMEMORY memoryOld = m_memory;
+        T *       arrayOld = m_array;
+        ULONG     sizeOfArrayOld = m_sizeOfArray;
         m_array = nullptr;
         if (index < I)
         {
@@ -104,8 +105,12 @@ VariableArray<T, I>::Set(
                 {
                     RtlCopyMemory(m_array, arrayOld, sizeof(T) * sizeOfArrayOld);
                 }
-                delete[] arrayOld;
-                arrayOld = nullptr;
+                if (memoryOld != nullptr)
+                {
+                    WdfObjectDelete(memoryOld);
+                    memoryOld = nullptr;
+                    arrayOld = nullptr;
+                }
                 TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, "delete arrayOld");
             }
             m_array[index] = data;
@@ -2964,6 +2969,11 @@ USBAudio2StreamInterface::~USBAudio2StreamInterface()
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
+    //
+    // m_usbAudioDataFormat is deleted in the destructor of USBAudioDataFormatManager.
+    //
+    m_usbAudioDataFormat = nullptr;
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
 }
 
@@ -3799,7 +3809,19 @@ USBAudioInterfaceInfo::~USBAudioInterfaceInfo()
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+    ULONG numOfAlternateInterface = m_usbAudioAlternateInterfaces.GetNumOfArray();
 
+    for (ULONG index = 0; index < numOfAlternateInterface; index++)
+    {
+        USBAudioInterface * usbAudioInterface = nullptr;
+        if (NT_SUCCESS(m_usbAudioAlternateInterfaces.Get(index, usbAudioInterface)))
+        {
+            if (usbAudioInterface != nullptr)
+            {
+                delete usbAudioInterface;
+            }
+        }
+    }
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
 }
 
@@ -4452,11 +4474,23 @@ USBAudioConfiguration::~USBAudioConfiguration()
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
-    if (m_usbAudioInterfaceInfoesMemory != nullptr)
+    if (m_usbConfigurationDescriptor != nullptr)
     {
-        WdfObjectDelete(m_usbAudioInterfaceInfoesMemory);
-        m_usbAudioInterfaceInfoesMemory = nullptr;
-        m_usbAudioInterfaceInfoes = nullptr;
+        for (ULONG interfaceIndex = 0; interfaceIndex < m_usbConfigurationDescriptor->bNumInterfaces; interfaceIndex++)
+        {
+            if (m_usbAudioInterfaceInfoes[interfaceIndex] != nullptr)
+            {
+                delete m_usbAudioInterfaceInfoes[interfaceIndex];
+                m_usbAudioInterfaceInfoes[interfaceIndex] = nullptr;
+            }
+        }
+
+        if (m_usbAudioInterfaceInfoesMemory != nullptr)
+        {
+            WdfObjectDelete(m_usbAudioInterfaceInfoesMemory);
+            m_usbAudioInterfaceInfoesMemory = nullptr;
+            m_usbAudioInterfaceInfoes = nullptr;
+        }
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");

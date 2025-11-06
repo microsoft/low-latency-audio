@@ -1280,7 +1280,7 @@ class USBAudioInterfaceInfo
 {
     enum
     {
-        DEFAULT_SIZE_OF_ALTERNATE_INTERFACES = 3
+        DEFAULT_SIZE_OF_ALTERNATE_INTERFACES = 10
     };
 
   public:

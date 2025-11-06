@@ -1014,6 +1014,30 @@ Return Value:
         deviceContext->UsbAudioConfiguration = nullptr;
     }
 
+    if (deviceContext->RtPacketObject != nullptr)
+    {
+        delete deviceContext->RtPacketObject;
+        deviceContext->RtPacketObject = nullptr;
+    }
+
+    if (deviceContext->StreamObject != nullptr)
+    {
+        delete deviceContext->StreamObject;
+        deviceContext->StreamObject = nullptr;
+    }
+
+    if (deviceContext->AsioBufferObject != nullptr)
+    {
+        delete deviceContext->AsioBufferObject;
+        deviceContext->AsioBufferObject = nullptr;
+    }
+
+    if (deviceContext->ErrorStatistics != nullptr)
+    {
+        delete deviceContext->ErrorStatistics;
+        deviceContext->ErrorStatistics = nullptr;
+    }
+
     //
     // The driver uses this DDI to delete a circuit from the current device.
     //

@@ -22,6 +22,10 @@ Environment:
 #include "Private.h"
 #include "NewDelete.h"
 
+#ifndef __INTELLISENSE__
+#include "NewDelete.tmh"
+#endif
+
 /*****************************************************************************
  * ::new(POOL_FLAGS)
  *****************************************************************************
