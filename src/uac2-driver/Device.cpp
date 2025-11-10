@@ -575,8 +575,10 @@ Return Value:
     WDF_PNPPOWER_EVENT_CALLBACKS_INIT(&pnpPowerCallbacks);
     pnpPowerCallbacks.EvtDevicePrepareHardware = USBAudioAcxDriverEvtDevicePrepareHardware;
     pnpPowerCallbacks.EvtDeviceReleaseHardware = USBAudioAcxDriverEvtDeviceReleaseHardware;
+    pnpPowerCallbacks.EvtDeviceSurpriseRemoval = USBAudioAcxDriverEvtDeviceSurpriseRemoval;
     pnpPowerCallbacks.EvtDeviceD0Entry = USBAudioAcxDriverEvtDeviceD0Entry;
     pnpPowerCallbacks.EvtDeviceD0Exit = USBAudioAcxDriverEvtDeviceD0Exit;
+
     WdfDeviceInitSetPnpPowerEventCallbacks(deviceInit, &pnpPowerCallbacks);
 
     //
@@ -991,8 +993,7 @@ Return Value:
 
 --*/
 {
-    NTSTATUS status = STATUS_SUCCESS;
-    ;
+    NTSTATUS        status = STATUS_SUCCESS;
     PDEVICE_CONTEXT deviceContext;
 
     PAGED_CODE();
@@ -1097,6 +1098,29 @@ Return Value:
     return status;
 }
 
+PAGED_CODE_SEG
+_Use_decl_annotations_
+VOID USBAudioAcxDriverEvtDeviceSurpriseRemoval(
+    WDFDEVICE device
+)
+{
+    PDEVICE_CONTEXT deviceContext;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
+    deviceContext = GetDeviceContext(device);
+    NT_ASSERT(deviceContext != nullptr);
+
+    if (deviceContext->StreamObject != nullptr)
+    {
+        deviceContext->StreamObject->SetTerminateStream();
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+}
+
 NONPAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
@@ -1144,14 +1168,14 @@ USBAudioAcxDriverEvtDeviceD0Exit(
 
     deviceContext->AudioProperty.IsAccessible = FALSE;
 
+    if (deviceContext->StreamObject != nullptr)
+    {
+        deviceContext->StreamObject->SetTerminateStream();
+    }
+
     WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
     if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
     {
-        if (deviceContext->StreamObject != nullptr)
-        {
-            deviceContext->StreamObject->SetTerminateStream();
-        }
-
         if (deviceContext->AsioBufferObject != nullptr)
         {
             deviceContext->AsioBufferObject->Clear();
@@ -5009,7 +5033,7 @@ Return Value:
     status = completionParams->IoStatus.Status;
     if (!NT_SUCCESS(status) && (status != STATUS_CANCELLED))
     {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "frame %u : completion failed with status %08x", transferObject->GetStartFrame(), status);
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "frame %u : completion failed with status %!STATUS!", transferObject->GetStartFrame(), status);
     }
 
     usbdStatus = transferObject->GetUSBDStatus();
@@ -5017,13 +5041,16 @@ Return Value:
     {
         TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "frame %u : urb failed with status %08x", transferObject->GetStartFrame(), usbdStatus);
         deviceContext->ErrorStatistics->LogErrorOccurrence(ErrorStatus::UrbFailed, usbdStatus);
+        if (status != STATUS_NO_SUCH_DEVICE) // STATUS_NO_SUCH_DEVICE: surprise remove
+        {
 #if false
-		// TBD Add a recovery process
+			// TBD Add a recovery process
 #else
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "irp at index %d failed (%!STATUS!), but will be reused.", transferObject->GetIndex(), status);
-        usbdStatus = USBD_STATUS_SUCCESS;
-        status = STATUS_SUCCESS;
+            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "irp at index %d failed (%!STATUS!), but will be reused.", transferObject->GetIndex(), status);
 #endif
+            usbdStatus = USBD_STATUS_SUCCESS;
+            status = STATUS_SUCCESS;
+        }
     }
 
     if (requestContext->TransferObject != nullptr)
@@ -5037,100 +5064,111 @@ Return Value:
     if (NT_SUCCESS(status) && USBD_SUCCESS(usbdStatus) && (deviceContext->StartCounterIsoStream != 0))
     {
         //		WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
-        switch (transferObject->GetDirection())
+        if ((requestContext->StreamObject != nullptr) && !requestContext->StreamObject->IsTerminateStream())
         {
-        case IsoDirection::In: {
-            status = ProcessTransferIn(deviceContext, streamObject, transferObject);
-            if (!NT_SUCCESS(status))
+            switch (transferObject->GetDirection())
             {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferIn failed %!STATUS!", status);
+            case IsoDirection::In: {
+                status = ProcessTransferIn(deviceContext, streamObject, transferObject);
+                if (!NT_SUCCESS(status))
+                {
+                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferIn failed %!STATUS!", status);
 
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                }
+                // Since the URB is referenced in ProcessTransferIn, the parent request is released here.
+                status = transferObject->FreeRequest();
+                if (!NT_SUCCESS(status))
+                {
+                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
+
+                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                }
+                status = InitializeIsoUrbIn(deviceContext, streamObject, transferObject, transferObject->GetNumPackets());
+                if (!NT_SUCCESS(status))
+                {
+                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbIn failed %!STATUS!", status);
+
+                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                }
             }
-            // Since the URB is referenced in ProcessTransferIn, the parent request is released here.
-            status = transferObject->FreeRequest();
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
-
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-            }
-            status = InitializeIsoUrbIn(deviceContext, streamObject, transferObject, transferObject->GetNumPackets());
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbIn failed %!STATUS!", status);
-
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-            }
-        }
-        break;
-        case IsoDirection::Out: {
-            status = ProcessTransferOut(deviceContext, streamObject, transferObject);
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferOut failed %!STATUS!", status);
-
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-            }
-
-            streamObject->SetOutputStreaming(transferObject->GetIndex(), transferObject->GetLockDelayCount());
-
-            // Since the URB is referenced in ProcessTransferOut, the parent request is released here.
-            status = transferObject->FreeRequest();
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
-
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-            }
-            status = InitializeIsoUrbOut(deviceContext, streamObject, transferObject, transferObject->GetNumPackets());
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbOut failed %!STATUS!", status);
-
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-            }
-        }
-        break;
-        case IsoDirection::Feedback: {
-            status = ProcessTransferFeedback(deviceContext, streamObject, transferObject);
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferFeedback failed %!STATUS!", status);
-
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-            }
-            // Since the URB is referenced in ProcessTransferFeedback, the parent request is released here.
-            status = transferObject->FreeRequest();
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
-
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-            }
-
-            status = InitializeIsoUrbFeedback(deviceContext, streamObject, transferObject, transferObject->GetNumPackets());
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbFeedback failed %!STATUS!", status);
-
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-            }
-        }
-        break;
-        default:
             break;
-        }
+            case IsoDirection::Out: {
+                status = ProcessTransferOut(deviceContext, streamObject, transferObject);
+                if (!NT_SUCCESS(status))
+                {
+                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferOut failed %!STATUS!", status);
 
-        status = transferObject->SendIsochronousRequest(transferObject->GetDirection(), USBAudioAcxDriverEvtIsoRequestCompletionRoutine);
-        if (!NT_SUCCESS(status))
+                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                }
+
+                streamObject->SetOutputStreaming(transferObject->GetIndex(), transferObject->GetLockDelayCount());
+
+                // Since the URB is referenced in ProcessTransferOut, the parent request is released here.
+                status = transferObject->FreeRequest();
+                if (!NT_SUCCESS(status))
+                {
+                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
+
+                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                }
+                status = InitializeIsoUrbOut(deviceContext, streamObject, transferObject, transferObject->GetNumPackets());
+                if (!NT_SUCCESS(status))
+                {
+                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbOut failed %!STATUS!", status);
+
+                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                }
+            }
+            break;
+            case IsoDirection::Feedback: {
+                status = ProcessTransferFeedback(deviceContext, streamObject, transferObject);
+                if (!NT_SUCCESS(status))
+                {
+                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferFeedback failed %!STATUS!", status);
+
+                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                }
+                // Since the URB is referenced in ProcessTransferFeedback, the parent request is released here.
+                status = transferObject->FreeRequest();
+                if (!NT_SUCCESS(status))
+                {
+                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
+
+                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                }
+
+                status = InitializeIsoUrbFeedback(deviceContext, streamObject, transferObject, transferObject->GetNumPackets());
+                if (!NT_SUCCESS(status))
+                {
+                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbFeedback failed %!STATUS!", status);
+
+                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                }
+            }
+            break;
+            default:
+                break;
+            }
+
+            status = transferObject->SendIsochronousRequest(transferObject->GetDirection(), USBAudioAcxDriverEvtIsoRequestCompletionRoutine);
+            if (!NT_SUCCESS(status))
+            {
+                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "SendIsochronousRequest failed %!STATUS!", status);
+
+                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+            }
+        }
+        else
         {
-            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "SendIsochronousRequest failed %!STATUS!", status);
+            status = transferObject->FreeRequest();
+            if (!NT_SUCCESS(status))
+            {
+                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
 
-            goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+            }
         }
-
         //		WdfWaitLockRelease(deviceContext->StreamWaitLock);
     }
 
@@ -5174,6 +5212,7 @@ NTSTATUS StartIsoStream(
     });
 
     RETURN_NTSTATUS_IF_TRUE_ACTION(deviceContext->StreamObject != nullptr, status = STATUS_DEVICE_BUSY, status);
+    InterlockedExchange(&deviceContext->StartCounterIsoStream, 0);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
     status = SetPipeInformation(deviceContext);

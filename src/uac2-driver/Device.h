@@ -363,6 +363,7 @@ __drv_requiresIRQL(PASSIVE_LEVEL)
 EVT_WDF_DRIVER_DEVICE_ADD       USBAudioAcxDriverEvtDeviceAdd;                // PASSIVE_LEVEL
 EVT_WDF_DEVICE_PREPARE_HARDWARE USBAudioAcxDriverEvtDevicePrepareHardware;    // PASSIVE_LEVEL
 EVT_WDF_DEVICE_RELEASE_HARDWARE USBAudioAcxDriverEvtDeviceReleaseHardware;    // PASSIVE_LEVEL
+EVT_WDF_DEVICE_SURPRISE_REMOVAL USBAudioAcxDriverEvtDeviceSurpriseRemoval;    // PASSIVE_LEVEL
 EVT_WDF_DEVICE_D0_ENTRY         USBAudioAcxDriverEvtDeviceD0Entry;            // PASSIVE_LEVEL, but you should not make this callback function pageable.
 EVT_WDF_DEVICE_D0_EXIT          USBAudioAcxDriverEvtDeviceD0Exit;             // PASSIVE_LEVEL
 EVT_WDF_OBJECT_CONTEXT_CLEANUP  USBAudioAcxDriverEvtDeviceContextCleanup;     // PASSIVE_LEVEL, https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/wdfobject/nc-wdfobject-evt_wdf_object_context_cleanup
