@@ -1365,12 +1365,17 @@ void StreamObject::AddCompensateSamples(
 }
 
 _Use_decl_annotations_
-PAGED_CODE_SEG
+NONPAGED_CODE_SEG
 bool StreamObject::IsTerminateStream()
 {
-    PAGED_CODE();
+    return InterlockedCompareExchange(&m_IsTerminateStream, 0, 0) ? true : false;
+}
 
-    return m_IsTerminateStream;
+_Use_decl_annotations_
+NONPAGED_CODE_SEG
+void StreamObject::SetTerminateStream()
+{
+    InterlockedExchange(&m_IsTerminateStream, (ULONG) true);
 }
 
 _Use_decl_annotations_

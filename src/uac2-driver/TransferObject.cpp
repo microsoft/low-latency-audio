@@ -859,6 +859,7 @@ TransferObject::SendIsochronousRequest(
     requestContext->StreamObject = const_cast<StreamObject *>(m_streamObject);
     requestContext->TransferObject = this;
     requestContext->UrbMemory = m_urbMemory;
+    WdfSpinLockRelease(m_spinLock);
 
     KeClearEvent(&m_requestCompletedEvent);
 
@@ -876,12 +877,10 @@ TransferObject::SendIsochronousRequest(
         status = WdfRequestGetStatus(m_request);
         if (!NT_SUCCESS(status))
         {
-            WdfSpinLockRelease(m_spinLock);
             TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfRequestSend failed");
             return status;
         }
     }
-    WdfSpinLockRelease(m_spinLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 

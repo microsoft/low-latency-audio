@@ -180,6 +180,31 @@ ContiguousMemory::Free()
 }
 
 _Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
+ContiguousMemory::Clear()
+{
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
+    for (ULONG direction = 0; direction < toULONG(IsoDirection::NumOfIsoDirection); ++direction)
+    {
+        for (ULONG index = 0; index < UAC_MAX_IRP_NUMBER; ++index)
+        {
+            if ((m_contiguousMemory[direction][index] != nullptr) && (m_contiguousMemorySize[direction] != 0))
+            {
+                RtlZeroMemory(m_contiguousMemory[direction][index], m_contiguousMemorySize[direction]);
+            }
+        }
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+
+    return STATUS_SUCCESS;
+}
+
+_Use_decl_annotations_
 NONPAGED_CODE_SEG
 bool ContiguousMemory::IsValid(
     LONG         index,

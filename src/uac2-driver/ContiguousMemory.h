@@ -49,6 +49,11 @@ class ContiguousMemory
     NTSTATUS
     Free();
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    Clear();
+
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
     bool

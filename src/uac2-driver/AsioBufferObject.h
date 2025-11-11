@@ -58,6 +58,10 @@ class AsioBufferObject
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    void Clear();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     bool IsRecBufferReady() const;
 
     __drv_maxIRQL(PASSIVE_LEVEL)

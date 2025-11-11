@@ -321,6 +321,15 @@ class StreamObject
         _In_ LONG nonFeedbackSamples
     );
 
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    bool
+    IsTerminateStream();
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    void SetTerminateStream();
+
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     StreamObject * Create(
@@ -450,11 +459,6 @@ class StreamObject
     PAGED_CODE_SEG
     void IncrementOutputProcessedPacket();
 
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    bool
-    IsTerminateStream();
-
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
     ULONG CalculateDropoutThresholdTime();
@@ -505,7 +509,7 @@ class StreamObject
     LONG m_requirePortReset{0};
     LONG m_donePortReset{0};
 
-    bool m_IsTerminateStream{false};
+    LONG m_IsTerminateStream{(LONG) false};
 
     LONGLONG m_inputWritePosition{0LL};
     LONGLONG m_inputSyncPosition{0LL};
