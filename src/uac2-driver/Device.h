@@ -228,6 +228,7 @@ typedef struct _DEVICE_CONTEXT
     LONG                       StartCounterAsio;
     LONG                       StartCounterWdmAudio;
     LONG                       StartCounterIsoStream;
+    LONG                       IsIdleStopSucceeded;
 
     LARGE_INTEGER        LastVendorRequestTime;
     NTSTATUS             LastActivationStatus;

@@ -649,6 +649,13 @@ Return Value:
     deviceContext->Render = nullptr;
     deviceContext->Capture = nullptr;
     deviceContext->ExcludeD3Cold = WdfFalse;
+    deviceContext->IsDeviceRemoteWakeable = false;
+    deviceContext->IsDeviceHighSpeed = false;
+    deviceContext->IsDeviceSuperSpeed = false;
+    deviceContext->StartCounterAsio = 0;
+    deviceContext->StartCounterWdmAudio = 0;
+    deviceContext->StartCounterIsoStream = 0;
+    deviceContext->IsIdleStopSucceeded = FALSE;
 
     deviceContext->ContiguousMemory = ContiguousMemory::Create();
     RETURN_NTSTATUS_IF_TRUE(deviceContext->ContiguousMemory == nullptr, STATUS_INSUFFICIENT_RESOURCES);
@@ -5206,7 +5213,11 @@ NTSTATUS StartIsoStream(
 
         if (deviceContext->StreamObject != nullptr)
         {
-            NTSTATUS statusTemp = WdfDeviceStopIdle(deviceContext->Device, TRUE);
+            NTSTATUS statusTemp = WdfDeviceStopIdle(deviceContext->Device, FALSE);
+            if (NT_SUCCESS(statusTemp))
+            {
+                InterlockedExchange(&deviceContext->IsIdleStopSucceeded, TRUE);
+            }
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "WdfDeviceStopIdle %!STATUS!", statusTemp);
         }
     });
@@ -5776,7 +5787,10 @@ NTSTATUS StopIsoStream(
         {
             SelectAlternateInterface(IsoDirection::In, deviceContext, deviceContext->AudioProperty.InputInterfaceNumber, 0);
         }
-        WdfDeviceResumeIdle(deviceContext->Device);
+        if (InterlockedCompareExchange(&deviceContext->IsIdleStopSucceeded, FALSE, TRUE) == TRUE)
+        {
+            WdfDeviceResumeIdle(deviceContext->Device);
+        }
     }
 
     if (deviceContext->ErrorStatistics != nullptr)
