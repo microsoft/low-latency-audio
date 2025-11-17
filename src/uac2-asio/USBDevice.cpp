@@ -33,8 +33,8 @@ Environment:
 #include <shlwapi.h>
 
 static HANDLE OpenUsbDeviceCore(
-    _In_ const LPGUID      classGuid,
-    _In_ const TCHAR *     /* serviceName */,
+    _In_ const LPGUID classGuid,
+    _In_ const TCHAR * /* serviceName */,
     _In_ const TCHAR *     referenceString,
     _In_opt_ const TCHAR * desiredPath
 )
@@ -98,7 +98,7 @@ static HANDLE OpenUsbDeviceCore(
 
                 if (SetupDiGetDeviceInterfaceDetail(deviceInfo, &deviceInterfaceData, deviceInterfaceDetailData, deviceInterfaceDetailDataSize, nullptr, nullptr))
                 {
-                    info_print_("compare %s, %s\n", deviceInterfaceDetailData->DevicePath, referenceString);
+                    info_print_(_T("compare %s, %s\n"), deviceInterfaceDetailData->DevicePath, referenceString);
                     if (StrStrI(deviceInterfaceDetailData->DevicePath, referenceString) != nullptr)
                     {
                         if ((desiredPath == nullptr) || ((desiredPath != nullptr && _tcsicmp(deviceInterfaceDetailData->DevicePath, desiredPath) == 0)))
@@ -111,7 +111,7 @@ static HANDLE OpenUsbDeviceCore(
                                 result = GetAudioProperty(targetHandle, &audioProp);
                                 if (result && !((audioProp.OutputAsioChannels == 0) && (audioProp.InputAsioChannels == 0)))
                                 {
-                                    info_print_("successfully opened %s\n", deviceInterfaceDetailData->DevicePath);
+                                    info_print_(_T("successfully opened %s\n"), deviceInterfaceDetailData->DevicePath);
                                     delete[] (BYTE *)deviceInterfaceDetailData;
                                     deviceInterfaceDetailData = nullptr;
                                     SetupDiDestroyDeviceInfoList(deviceInfo);
