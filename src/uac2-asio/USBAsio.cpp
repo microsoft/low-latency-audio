@@ -346,7 +346,7 @@ _Use_decl_annotations_
 void CUSBAsio::getDriverName(char * name)
 {
 	// 
-	// name uses multi-byte character sets,
+	// name uses multibyte character sets,
 	// so sprintf_s is used.
 	// 
     strcpy_s(name, DRIVER_NAME_LENGTH, DRIVER_NAME_8b);
@@ -367,8 +367,8 @@ void CUSBAsio::getErrorMessage(char * errorMessage)
     size = min(size, ERROR_MESSAGE_LENGTH);
 
 #ifdef _UNICODE
-    // TCHAR is wchar_t → convert wide char to multi-byte
-    WideCharToMulti-Byte(CP_ACP, 0, m_errorMessage, -1, errorMessage, ERROR_MESSAGE_LENGTH, NULL, NULL);
+    // TCHAR is wchar_t → convert wide char to multibyte
+    WideCharToMultiByte(CP_ACP, 0, m_errorMessage, -1, errorMessage, ERROR_MESSAGE_LENGTH, NULL, NULL);
 #else
     // TCHAR is char → direct copy
     strcpy_s(errorMessage, ERROR_MESSAGE_LENGTH, m_errorMessage);
@@ -716,7 +716,7 @@ ASIOError CUSBAsio::getClockSources(ASIOClockSource * clocks, long * numSources)
             clocks[i].isCurrentSource = clockInfo->ClockSource[i].IsCurrentSource ? ASIOTrue : ASIOFalse;
 
 			// 
-			// ASIOClockSource::name uses multi-byte character sets,
+			// ASIOClockSource::name uses multibyte character sets,
 			// so sprintf_s is used.
 			// 
             sprintf_s(clocks[i].name, CLOCK_SOURCE_NAME_LENGTH, "%S", clockInfo->ClockSource[i].Name);
@@ -861,7 +861,7 @@ ASIOError CUSBAsio::getChannelInfo(ASIOChannelInfo * info)
         }
 
 		// 
-		// ASIOChannelInfo::name uses multi-byte character sets,
+		// ASIOChannelInfo::name uses multibyte character sets,
 		// so sprintf_s is used.
 		// 
         if (ch == m_channelInfo->NumChannels)
