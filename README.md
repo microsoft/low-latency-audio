@@ -32,6 +32,12 @@ This project has adopted the [Microsoft Open Source Code of Conduct](https://ope
 For more information see the [Code of Conduct FAQ](https://opensource.microsoft.com/codeofconduct/faq/) or
 contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additional questions or comments.
 
+## Questions and Discussion
+
+For questions, suggestions, and discussion, please join our [MIDI / Audio Discord server](https://aka.ms/mididiscord). If possible, please use your real name when posting questions in the appropriate forums there. Be respectful of others.
+
+For general suggestions not directly related to the low-latency audio project, please use the Microsoft Feedback Hub app.
+
 ## Trademarks
 
 ASIO is a trademark and software of Steinberg Media Technologies GmbH.
