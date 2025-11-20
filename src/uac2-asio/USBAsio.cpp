@@ -190,7 +190,7 @@ CUSBAsio::CUSBAsio(
 
     m_InstanceIndex = InterlockedIncrement(&g_Instance);
 
-    info_print_("USB ASIO created, instance %d.\n", InterlockedCompareExchange(&g_Instance, 0, 0));
+    info_print_(_T("USB ASIO created, instance %d.\n"), InterlockedCompareExchange(&g_Instance, 0, 0));
 
     RtlZeroMemory(&m_audioProperty, sizeof(UAC_AUDIO_PROPERTY));
 
@@ -339,25 +339,29 @@ CUSBAsio::~CUSBAsio()
 
     InterlockedDecrement(&g_Instance);
 
-    info_print_("USB ASIO destructed, instance %d.\n", InterlockedCompareExchange(&g_Instance, 0, 0));
+    info_print_(_T("USB ASIO destructed, instance %d.\n"), InterlockedCompareExchange(&g_Instance, 0, 0));
 }
 
 _Use_decl_annotations_
 void CUSBAsio::getDriverName(char * name)
 {
+	// 
+	// name uses multibyte character sets,
+	// so sprintf_s is used.
+	// 
     strcpy_s(name, DRIVER_NAME_LENGTH, DRIVER_NAME_8b);
 }
 
 long CUSBAsio::getDriverVersion()
 {
-    info_print_("getDriverVersion\n");
+    info_print_(_T("getDriverVersion\n"));
     return 0x00010000L;
 }
 
 _Use_decl_annotations_
 void CUSBAsio::getErrorMessage(char * errorMessage)
 {
-    info_print_("getErrorMessage\n");
+    info_print_(_T("getErrorMessage\n"));
     // >>comment-001<<
     size_t size = _tcslen(m_errorMessage) + 1;
     size = min(size, ERROR_MESSAGE_LENGTH);
@@ -374,7 +378,7 @@ void CUSBAsio::getErrorMessage(char * errorMessage)
 _Use_decl_annotations_
 ASIOBool CUSBAsio::init(void * /* sysRef */)
 {
-    info_print_("init\n");
+    info_print_(_T("init\n"));
     // Due to a change in the error handling policy, it has been changed to return an error if an error occurs in CUSBAsio::CUSBAsio ().
     if (m_usbDeviceHandle == INVALID_HANDLE_VALUE || m_inputLatency == 0 || m_outputLatency == 0)
     {
@@ -386,7 +390,7 @@ ASIOBool CUSBAsio::init(void * /* sysRef */)
 
 ASIOError CUSBAsio::start()
 {
-    info_print_("start\n");
+    info_print_(_T("start\n"));
     if (m_usbDeviceHandle == INVALID_HANDLE_VALUE || m_inputLatency == 0 || m_outputLatency == 0)
     {
         return ASE_NotPresent;
@@ -418,7 +422,7 @@ ASIOError CUSBAsio::start()
 
 ASIOError CUSBAsio::stop()
 {
-    info_print_("stop\n");
+    info_print_(_T("stop\n"));
 
     if (m_usbDeviceHandle == INVALID_HANDLE_VALUE || m_inputLatency == 0 || m_outputLatency == 0)
     {
@@ -439,7 +443,7 @@ ASIOError CUSBAsio::stop()
 _Use_decl_annotations_
 ASIOError CUSBAsio::getChannels(long * numInputChannels, long * numOutputChannels)
 {
-    info_print_("getChannels\n");
+    info_print_(_T("getChannels\n"));
     if (m_usbDeviceHandle == INVALID_HANDLE_VALUE || m_inputLatency == 0 || m_outputLatency == 0)
     {
         *numInputChannels = 0;
@@ -456,14 +460,14 @@ ASIOError CUSBAsio::getChannels(long * numInputChannels, long * numOutputChannel
         *numInputChannels = m_inAvailableChannels;
         *numOutputChannels = m_outAvailableChannels;
     }
-    info_print_("Channels: IN %d, OUT %d.\n", *numInputChannels, *numOutputChannels);
+    info_print_(_T("Channels: IN %d, OUT %d.\n"), *numInputChannels, *numOutputChannels);
     return ASE_OK;
 }
 
 _Use_decl_annotations_
 ASIOError CUSBAsio::getLatencies(long * inputLatency, long * outputLatency)
 {
-    info_print_("getLatencies\n");
+    info_print_(_T("getLatencies\n"));
 
     *inputLatency = 0;
     *outputLatency = 0;
@@ -480,7 +484,7 @@ ASIOError CUSBAsio::getLatencies(long * inputLatency, long * outputLatency)
 
     if (GetAudioProperty(m_usbDeviceHandle, &m_audioProperty))
     {
-        info_print_("Obtained latency offset in-%d out-%d\n", m_audioProperty.InputLatencyOffset, m_audioProperty.OutputLatencyOffset);
+        info_print_(_T("Obtained latency offset in-%d out-%d\n"), m_audioProperty.InputLatencyOffset, m_audioProperty.OutputLatencyOffset);
     }
 
     *inputLatency = m_blockFrames + m_audioProperty.InputLatencyOffset;
@@ -493,7 +497,7 @@ ASIOError CUSBAsio::getLatencies(long * inputLatency, long * outputLatency)
 _Use_decl_annotations_
 ASIOError CUSBAsio::getBufferSize(long * minSize, long * maxSize, long * preferredSize, long * granularity)
 {
-    info_print_("getBufferSize\n");
+    info_print_(_T("getBufferSize\n"));
 
     *minSize = 0;
     *maxSize = 0;
@@ -519,13 +523,13 @@ ASIOError CUSBAsio::getBufferSize(long * minSize, long * maxSize, long * preferr
 _Use_decl_annotations_
 ASIOError CUSBAsio::canSampleRate(ASIOSampleRate sampleRate)
 {
-    info_print_("canSampleRate\n");
+    info_print_(_T("canSampleRate\n"));
     if (m_usbDeviceHandle == INVALID_HANDLE_VALUE || m_inputLatency == 0 || m_outputLatency == 0)
     {
         // No error is returned even if the hardware is unusable. -> Error handling policy changed: ASE_NotPresent is returned.
         return ASE_NotPresent;
     }
-    info_print_("requested %lf Hz\n", sampleRate);
+    info_print_(_T("requested %lf Hz\n"), sampleRate);
     if (m_fixedSamplingRate != 0)
     {
         if ((ULONG)sampleRate == m_fixedSamplingRate)
@@ -548,20 +552,20 @@ ASIOError CUSBAsio::canSampleRate(ASIOSampleRate sampleRate)
             {
                 if ((requiredFrameRate == c_FrameRateList[index]) && ((m_audioProperty.SupportedSampleRate & (1 << index)) != 0))
                 {
-                    info_print_("This device works at requested sample rate.\n");
+                    info_print_(_T("This device works at requested sample rate.\n"));
                     return ASE_OK;
                 }
             }
         }
     }
-    info_print_("This device does not work at requested sample rate.\n");
+    info_print_(_T("This device does not work at requested sample rate.\n"));
     return ASE_NoClock;
 }
 
 _Use_decl_annotations_
 ASIOError CUSBAsio::getSampleRate(ASIOSampleRate * sampleRate)
 {
-    verbose_print_("getSampleRate\n");
+    verbose_print_(_T("getSampleRate\n"));
 
     if (sampleRate == nullptr)
     {
@@ -581,8 +585,8 @@ ASIOError CUSBAsio::getSampleRate(ASIOSampleRate * sampleRate)
         auto lockDevice = m_deviceInfoCS.lock();
         *sampleRate = m_sampleRate;
     }
-    // info_print_("getSampleRate\n");
-    // info_print_("current %lf Hz, device current %u Hz\n",this->m_sampleRate,m_audioProperty.SampleRate);
+    // info_print_(_T("getSampleRate\n"));
+    // info_print_(_T("current %lf Hz, device current %u Hz\n"),this->m_sampleRate,m_audioProperty.SampleRate);
     return ASE_OK;
 }
 
@@ -594,8 +598,8 @@ ASIOError CUSBAsio::setSampleRate(ASIOSampleRate sampleRate)
         // No error is returned even if the hardware is unusable. -> Error handling policy changed: ASE_NotPresent is returned.
         return ASE_NotPresent;
     }
-    info_print_("setSampleRate\n");
-    info_print_("current %lf Hz, device current %u Hz, request %lf Hz\n", this->m_sampleRate, m_audioProperty.SampleRate, sampleRate);
+    info_print_(_T("setSampleRate\n"));
+    info_print_(_T("current %lf Hz, device current %u Hz, request %lf Hz\n"), this->m_sampleRate, m_audioProperty.SampleRate, sampleRate);
     if (canSampleRate(sampleRate) != ASE_OK)
     {
         return ASE_NoClock;
@@ -640,7 +644,7 @@ ASIOError CUSBAsio::setSampleRate(ASIOSampleRate sampleRate)
                 if (frameRate == c_FrameRateList[i] &&
                     ((m_audioProperty.SupportedSampleRate & (1 << i)) != 0))
                 {
-                    info_print_("This device works at requested sample rate.\n");
+                    info_print_(_T("This device works at requested sample rate.\n"));
                     result = ChangeSampleRate(m_usbDeviceHandle, frameRate);
                     break;
                 }
@@ -664,7 +668,7 @@ ASIOError CUSBAsio::setSampleRate(ASIOSampleRate sampleRate)
 _Use_decl_annotations_
 ASIOError CUSBAsio::getClockSources(ASIOClockSource * clocks, long * numSources)
 {
-    verbose_print_("getClockSources\n");
+    verbose_print_(_T("getClockSources\n"));
 
     if (clocks == nullptr)
     {
@@ -685,7 +689,7 @@ ASIOError CUSBAsio::getClockSources(ASIOClockSource * clocks, long * numSources)
     }
     if (*numSources < (long)m_audioProperty.ClockSources)
     {
-        info_print_("too small buffers. *NumSources %d, m_audioProperty.ClockSources %d.\n", *numSources, m_audioProperty.ClockSources);
+        info_print_(_T("too small buffers. *NumSources %d, m_audioProperty.ClockSources %d.\n"), *numSources, m_audioProperty.ClockSources);
         // return ASE_InvalidParameter;
     }
 
@@ -710,6 +714,11 @@ ASIOError CUSBAsio::getClockSources(ASIOClockSource * clocks, long * numSources)
             clocks[i].associatedChannel = -1;
             clocks[i].associatedGroup = -1;
             clocks[i].isCurrentSource = clockInfo->ClockSource[i].IsCurrentSource ? ASIOTrue : ASIOFalse;
+
+			// 
+			// ASIOClockSource::name uses multibyte character sets,
+			// so sprintf_s is used.
+			// 
             sprintf_s(clocks[i].name, CLOCK_SOURCE_NAME_LENGTH, "%S", clockInfo->ClockSource[i].Name);
         }
         *numSources = clockInfo->NumClockSource;
@@ -720,7 +729,7 @@ ASIOError CUSBAsio::getClockSources(ASIOClockSource * clocks, long * numSources)
 _Use_decl_annotations_
 ASIOError CUSBAsio::setClockSource(long index)
 {
-    info_print_("setClockSource\n");
+    info_print_(_T("setClockSource\n"));
     BOOL result = FALSE;
     if (m_usbDeviceHandle == INVALID_HANDLE_VALUE || m_inputLatency == 0 || m_outputLatency == 0)
     {
@@ -757,7 +766,7 @@ ASIOError CUSBAsio::setClockSource(long index)
 _Use_decl_annotations_
 ASIOError CUSBAsio::getSamplePosition(ASIOSamples * samplePosition, ASIOTimeStamp * timeStamp)
 {
-    // info_print_("getSamplePosition");
+    // info_print_(_T("getSamplePosition\n"));
 
     *samplePosition = {};
     *timeStamp = {};
@@ -783,14 +792,14 @@ ASIOError CUSBAsio::getSamplePosition(ASIOSamples * samplePosition, ASIOTimeStam
         samplePosition->hi = 0;
         samplePosition->lo = (unsigned long)m_samplePosition;
     }
-    // info_print_("getSamplePosition SamplePosition %u, TimeStamp %u\n", samplePosition->lo, timeStamp->lo);
+    // info_print_(_T("getSamplePosition SamplePosition %u, TimeStamp %u\n"), samplePosition->lo, timeStamp->lo);
     return ASE_OK;
 }
 
 _Use_decl_annotations_
 ASIOError CUSBAsio::getChannelInfo(ASIOChannelInfo * info)
 {
-    verbose_print_("getChannelInfo\n");
+    verbose_print_(_T("getChannelInfo\n"));
 
     if (info == nullptr)
     {
@@ -850,6 +859,11 @@ ASIOError CUSBAsio::getChannelInfo(ASIOChannelInfo * info)
                 break;
             }
         }
+
+		// 
+		// ASIOChannelInfo::name uses multibyte character sets,
+		// so sprintf_s is used.
+		// 
         if (ch == m_channelInfo->NumChannels)
         {
             sprintf_s(info->name, DRIVER_NAME_LENGTH, "channel %u", info->channel);
@@ -859,7 +873,11 @@ ASIOError CUSBAsio::getChannelInfo(ASIOChannelInfo * info)
             sprintf_s(info->name, DRIVER_NAME_LENGTH, "%S", m_channelInfo->Channel[ch].Name);
         }
     }
-    info_print_("getChannelInfo(): channel %d, isInput %d, isActive %d, channelGroup %d, type %d, name %s.\n", info->channel, info->isInput, info->isActive, info->channelGroup, info->type, info->name);
+#ifdef _UNICODE
+    info_print_(_T("getChannelInfo(): channel %d, isInput %d, isActive %d, channelGroup %d, type %d, name %S\n"), info->channel, info->isInput, info->isActive, info->channelGroup, info->type, info->name);
+#else
+    info_print_(_T("getChannelInfo(): channel %d, isInput %d, isActive %d, channelGroup %d, type %d, name %s\n"), info->channel, info->isInput, info->isActive, info->channelGroup, info->type, info->name);
+#endif
 
     return ASE_OK;
 }
@@ -867,7 +885,7 @@ ASIOError CUSBAsio::getChannelInfo(ASIOChannelInfo * info)
 _Use_decl_annotations_
 ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels, long bufferSize, ASIOCallbacks * callbacks)
 {
-    info_print_("createBuffers\n");
+    info_print_(_T("createBuffers\n"));
     ASIOBufferInfo * info = bufferInfos;
     long             i;
     BOOL             result = FALSE;
@@ -875,7 +893,7 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
     if (m_usbDeviceHandle == INVALID_HANDLE_VALUE || m_inputLatency == 0 || m_outputLatency == 0)
     {
         // No error is returned even if the hardware is unusable. -> Error handling policy changed: ASE_NotPresent is returned.
-        info_print_("createBuffers : device not ready.\n");
+        info_print_(_T("createBuffers : device not ready.\n"));
         return ASE_NotPresent;
     }
     if (bufferInfos == nullptr || callbacks == nullptr)
@@ -885,7 +903,7 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
 
     if (m_requestedSampleFormat == kASIOPCMFormat && (ULONG)m_sampleRate != m_audioProperty.SampleRate)
     {
-        info_print_("createBuffers : invalid format, format req %u, cur %u, fs req %lf, cur %u.\n", m_requestedSampleFormat, m_audioProperty.CurrentSampleFormat, m_sampleRate, m_audioProperty.SampleRate);
+        info_print_(_T("createBuffers : invalid format, format req %u, cur %u, fs req %lf, cur %u.\n"), m_requestedSampleFormat, m_audioProperty.CurrentSampleFormat, m_sampleRate, m_audioProperty.SampleRate);
         return ASE_InvalidMode;
     }
 
@@ -903,7 +921,7 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
 
         if (m_isActive)
         {
-            info_print_("createBuffers : already initialized.\n");
+            info_print_(_T("createBuffers : already initialized.\n"));
             error = ASE_OK;
             return error;
         }
@@ -929,13 +947,13 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                 {
                     if (info->channelNum < 0)
                     {
-                        info_print_("createBuffers : invalid parameter.\n");
+                        info_print_(_T("createBuffers : invalid parameter.\n"));
                         error = ASE_InvalidParameter;
                         return error;
                     }
                     if ((ULONG)info->channelNum >= m_inAvailableChannels)
                     {
-                        info_print_("createBuffers : over channel.\n");
+                        info_print_(_T("createBuffers : over channel.\n"));
                         error = ASE_InvalidMode;
                         return error;
                     }
@@ -944,7 +962,7 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                     recChannelsMap |= 1ULL << info->channelNum;
                     if (m_activeInputs > m_inAvailableChannels)
                     {
-                        info_print_("createBuffers : over channel.\n");
+                        info_print_(_T("createBuffers : over channel.\n"));
                         error = ASE_InvalidMode;
                         return error;
                     }
@@ -953,13 +971,13 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                 {
                     if (info->channelNum < 0)
                     {
-                        info_print_("createBuffers : invalid parameter.\n");
+                        info_print_(_T("createBuffers : invalid parameter.\n"));
                         error = ASE_InvalidParameter;
                         return error;
                     }
                     if ((ULONG)info->channelNum >= m_outAvailableChannels)
                     {
-                        info_print_("createBuffers : over channel.\n");
+                        info_print_(_T("createBuffers : over channel.\n"));
                         error = ASE_InvalidMode;
                         return error;
                     }
@@ -968,7 +986,7 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                     playChannelsMap |= 1ULL << info->channelNum;
                     if (m_activeOutputs > m_outAvailableChannels)
                     {
-                        info_print_("createBuffers : over channel.\n");
+                        info_print_(_T("createBuffers : over channel.\n"));
                         error = ASE_InvalidMode;
                         return error;
                     }
@@ -977,7 +995,7 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
 
             if (bufferSize != m_blockFrames)
             {
-                info_print_("createBuffers : requested buffer size %u differs from preferred %u.\n", bufferSize, m_blockFrames);
+                info_print_(_T("createBuffers : requested buffer size %u differs from preferred %u.\n"), bufferSize, m_blockFrames);
                 m_blockFrames = bufferSize;
                 m_isRequireAsioReset = true;
                 SetEvent(m_asioResetEvent);
@@ -1017,12 +1035,12 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                 m_driverRecBuffer = new UCHAR[recSize];
                 if (m_driverPlayBuffer == nullptr || m_driverRecBuffer == nullptr)
                 {
-                    info_print_("createBuffers : insufficient resources.\n");
+                    info_print_(_T("createBuffers : insufficient resources.\n"));
                     error = ASE_NoMemory;
                     return error;
                 }
 
-                info_print_("play buffer at %p, %u bytes, rec buffer at %p, %u bytes, period %d samples.\n", m_driverPlayBuffer, playSize, m_driverRecBuffer, recSize, m_blockFrames);
+                info_print_(_T("play buffer at %p, %u bytes, rec buffer at %p, %u bytes, period %d samples.\n"), m_driverPlayBuffer, playSize, m_driverRecBuffer, recSize, m_blockFrames);
 
                 ZeroMemory((void *)m_driverPlayBuffer, playSize);
                 ZeroMemory((void *)m_driverRecBuffer, recSize);
@@ -1060,7 +1078,7 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                 m_notificationEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
                 if (m_notificationEvent == nullptr)
                 {
-                    info_print_("createBuffers : insufficient resources.\n");
+                    info_print_(_T("createBuffers : insufficient resources.\n"));
                     error = ASE_NoMemory;
                     return error;
                 }
@@ -1068,7 +1086,7 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                 m_outputReadyEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
                 if (m_outputReadyEvent == nullptr)
                 {
-                    info_print_("createBuffers : insufficient resources.\n");
+                    info_print_(_T("createBuffers : insufficient resources.\n"));
                     error = ASE_NoMemory;
                     return error;
                 }
@@ -1076,7 +1094,7 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                 m_deviceReadyEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
                 if (m_deviceReadyEvent == nullptr)
                 {
-                    info_print_("createBuffers : insufficient resources.\n");
+                    info_print_(_T("createBuffers : insufficient resources.\n"));
                     error = ASE_NoMemory;
                     return error;
                 }
@@ -1112,11 +1130,11 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                         TCHAR messageString[ERROR_MESSAGE_LENGTH] = {0};
                         LoadString(GetModuleHandle(nullptr), IDS_ERRMSG_VERSION_MISMATCH, messageString, sizeof(messageString) / sizeof(messageString[0]));
                         _tcscpy_s(m_errorMessage, ERROR_MESSAGE_LENGTH, messageString);
-                        info_print_("createBuffers : driver version mismatch.\n");
+                        info_print_(_T("createBuffers : driver version mismatch.\n"));
                     }
                     else
                     {
-                        info_print_("createBuffers : physical driver reports error.\n");
+                        info_print_(_T("createBuffers : physical driver reports error.\n"));
                     }
                     error = ASE_NotPresent;
 
@@ -1126,7 +1144,7 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                 this->m_callbacks = callbacks;
                 if (callbacks->asioMessage(kAsioSupportsTimeInfo, 0, 0, 0))
                 {
-                    info_print_("time info mode.\n");
+                    info_print_(_T("time info mode.\n"));
                     m_isTimeInfoMode = true;
                     m_asioTime.timeInfo.speed = 1.;
                     m_asioTime.timeInfo.systemTime.hi = m_asioTime.timeInfo.systemTime.lo = 0;
@@ -1137,30 +1155,30 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                 }
                 else
                 {
-                    info_print_("NOT time info mode.\n");
+                    info_print_(_T("NOT time info mode.\n"));
                     m_isTimeInfoMode = false;
                 }
                 for (i = 0; i < numChannels; i++)
                 {
-                    info_print_("buffer %2u: isInput %d, channelNum %d, buffer0 %p, buffer1 %p.\n", i, bufferInfos[i].isInput, bufferInfos[i].channelNum, bufferInfos[i].buffers[0], bufferInfos[i].buffers[1]);
+                    info_print_(_T("buffer %2u: isInput %d, channelNum %d, buffer0 %p, buffer1 %p.\n"), i, bufferInfos[i].isInput, bufferInfos[i].channelNum, bufferInfos[i].buffers[0], bufferInfos[i].buffers[1]);
                 }
             }
         }
     }
-    info_print_("createBuffers : completed.\n");
+    info_print_(_T("createBuffers : completed.\n"));
     error = ASE_OK;
     return error;
 }
 
 ASIOError CUSBAsio::disposeBuffers()
 {
-    info_print_("disposeBuffers\n");
+    info_print_(_T("disposeBuffers\n"));
     BOOL result;
 
     if (m_usbDeviceHandle == INVALID_HANDLE_VALUE || m_inputLatency == 0 || m_outputLatency == 0)
     {
         // No error is returned even if the hardware is unusable. -> Error handling policy changed: ASE_NotPresent is returned.
-        info_print_("disposeBuffers : device not ready.\n");
+        info_print_(_T("disposeBuffers : device not ready.\n"));
         return ASE_NotPresent;
     }
 
@@ -1217,7 +1235,7 @@ ASIOError CUSBAsio::disposeBuffers()
 
 ASIOError CUSBAsio::controlPanel()
 {
-    info_print_("controlPanel\n");
+    info_print_(_T("controlPanel\n"));
 
     BOOL result = ExecuteControlPanel();
     if (!result)
@@ -1274,7 +1292,7 @@ ASIOError CUSBAsio::future(long selector, void * option) // !!! check properties
             return ASE_NotPresent;
         }
         ASIOIoFormat * requestedFormat = (ASIOIoFormat *)option;
-        info_print_("kAsioSetIoFormat request. Device supported 0x%x, current %u, requested %u.\n", m_audioProperty.SupportedSampleFormats, m_audioProperty.CurrentSampleFormat, requestedFormat->FormatType);
+        info_print_(_T("kAsioSetIoFormat request. Device supported 0x%x, current %u, requested %u.\n"), m_audioProperty.SupportedSampleFormats, m_audioProperty.CurrentSampleFormat, requestedFormat->FormatType);
         auto lockClient = m_clientInfoCS.lock();
 
         if ((requestedFormat->FormatType == kASIOPCMFormat) && ((m_audioProperty.SupportedSampleFormats & GetSupportedSampleFormats()) != 0))
@@ -1293,7 +1311,7 @@ ASIOError CUSBAsio::future(long selector, void * option) // !!! check properties
             return ASE_NotPresent;
         }
         ASIOIoFormat * requestedFormat = (ASIOIoFormat *)option;
-        info_print_("kAsioGetIoFormat request. Device supported 0x%x, current %u.\n", m_audioProperty.SupportedSampleFormats, m_audioProperty.CurrentSampleFormat);
+        info_print_(_T("kAsioGetIoFormat request. Device supported 0x%x, current %u.\n"), m_audioProperty.SupportedSampleFormats, m_audioProperty.CurrentSampleFormat);
         if ((m_audioProperty.SupportedSampleFormats & GetSupportedSampleFormats()) != 0)
         {
             requestedFormat->FormatType = m_requestedSampleFormat;
@@ -1310,7 +1328,7 @@ ASIOError CUSBAsio::future(long selector, void * option) // !!! check properties
             return ASE_NotPresent;
         }
         ASIOIoFormat * requestedFormat = (ASIOIoFormat *)option;
-        info_print_("kAsioCanDoIoFormat. Device supported %u, current 0x%x, requested %u.\n", m_audioProperty.SupportedSampleFormats, m_audioProperty.CurrentSampleFormat, requestedFormat->FormatType);
+        info_print_(_T("kAsioCanDoIoFormat. Device supported %u, current 0x%x, requested %u.\n"), m_audioProperty.SupportedSampleFormats, m_audioProperty.CurrentSampleFormat, requestedFormat->FormatType);
         if ((requestedFormat->FormatType == kASIOPCMFormat) && ((m_audioProperty.SupportedSampleFormats & GetSupportedSampleFormats()) != 0))
         {
             return ASE_SUCCESS;
@@ -1324,7 +1342,7 @@ ASIOError CUSBAsio::future(long selector, void * option) // !!! check properties
         if (m_isDropoutDetectionSetting)
         {
             m_isSupportDropoutDetection = true;
-            info_print_("kAsioCanReportOverload request.\n");
+            info_print_(_T("kAsioCanReportOverload request.\n"));
             return ASE_SUCCESS;
         }
         else
@@ -1341,7 +1359,7 @@ ASIOError CUSBAsio::future(long selector, void * option) // !!! check properties
         ASIOInternalBufferInfo * internalBufferInfo = (ASIOInternalBufferInfo *)option;
         internalBufferInfo->inputSamples = m_audioProperty.InputDriverBuffer;
         internalBufferInfo->outputSamples = m_audioProperty.OutputDriverBuffer;
-        info_print_("kAsioGetInternalBufferSamples request. in %u samples, out %u samples.\n", internalBufferInfo->inputSamples, internalBufferInfo->outputSamples);
+        info_print_(_T("kAsioGetInternalBufferSamples request. in %u samples, out %u samples.\n"), internalBufferInfo->inputSamples, internalBufferInfo->outputSamples);
         return ASE_SUCCESS;
     }
     }
@@ -1477,8 +1495,8 @@ bool CUSBAsio::MeasureLatency()
 
     m_outputLatency = m_blockFrames + m_audioProperty.OutputLatencyOffset;
 
-    info_print_(" SampleRate = %d, m_blockFrames = %d, ClassicFramesPerIrp = %d, OutFrameDelay = %d, InputLatencyOffset = %d, OutputLatencyOffset = %d\n", m_audioProperty.SampleRate, m_blockFrames, classicFramesPerIrp, m_driverFlags.OutputFrameDelay, m_audioProperty.InputLatencyOffset, m_audioProperty.OutputLatencyOffset);
-    info_print_("calculated latency is in:%d, out:%d samples.\n", m_inputLatency, m_outputLatency);
+    info_print_(_T(" SampleRate = %d, m_blockFrames = %d, ClassicFramesPerIrp = %d, OutFrameDelay = %d, InputLatencyOffset = %d, OutputLatencyOffset = %d\n"), m_audioProperty.SampleRate, m_blockFrames, classicFramesPerIrp, m_driverFlags.OutputFrameDelay, m_audioProperty.InputLatencyOffset, m_audioProperty.OutputLatencyOffset);
+    info_print_(_T("calculated latency is in:%d, out:%d samples.\n"), m_inputLatency, m_outputLatency);
 
     if (m_inputLatency == 0 || m_outputLatency == 0)
     {
@@ -1630,7 +1648,7 @@ bool CUSBAsio::ApplySettings()
 
     if (!SetFlags(m_usbDeviceHandle, m_driverFlags))
     {
-        info_print_("set flags failed.\n");
+        info_print_(_T("set flags failed.\n"));
         return false;
     }
     return true;
@@ -1752,7 +1770,7 @@ bool CUSBAsio::ObtainDeviceParameter()
         result = GetAudioProperty(m_usbDeviceHandle, &m_audioProperty);
         if (!result || !m_audioProperty.IsAccessible)
         {
-            info_print_("failed to obtain device property\n");
+            info_print_(_T("failed to obtain device property\n"));
             TCHAR messageString[ERROR_MESSAGE_LENGTH] = {0};
             LoadString(GetModuleHandle(nullptr), IDS_ERRMSG_CONSTRUCT, messageString, sizeof(messageString) / sizeof(messageString[0]));
             _tcscpy_s(m_errorMessage, ERROR_MESSAGE_LENGTH, messageString);
@@ -1846,7 +1864,7 @@ bool CUSBAsio::ObtainDeviceParameter()
 
 bool CUSBAsio::RequestClockInfoChange()
 {
-    info_print_("RequestClockInfoChange\n");
+    info_print_(_T("RequestClockInfoChange\n"));
 
     auto lockClient = m_clientInfoCS.lock();
     if (m_isActive)
@@ -1872,7 +1890,7 @@ bool CUSBAsio::RequestClockInfoChange()
     {
         // If the fs/clock source is changed before the buffer is acquired, the device information is acquired again and the latency is calculated again.
         bool result = ObtainDeviceParameter();
-        info_print_("ObtainDeviceParameter() completed, result %u, current rate %u, format %u\n", result, m_audioProperty.SampleRate, m_audioProperty.CurrentSampleFormat);
+        info_print_(_T("ObtainDeviceParameter() completed, result %u, current rate %u, format %u\n"), result, m_audioProperty.SampleRate, m_audioProperty.CurrentSampleFormat);
         if (!result)
         {
             return false;
@@ -1893,7 +1911,7 @@ unsigned int __stdcall CUSBAsio::AsioResetThread(void * param)
 
     InterlockedIncrement(&g_AsioResetThread);
 
-    info_print_("entering ASIO reset thread instance %d.\n", InterlockedCompareExchange(&g_AsioResetThread, 0, 0));
+    info_print_(_T("entering ASIO reset thread instance %d.\n"), InterlockedCompareExchange(&g_AsioResetThread, 0, 0));
 
     HANDLE handlesForWait[] = {self->m_terminateAsioResetEvent, self->m_asioResetEvent};
 
@@ -1904,7 +1922,7 @@ unsigned int __stdcall CUSBAsio::AsioResetThread(void * param)
             auto lockClient = self->m_clientInfoCS.lock();
             if (self->m_callbacks != nullptr && self->m_callbacks->asioMessage != nullptr)
             {
-                info_print_("AsioResetThread: ASIO reset callback try %u, thread ID %u.\n", resetExecuted, GetCurrentThreadId());
+                info_print_(_T("AsioResetThread: ASIO reset callback try %u, thread ID %u.\n"), resetExecuted, GetCurrentThreadId());
                 self->m_callbacks->asioMessage(kAsioResetRequest, 0, nullptr, nullptr);
                 --resetQueue;
                 ++resetExecuted;
@@ -1923,7 +1941,7 @@ unsigned int __stdcall CUSBAsio::AsioResetThread(void * param)
                 auto lockClient = self->m_clientInfoCS.lock();
                 if (self->m_callbacks != nullptr && self->m_callbacks->sampleRateDidChange != nullptr && oldSampleRate != self->m_nextSampleRate)
                 {
-                    info_print_("AsioResetThread: sample rate change callback, new %lf.\n", self->m_nextSampleRate);
+                    info_print_(_T("AsioResetThread: sample rate change callback, new %lf.\n"), self->m_nextSampleRate);
                     self->m_callbacks->sampleRateDidChange(self->m_nextSampleRate);
                     oldSampleRate = self->m_nextSampleRate;
                 }
@@ -1933,7 +1951,7 @@ unsigned int __stdcall CUSBAsio::AsioResetThread(void * param)
                 self->m_isRequireReportDropout = false;
                 if (self->m_callbacks != nullptr && self->m_callbacks->asioMessage != nullptr)
                 {
-                    info_print_("AsioResetThread: dropout detect callback.\n");
+                    info_print_(_T("AsioResetThread: dropout detect callback.\n"));
                     self->m_callbacks->asioMessage(kAsioOverload, 0, nullptr, nullptr);
                 }
             }
@@ -1942,7 +1960,7 @@ unsigned int __stdcall CUSBAsio::AsioResetThread(void * param)
                 self->m_isRequireLatencyChange = false;
                 if (self->m_callbacks != nullptr && self->m_callbacks->asioMessage != nullptr)
                 {
-                    info_print_("AsioResetThread: latency change callback.\n");
+                    info_print_(_T("AsioResetThread: latency change callback.\n"));
                     self->m_callbacks->asioMessage(kAsioLatenciesChanged, 0, nullptr, nullptr);
                 }
             }
@@ -1960,7 +1978,7 @@ unsigned int __stdcall CUSBAsio::AsioResetThread(void * param)
         }
     } while (!done);
 
-    info_print_("exiting ASIO reset thread %d.\n", InterlockedCompareExchange(&g_AsioResetThread, 0, 0));
+    info_print_(_T("exiting ASIO reset thread %d.\n"), InterlockedCompareExchange(&g_AsioResetThread, 0, 0));
     InterlockedDecrement(&g_AsioResetThread);
 
     return 0;
@@ -1974,7 +1992,7 @@ void CUSBAsio::ThreadStart()
     if ((beginThreadResult > 0) && (m_threadPriority == -2))
     {
         SetThreadPriority(m_workerThread, THREAD_PRIORITY_TIME_CRITICAL);
-        info_print_("call SetThreadPriority %d.\n", THREAD_PRIORITY_TIME_CRITICAL);
+        info_print_(_T("call SetThreadPriority %d.\n"), THREAD_PRIORITY_TIME_CRITICAL);
     }
 }
 
@@ -2004,7 +2022,7 @@ void CUSBAsio::ThreadStop()
         }
         else
         {
-            error_print_("wait timeout.\n");
+            error_print_(_T("wait timeout.\n"));
         }
     }
     m_workerThread = nullptr;
@@ -2046,7 +2064,7 @@ unsigned int __stdcall CUSBAsio::WorkerThread(void * param)
 
     InterlockedIncrement(&g_WorkerThread);
 
-    info_print_("entering worker thread instance %d.\n", InterlockedCompareExchange(&g_WorkerThread, 0, 0));
+    info_print_(_T("entering worker thread instance %d.\n"), InterlockedCompareExchange(&g_WorkerThread, 0, 0));
 
     HANDLE handlesForWait[] = {self->m_stopEvent, self->m_notificationEvent};
 
@@ -2055,7 +2073,7 @@ unsigned int __stdcall CUSBAsio::WorkerThread(void * param)
     {
         HANDLE hTask = AvSetMmThreadCharacteristics(TEXT("Pro Audio"), &taskIndex);
         AvSetMmThreadPriority(hTask, (AVRT_PRIORITY)self->m_threadPriority);
-        info_print_("call AvSetMmThreadPriority %d.\n", self->m_threadPriority);
+        info_print_(_T("call AvSetMmThreadPriority %d.\n"), self->m_threadPriority);
     }
 
     self->BufferSwitch();
@@ -2083,14 +2101,14 @@ unsigned int __stdcall CUSBAsio::WorkerThread(void * param)
             memcpy(&curHdr, (void *)recHdr, sizeof(curHdr)); // Explicit copy
             if ((curHdr.DeviceStatus & toInt(DeviceStatuses::ClockSourceChanged)) != 0)
             {
-                info_print_("clock source change detected, new %u.\n", curHdr.CurrentClockSource);
+                info_print_(_T("clock source change detected, new %u.\n"), curHdr.CurrentClockSource);
                 self->m_asioTime.timeInfo.flags |= kClockSourceChanged;
                 recHdr->DeviceStatus &= ~((ULONG)toInt(DeviceStatuses::ClockSourceChanged));
             }
             if (((curHdr.DeviceStatus & toInt(DeviceStatuses::SampleRateChanged)) != 0 && curHdr.CurrentSampleRate != 0) ||
                 (curHdr.CurrentSampleRate != (ULONG)self->m_sampleRate))
             {
-                info_print_("sample rate change detected, old %u, new %u.\n", self->m_audioProperty.SampleRate, curHdr.CurrentSampleRate);
+                info_print_(_T("sample rate change detected, old %u, new %u.\n"), self->m_audioProperty.SampleRate, curHdr.CurrentSampleRate);
                 self->m_asioTime.timeInfo.flags |= kSampleRateChanged;
                 self->m_requireSampleRateChange = true;
                 self->m_nextSampleRate = (ASIOSampleRate)curHdr.CurrentSampleRate;
@@ -2099,14 +2117,14 @@ unsigned int __stdcall CUSBAsio::WorkerThread(void * param)
             }
             if ((curHdr.DeviceStatus & toInt(DeviceStatuses::OverloadDetected)) != 0)
             {
-                info_print_("overload detected.\n");
+                info_print_(_T("overload detected.\n"));
                 self->m_isRequireReportDropout = true;
                 setAsioResetEvent = true;
                 recHdr->DeviceStatus &= ~((ULONG)toInt(DeviceStatuses::OverloadDetected));
             }
             if ((curHdr.DeviceStatus & toInt(DeviceStatuses::LatencyChanged)) != 0)
             {
-                info_print_("latency change detected.\n");
+                info_print_(_T("latency change detected.\n"));
                 self->m_isRequireLatencyChange = true;
                 setAsioResetEvent = true;
                 recHdr->DeviceStatus &= ~((ULONG)toInt(DeviceStatuses::LatencyChanged));
@@ -2114,7 +2132,7 @@ unsigned int __stdcall CUSBAsio::WorkerThread(void * param)
             if ((curHdr.DeviceStatus & toInt(DeviceStatuses::ResetRequired)) != 0 ||
                 (curHdr.CurrentSampleRate != (ULONG)self->m_sampleRate))
             {
-                info_print_("reset request detected.\n");
+                info_print_(_T("reset request detected.\n"));
                 self->m_isRequireAsioReset = true;
                 setAsioResetEvent = true;
                 // To prevent "Ableton Live" from hanging, callbacks will be processed even after a reset request.
@@ -2191,9 +2209,9 @@ unsigned int __stdcall CUSBAsio::WorkerThread(void * param)
                     {
                         break;
                     }
-                    error_print_("out of sync, ASIO callback iteration %u, sleep %u(ms).\n", iteration, self->m_blockFrames * 500 / (LONG)(self->m_sampleRate));
-                    error_print_("prev hdr PC%7u PB%7u RC%7u RB%7u\n", prevHdr.PlayCurrentPosition, prevHdr.PlayBufferPosition, prevHdr.RecCurrentPosition, prevHdr.RecBufferPosition);
-                    error_print_("cur  hdr PC%7u PB%7u RC%7u RB%7u REB%7u\n", curHdr.PlayCurrentPosition, curHdr.PlayBufferPosition, curHdr.RecCurrentPosition, curHdr.RecBufferPosition, readyBuffers);
+                    error_print_(_T("out of sync, ASIO callback iteration %u, sleep %u(ms).\n"), iteration, self->m_blockFrames * 500 / (LONG)(self->m_sampleRate));
+                    error_print_(_T("prev hdr PC%7u PB%7u RC%7u RB%7u\n"), prevHdr.PlayCurrentPosition, prevHdr.PlayBufferPosition, prevHdr.RecCurrentPosition, prevHdr.RecBufferPosition);
+                    error_print_(_T("cur  hdr PC%7u PB%7u RC%7u RB%7u REB%7u\n"), curHdr.PlayCurrentPosition, curHdr.PlayBufferPosition, curHdr.RecCurrentPosition, curHdr.RecBufferPosition, readyBuffers);
                     status = WaitForSingleObject(self->m_stopEvent, 0);
                     if (status == WAIT_TIMEOUT)
                     {
@@ -2214,8 +2232,8 @@ unsigned int __stdcall CUSBAsio::WorkerThread(void * param)
             // it is assumed that an error has occurred, the thread is terminated, and the application is prompted to reset.
             if (timeout == NOTIFICATION_TIMEOUT)
             {
-                error_print_("wait timeout. requesting reset.\n");
-                error_print_("cur  hdr PC%7u PB%7u RC%7u RB%7u\n", recHdr->PlayCurrentPosition, recHdr->PlayBufferPosition, recHdr->RecCurrentPosition, recHdr->RecBufferPosition);
+                error_print_(_T("wait timeout. requesting reset.\n"));
+                error_print_(_T("cur  hdr PC%7u PB%7u RC%7u RB%7u\n"), recHdr->PlayCurrentPosition, recHdr->PlayBufferPosition, recHdr->RecCurrentPosition, recHdr->RecBufferPosition);
                 self->m_isRequireAsioReset = true;
                 setAsioResetEvent = true;
                 timeout = self->m_blockFrames / 1000 / self->m_audioProperty.SampleRate;
@@ -2228,7 +2246,7 @@ unsigned int __stdcall CUSBAsio::WorkerThread(void * param)
             SetEvent(self->m_asioResetEvent);
         }
     } while (!done);
-    info_print_("exiting worker thread...\n");
+    info_print_(_T("exiting worker thread...\n"));
 #ifdef ASIO_THREAD_STATISTICS
     if (statsPos != 0)
     {
@@ -2257,7 +2275,7 @@ unsigned int __stdcall CUSBAsio::WorkerThread(void * param)
 #if defined(INFO_PRINT_)
         double dueTimeStddev = sqrt(dueTimeVar);
 #endif
-        info_print_("- ASIO Callback %5u(times), DueTime Calc %5d(us), Avg %5d(us), Stddev %5d(us), Max %5d(us), Min %5d(us)\n", statsPos, (LONG)idealPeriod, (LONG)dueTimeAvg, (LONG)dueTimeStddev, (LONG)dueTimeMax, (LONG)dueTimeMin);
+        info_print_(_T("- ASIO Callback %5u(times), DueTime Calc %5d(us), Avg %5d(us), Stddev %5d(us), Max %5d(us), Min %5d(us)\n"), statsPos, (LONG)idealPeriod, (LONG)dueTimeAvg, (LONG)dueTimeStddev, (LONG)dueTimeMax, (LONG)dueTimeMin);
     }
     delete[] stats;
 #endif
