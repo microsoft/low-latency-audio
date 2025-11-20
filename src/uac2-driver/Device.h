@@ -199,6 +199,7 @@ typedef struct _DEVICE_CONTEXT
     ContiguousMemory *                 ContiguousMemory;
     RtPacketObject *                   RtPacketObject;
     WDFWAITLOCK                        StreamWaitLock;
+    WDFWAITLOCK                        AsioWaitLock;
     CStreamEngine **                   RenderStreamEngine;
     CStreamEngine **                   CaptureStreamEngine;
     ULONG                              NumOfInputDevices;

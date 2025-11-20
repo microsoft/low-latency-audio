@@ -734,6 +734,21 @@ Return Value:
         return status;
     }
 
+    //
+    // AsioWaitLock protects the AsioBufferObject within a narrower scope compared to StreamWaitLock.
+    // Locking order: StreamWaitLock is acquired first, then AsioWaitLock.
+    // This design ensures proper synchronization and avoids deadlocks.
+    //
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+    attributes.ParentObject = device;
+
+    status = WdfWaitLockCreate(&attributes, &deviceContext->AsioWaitLock);
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
+        return status;
+    }
+
     status = ReadAndSelectDescriptors(device);
     if (!NT_SUCCESS(status))
     {
@@ -1183,10 +1198,12 @@ USBAudioAcxDriverEvtDeviceD0Exit(
     WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
     if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
     {
+        WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
         if (deviceContext->AsioBufferObject != nullptr)
         {
             deviceContext->AsioBufferObject->Clear();
         }
+        WdfWaitLockRelease(deviceContext->AsioWaitLock);
         if (deviceContext->ContiguousMemory != nullptr)
         {
             deviceContext->ContiguousMemory->Clear();
@@ -4345,10 +4362,12 @@ VOID EvtUSBAudioAcxDriverChangeSampleRate(
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
     if (deviceContext->StreamObject != nullptr)
     {
+        WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
         if (deviceContext->AsioBufferObject == nullptr)
         {
             streamRunning = true;
         }
+        WdfWaitLockRelease(deviceContext->AsioWaitLock);
         if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
         {
             StopIsoStream(deviceContext);
@@ -4634,6 +4653,7 @@ VOID EvtUSBAudioAcxDriverStartAsioStream(
         }
         else
         {
+            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
             if (deviceContext->AsioBufferObject != nullptr)
             {
                 deviceContext->AsioBufferObject->SetReady();
@@ -4643,6 +4663,7 @@ VOID EvtUSBAudioAcxDriverStartAsioStream(
             {
                 status = STATUS_UNSUCCESSFUL;
             }
+            WdfWaitLockRelease(deviceContext->AsioWaitLock);
         }
         if (NT_SUCCESS(status))
         {
@@ -4760,7 +4781,7 @@ VOID EvtUSBAudioAcxDriverSetAsioBuffer(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(params.Parameters.Property.ValueCb >= sizeof(UAC_ASIO_REC_BUFFER_HEADER));
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
+    WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
 
     IF_TRUE_ACTION_JUMP(((params.Parameters.Property.Control == nullptr) ||
                          (params.Parameters.Property.ControlCb < sizeof(UAC_ASIO_PLAY_BUFFER_HEADER)) ||
@@ -4800,7 +4821,7 @@ VOID EvtUSBAudioAcxDriverSetAsioBuffer(
         sizeof(KSPROPERTY)
     );
 Exit:
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
+    WdfWaitLockRelease(deviceContext->AsioWaitLock);
 
     WdfRequestCompleteWithInformation(request, status, outDataCb);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -4838,7 +4859,7 @@ VOID EvtUSBAudioAcxDriverUnsetAsioBuffer(
     ASSERT(params.Parameters.Property.Value == nullptr);
     ASSERT(params.Parameters.Property.ValueCb == 0);
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
+    WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
 
     IF_TRUE_ACTION_JUMP(((params.Parameters.Property.Control != nullptr) ||
                          (params.Parameters.Property.ControlCb != 0) ||
@@ -4859,7 +4880,7 @@ VOID EvtUSBAudioAcxDriverUnsetAsioBuffer(
         status = STATUS_SUCCESS;
     }
 Exit:
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
+    WdfWaitLockRelease(deviceContext->AsioWaitLock);
 
     WdfRequestCompleteWithInformation(request, status, outDataCb);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -5205,10 +5226,12 @@ NTSTATUS StartIsoStream(
         else
         {
             InterlockedIncrement(&deviceContext->StartCounterIsoStream);
+            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
             if (deviceContext->AsioBufferObject != nullptr)
             {
                 deviceContext->AsioBufferObject->SetReady();
             }
+            WdfWaitLockRelease(deviceContext->AsioWaitLock);
         }
 
         if (deviceContext->StreamObject != nullptr)
@@ -5945,12 +5968,15 @@ Return Value:
         {
             StopIsoStream(deviceContext);
 
+            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
             if (deviceContext->AsioBufferObject != nullptr)
             {
                 status = deviceContext->AsioBufferObject->UnsetBuffer();
                 delete deviceContext->AsioBufferObject;
                 deviceContext->AsioBufferObject = nullptr;
             }
+            WdfWaitLockRelease(deviceContext->AsioWaitLock);
+
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "clear asio owner");
             deviceContext->AsioOwner = nullptr;
         }
