@@ -100,6 +100,22 @@ class VariableArray
     PAGED_CODE_SEG
     void Report() const;
 
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    T * begin() noexcept;
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    T * end() noexcept;
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    const T * begin() const noexcept;
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    const T * end() const noexcept;
+
   protected:
     WDFMEMORY m_memory{nullptr};
     T *       m_array{nullptr};
@@ -1846,27 +1862,7 @@ class USBAudioInterfaceInfo
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    ULONG GetNumOfClockSources();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    ULONG GetClockEntityCountForTerminal();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    NTSTATUS ReconnectClockAll(
-        _In_ PDEVICE_CONTEXT deviceContext
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
     NTSTATUS QueryCurrentAttributeAll(
-        _In_ PDEVICE_CONTEXT deviceContext
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    NTSTATUS QueryRangeAttributeAll(
         _In_ PDEVICE_CONTEXT deviceContext
     );
 
@@ -1925,42 +1921,14 @@ class USBAudioInterfaceInfo
         _Out_ UCHAR & terminalLink
     );
 
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    void GetInterruptDataMessageEndpoint(
-        _Out_ bool &  isValid,
-        _Out_ UCHAR & interfaceNumber,
-        _Out_ UCHAR & endpoint,
-        _Out_ UCHAR & interval
-    );
-
+#if 0
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     NTSTATUS SetCurrentSampleFrequency(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ ULONG           desiredSampleRate
     );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    NTSTATUS SetCurrentSampleFrequency(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ UCHAR           terminalLink,
-        _In_ ULONG           desiredSampleRate
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    virtual NTSTATUS GetCurrentSampleFrequency(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _Out_ ULONG &        sampleRate
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    virtual bool CanSetSampleFrequency(
-        _In_ bool isInput
-    );
+#endif
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -1984,133 +1952,7 @@ class USBAudioInterfaceInfo
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    _Success_(NT_SUCCESS(return))
-    NTSTATUS SearchOutputTerminalFromInputTerminal(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ UCHAR           terminalLink,
-        _Out_ UCHAR &        numOfChannels,
-        _Out_ USHORT &       terminalType,
-        _Out_ UCHAR &        volumeUnitID,
-        _Out_ UCHAR &        muteUnitID
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    _Success_(NT_SUCCESS(return))
-    NTSTATUS SearchInputTerminalFromOutputTerminal(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ UCHAR           terminalLink,
-        _Out_ UCHAR &        numOfChannels,
-        _Out_ USHORT &       terminalType,
-        _Out_ UCHAR &        volumeUnitID,
-        _Out_ UCHAR &        muteUnitID
-    );
-
-    __drv_maxIRQL(DISPATCH_LEVEL)
-    NONPAGED_CODE_SEG
-    NTSTATUS UpdateCurrentValue(
-        _In_ const UCHAR entityID,
-        _In_ const UCHAR controlSelector,
-        _In_ const UCHAR controlNumber
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    bool IsVolumeEntityUpdated();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    bool IsMuteEntityUpdated();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    bool IsInputConnectorEntityUpdated();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    bool IsOutputConnectorEntityUpdated();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    _Success_return_ bool GetUpdatedVolumeEntity(
-        _Out_ UCHAR & entityID
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    _Success_return_ bool GetUpdatedMuteEntity(
-        _Out_ UCHAR & entityID
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    _Success_return_ bool GetUpdatedInputConnectorEntity(
-        _Out_ UCHAR & entityID
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    _Success_return_ bool GetUpdatedOutputConnectorEntity(
-        _Out_ UCHAR & entityID
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    NTSTATUS
-    _Success_(NT_SUCCESS(return))
-    GetVolumeConfiguration(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ UCHAR           entityID,
-        _Out_ LONG &         minimum,
-        _Out_ LONG &         maximum,
-        _Out_ ULONG &        steppingDelta
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    virtual NTSTATUS SetCurrentVolume(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ UCHAR           entityID,
-        _In_ UCHAR           channel,
-        _In_ LONG            volume
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    _Success_(NT_SUCCESS(return))
-    virtual NTSTATUS GetCurrentVolume(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ UCHAR           entityID,
-        _In_ UCHAR           channel,
-        _Out_ LONG &         volume
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    virtual NTSTATUS SetCurrentMute(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ UCHAR           entityID,
-        _In_ UCHAR           channel,
-        _In_ bool            mute
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    _Success_(NT_SUCCESS(return))
-    virtual NTSTATUS GetCurrentMute(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ UCHAR           entityID,
-        _In_ UCHAR           channel,
-        _Out_ bool &         mute
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    virtual NTSTATUS GetCurrentConnectorState(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ UCHAR           entityID,
-        _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
-    );
+    void Dump();
 
   protected:
     WDFOBJECT                                                                m_parentObject{nullptr};
@@ -2607,6 +2449,7 @@ class USBAudioConfiguration
     PDEVICE_CONTEXT               m_deviceContext{nullptr};
     PUSB_DEVICE_DESCRIPTOR        m_usbDeviceDescriptor{nullptr};
     PUSB_CONFIGURATION_DESCRIPTOR m_usbConfigurationDescriptor{nullptr};
+    USBAudioControlInterface *    m_usbAudioControlInterface{nullptr};
     USBAudioInterfaceInfo **      m_usbAudioInterfaceInfoes{nullptr};
     WDFMEMORY                     m_usbAudioInterfaceInfoesMemory{nullptr};
     ULONG                         m_numOfUsbAudioInterfaceInfo{0};
