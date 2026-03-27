@@ -137,6 +137,14 @@ NTSTATUS SplitAcxDataFormatByDeviceChannels(
 );
 
 PAGED_CODE_SEG
+NTSTATUS NotifyDataFormatChange(
+    _In_ WDFDEVICE     Device,
+    _In_ ACXCIRCUIT    Circuit,
+    _In_ ACXPIN        Pin,
+    _In_ ACXDATAFORMAT OriginalDataFormat
+);
+
+PAGED_CODE_SEG
 const char * GetKsDataFormatSubTypeString(
     _In_ GUID ksDataFormatSubType
 );

@@ -76,7 +76,7 @@ Routine Description:
 
 Arguments:
 
-    usbAudioConfiguration - USB Audio Configuration class
+    usbAudioStreamInterfaceGroup - USB Audio Stream Interface Group class
 
     maxBurstOverride -
 
@@ -90,10 +90,10 @@ Return Value:
 
 --*/
 ContiguousMemory::Allocate(
-    USBAudioConfiguration * usbAudioConfiguration,
-    ULONG                   maxBurstOverride,
-    ULONG                   maxClassicFramesPerIrp,
-    ULONG                   framesPerMs
+    USBAudioStreamInterfaceGroup * usbAudioStreamInterfaceGroup,
+    ULONG                          maxBurstOverride,
+    ULONG                          maxClassicFramesPerIrp,
+    ULONG                          framesPerMs
 )
 {
     NTSTATUS         status = STATUS_SUCCESS;
@@ -112,15 +112,15 @@ ContiguousMemory::Allocate(
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - this, m_contiguousMemory, %p, %p", this, m_contiguousMemory);
     for (ULONG direction = 0; direction < toULONG(IsoDirection::NumOfIsoDirection); ++direction)
     {
-        if ((static_cast<IsoDirection>(direction) == IsoDirection::In) && !usbAudioConfiguration->HasInputIsochronousInterface())
+        if ((static_cast<IsoDirection>(direction) == IsoDirection::In) && !usbAudioStreamInterfaceGroup->HasInputIsochronousInterface())
         {
             continue;
         }
-        if ((static_cast<IsoDirection>(direction) == IsoDirection::Out) && !usbAudioConfiguration->HasOutputIsochronousInterface())
+        if ((static_cast<IsoDirection>(direction) == IsoDirection::Out) && !usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface())
         {
             continue;
         }
-        ULONG maxPacketSize = GetMaxPacketSize(usbAudioConfiguration, static_cast<IsoDirection>(direction));
+        ULONG maxPacketSize = GetMaxPacketSize(usbAudioStreamInterfaceGroup, static_cast<IsoDirection>(direction));
         if (maxPacketSize == 0)
         {
             return STATUS_UNSUCCESSFUL;
@@ -285,20 +285,20 @@ _Use_decl_annotations_
 PAGED_CODE_SEG
 ULONG
 ContiguousMemory::GetMaxPacketSize(
-    USBAudioConfiguration * usbAudioConfiguration,
-    IsoDirection            direction
+    USBAudioStreamInterfaceGroup * usbAudioStreamInterfaceGroup,
+    IsoDirection                   direction
 )
 {
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    if (usbAudioConfiguration == nullptr)
+    if (usbAudioStreamInterfaceGroup == nullptr)
     {
         return 0;
     }
 
-    ULONG maxPacketSize = usbAudioConfiguration->GetMaxPacketSize(direction);
+    ULONG maxPacketSize = usbAudioStreamInterfaceGroup->GetMaxPacketSize(direction);
 
     if (maxPacketSize < UAC_DEFAULT_MAX_PACKET_SIZE)
     {

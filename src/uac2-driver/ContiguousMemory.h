@@ -24,6 +24,8 @@ Environment:
 #ifndef _CONTIGUOUSMEMORY_H_
 #define _CONTIGUOUSMEMORY_H_
 
+class USBAudioStreamInterfaceGroup;
+
 class ContiguousMemory
 {
   public:
@@ -38,10 +40,10 @@ class ContiguousMemory
     PAGED_CODE_SEG
     NTSTATUS
     Allocate(
-        _In_ USBAudioConfiguration * usbAudioConfiguration,
-        _In_ ULONG                   maxBurstOverride,
-        _In_ ULONG                   maxClassicFramesPerIrp,
-        _In_ ULONG                   framesPerMs
+        _In_ USBAudioStreamInterfaceGroup * usbAudioStreamInterfaceGroup,
+        _In_ ULONG                          maxBurstOverride,
+        _In_ ULONG                          maxClassicFramesPerIrp,
+        _In_ ULONG                          framesPerMs
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -93,8 +95,8 @@ class ContiguousMemory
     PAGED_CODE_SEG
     ULONG
     GetMaxPacketSize(
-        _In_ USBAudioConfiguration * usbAudioConfiguration,
-        _In_ IsoDirection            direction
+        _In_ USBAudioStreamInterfaceGroup * usbAudioStreamInterfaceGroup,
+        _In_ IsoDirection                   direction
     );
 
     ULONG  m_contiguousMemorySize[toInt(IsoDirection::NumOfIsoDirection)]{0};

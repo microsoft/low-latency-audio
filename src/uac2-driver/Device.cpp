@@ -34,6 +34,7 @@ Environment:
 #include "TransferObject.h"
 #include "StreamObject.h"
 #include "RtPacketObject.h"
+#include "AudioIsochronousEngine.h"
 #include "AsioBufferObject.h"
 #include "StreamEngine.h"
 #include "ErrorStatistics.h"
@@ -84,54 +85,6 @@ static const UAC_LATENCY_OFFSET_LIST g_LatencyOffsetList[] = {
 };
 
 //
-// Defines internal parameters corresponding to the specified ASIO Period Frames.
-// These parameters affect not only ASIO but also USB isochronous transfer settings,
-// and therefore influence the behavior of the ACX audio driver as well.
-//
-static const UAC_DRIVER_FLAGS g_DriverSettingsTable[] = {
-    {8192, {4, 4, 0xb0000008, 0x90000000}},
-    {4096, {4, 4, 0xb0000008, 0x90000000}},
-    {2048, {4, 4, 0xb0000008, 0x90000000}},
-    {1536, {4, 4, 0xb0000008, 0x90000000}},
-    {1024, {4, 4, 0xb0000008, 0x90000000}},
-    {768, {4, 4, 0xb0000008, 0x90000000}},
-    {512, {4, 4, 0xb0000007, 0x90000000}},
-    {384, {3, 3, 0xb0000006, 0x90000000}},
-    {256, {3, 3, 0xb0000005, 0x90000000}},
-    {192, {3, 3, 0xb0000004, 0x90000000}},
-    {128, {3, 3, 0xb0000004, 0x90000000}},
-    {96, {3, 2, 0xb0000003, 0x90000000}},
-    {64, {3, 2, 0xb0000003, 0x90000000}},
-    {48, {3, 1, 0xb0000002, 0x90000000}},
-    {32, {3, 1, 0xb0000002, 0x90000000}},
-    {24, {3, 1, 0xb0000002, 0x90000000}},
-    {16, {3, 1, 0xb0000002, 0x90000000}},
-    {12, {3, 1, 0xb0000002, 0x90000000}},
-    {8, {3, 1, 0xb0000002, 0x90000000}},
-    {4, {3, 1, 0xb0000002, 0x90000000}},
-    {0, {4, 4, 0xb0000007, 0x90000000}},
-};
-
-static const int g_SettingsCount = sizeof(g_DriverSettingsTable) / sizeof(g_DriverSettingsTable[0]);
-
-// INTERNAL_PARAMETERS Registry Value Name
-static const WCHAR c_FirstPacketLatencyName[] = L"FirstPacketLatency";
-static const WCHAR c_ClassicFramesPerIrpName[] = L"ClassicFramesPerIrp";
-static const WCHAR c_MaxIrpNumberName[] = L"MaxIrpNumber";
-static const WCHAR c_PreSendFramesName[] = L"PreSendFrames";
-static const WCHAR c_OutputFrameDelayName[] = L"OutputFrameDelay";
-static const WCHAR c_DelayedOutputBufferSwitchName[] = L"DelayedOutputBufferSwitch";
-static const WCHAR c_InputBufferOperationOffsetName[] = L"InputBufferOperationOffset";
-static const WCHAR c_InputHubOffsetName[] = L"InputHubOffset";
-static const WCHAR c_OutputBufferOperationOffsetName[] = L"OutputBufferOperationOffset";
-static const WCHAR c_OutputHubOffsetName[] = L"OutputHubOffset";
-static const WCHAR c_BufferThreadPriorityName[] = L"BufferThreadPriority";
-static const WCHAR c_ClassicFramesPerIrp2Name[] = L"ClassicFramesPerIrp2";
-static const WCHAR c_SuggestedBufferPeriodName[] = L"SuggestedBufferPeriod";
-static const WCHAR c_AsioDeviceName[] = L"AsioDevice";
-static const WCHAR c_SampleRateName[] = L"SampleRate";
-
-//
 //  Local function prototypes
 //
 
@@ -167,94 +120,8 @@ ConfigureDevice(
 __drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
 static NTSTATUS
-AbortPipes(
-    _In_ IsoDirection direction,
-    _In_ WDFDEVICE    device
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS
-InitializePipeContextForSuperSpeedDevice(
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ WDFUSBINTERFACE interface,
-    _In_ UCHAR           selectedAlternateSetting,
-    _In_ WDFUSBPIPE      pipe
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS
-RetrieveDeviceInformation(
-    _In_ WDFDEVICE device
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS
-InitializePipeContextForSuperSpeedIsochPipe(
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ UCHAR           interfaceNumber,
-    _In_ UCHAR           selectedAlternateSetting,
-    _In_ WDFUSBPIPE      pipe
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS
-InitializePipeContextForHighSpeedDevice(
-    _In_ WDFUSBPIPE pipe
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS
-InitializePipeContextForFullSpeedDevice(
-    _In_ WDFUSBPIPE pipe
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static PUSB_ENDPOINT_DESCRIPTOR
-GetEndpointDescriptorForEndpointAddress(
-    _In_ PDEVICE_CONTEXT                                  deviceContext,
-    _In_ UCHAR                                            interfaceNumber,
-    _In_ UCHAR                                            selectedAlternateSetting,
-    _In_ UCHAR                                            endpointAddress,
-    _Out_ PUSB_SUPERSPEED_ENDPOINT_COMPANION_DESCRIPTOR * endpointCompanionDescriptor
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS
-ActivateAudioInterface(
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ ULONG           desiredSampleRate,
-    _In_ ULONG           desiredFormatType,
-    _In_ ULONG           desiredFormat,
-    _In_ ULONG           desiredBytesPerSampleIn,
-    _In_ ULONG           desiredValidBitsPerSampleIn,
-    _In_ ULONG           desiredBytesPerSampleOut,
-    _In_ ULONG           desiredValidBitsPerSampleOut,
-    _In_ bool            forceSetSampleRate = false
-
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS
 SelectConfiguration(
     _In_ PDEVICE_CONTEXT deviceContext
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS
-SelectAlternateInterface(
-    _In_ IsoDirection    direction,
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ UCHAR           interfaceNumber,
-    _In_ UCHAR           alternateSetting
 );
 
 __drv_maxIRQL(PASSIVE_LEVEL)
@@ -278,189 +145,8 @@ GetStackCapability(
 
 __drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-static bool IsValidInternalParameters(
-    _In_ const DEVICE_CONTEXT::INTERNAL_PARAMETERS & internalParameters
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS UpdateFramePerIrp(
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ ULONG           bufferPeriod
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS UpdateBufferOperationOffset(
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ ULONG           bufferPeriod
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS CalculateUsbLatency(
-    _In_ PDEVICE_CONTEXT   deviceContext,
-    _Out_ PUAC_USB_LATENCY usbLatency
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static void BuildChannelMap(
-    _In_ PDEVICE_CONTEXT deviceContext
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS SetPipeInformation(
-    _In_ PDEVICE_CONTEXT deviceContext
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
 static NTSTATUS SetInterruptPipeInformation(
     _In_ PDEVICE_CONTEXT deviceContext
-);
-
-#if 0
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS ResetPipeInformation(
-    _In_ PDEVICE_CONTEXT deviceContext
-);
-#endif
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS StartIsoStream(
-    _In_ PDEVICE_CONTEXT deviceContext
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS FreeTransferObject(
-    _In_ TransferObject * transferObject
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS StartTransfer(
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ StreamObject *  streamObject,
-    _In_ ULONG           index,
-    _In_ IsoDirection    direction
-);
-
-__drv_maxIRQL(DISPATCH_LEVEL)
-NONPAGED_CODE_SEG
-static NTSTATUS InitializeIsoUrbIn(
-    _In_ PDEVICE_CONTEXT  deviceContext,
-    _In_ StreamObject *   streamObject,
-    _In_ TransferObject * transferObject,
-    _In_ ULONG            numPackets
-);
-
-__drv_maxIRQL(DISPATCH_LEVEL)
-NONPAGED_CODE_SEG
-static NTSTATUS InitializeIsoUrbOut(
-    _In_ PDEVICE_CONTEXT  deviceContext,
-    _In_ StreamObject *   streamObject,
-    _In_ TransferObject * transferObject,
-    _In_ ULONG            numPackets
-);
-
-__drv_maxIRQL(DISPATCH_LEVEL)
-NONPAGED_CODE_SEG
-static NTSTATUS InitializeIsoUrbFeedback(
-    _In_ PDEVICE_CONTEXT  deviceContext,
-    _In_ StreamObject *   streamObject,
-    _In_ TransferObject * transferObject,
-    _In_ ULONG            numPackets
-);
-
-__drv_maxIRQL(DISPATCH_LEVEL)
-NONPAGED_CODE_SEG
-static NTSTATUS ProcessTransferIn(
-    _In_ PDEVICE_CONTEXT  deviceContext,
-    _In_ StreamObject *   streamObject,
-    _In_ TransferObject * transferObject
-);
-
-__drv_maxIRQL(DISPATCH_LEVEL)
-NONPAGED_CODE_SEG
-static NTSTATUS ProcessTransferOut(
-    _In_ PDEVICE_CONTEXT  deviceContext,
-    _In_ StreamObject *   streamObject,
-    _In_ TransferObject * transferObject
-);
-
-__drv_maxIRQL(DISPATCH_LEVEL)
-NONPAGED_CODE_SEG
-static NTSTATUS ProcessTransferFeedback(
-    _In_ PDEVICE_CONTEXT  deviceContext,
-    _In_ StreamObject *   streamObject,
-    _In_ TransferObject * transferObject
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS StopIsoStream(
-    _In_ PDEVICE_CONTEXT deviceContext
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS NotifyDataFormatChange(
-    _In_ WDFDEVICE     device,
-    _In_ ACXCIRCUIT    circuit,
-    _In_ ACXPIN        pin,
-    _In_ ACXDATAFORMAT originalDataFormat
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS NotifyAllPinsDataFormatChange(
-    _In_ bool            isInput,
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ ACXDATAFORMAT   dataFormatBeforeChange,
-    _In_ ACXDATAFORMAT   dataFormatAfterChange
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS LoadInternalParametersFromDeviceRegistry(
-    _In_ PDEVICE_CONTEXT deviceContext
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS SaveInternalParametersToDeviceRegistry(
-    _In_ PDEVICE_CONTEXT deviceContext
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS SaveAsioDeviceToRegistry(
-    _In_ PUNICODE_STRING asioDevice
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS LoadAsioDeviceFromRegistry(
-    _Out_ PUNICODE_STRING asioDevice
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS SaveSampleRateToRegistry(
-    _In_ WDFDEVICE device,
-    _In_ ULONG     sampleRate
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-static NTSTATUS LoadSampleRateFromRegistry(
-    _In_ WDFDEVICE device,
-    _Out_ ULONG &  sampleRate
 );
 
 __drv_maxIRQL(PASSIVE_LEVEL)
@@ -712,22 +398,11 @@ Return Value:
     deviceContext->Device = device;
     KeQueryPerformanceCounter(&deviceContext->PerformanceCounterFrequency);
 
-    deviceContext->Render = nullptr;
-    deviceContext->Capture = nullptr;
     deviceContext->ExcludeD3Cold = WdfFalse;
     deviceContext->IsDeviceRemoteWakeable = false;
     deviceContext->IsDeviceHighSpeed = false;
     deviceContext->IsDeviceSuperSpeed = false;
-    deviceContext->StartCounterAsio = 0;
-    deviceContext->StartCounterWdmAudio = 0;
-    deviceContext->StartCounterIsoStream = 0;
     deviceContext->IsIdleStopSucceeded = FALSE;
-
-    deviceContext->ContiguousMemory = ContiguousMemory::Create();
-    RETURN_NTSTATUS_IF_TRUE(deviceContext->ContiguousMemory == nullptr, STATUS_INSUFFICIENT_RESOURCES);
-
-    deviceContext->RtPacketObject = RtPacketObject::Create(deviceContext);
-    RETURN_NTSTATUS_IF_TRUE(deviceContext->RtPacketObject == nullptr, STATUS_INSUFFICIENT_RESOURCES);
 
     deviceContext->ErrorStatistics = ErrorStatistics::Create();
     RETURN_NTSTATUS_IF_TRUE(deviceContext->ErrorStatistics == nullptr, STATUS_INSUFFICIENT_RESOURCES);
@@ -792,41 +467,6 @@ Return Value:
 
     deviceContext->IsPrepareHardwareSucceeded = false;
 
-    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.ParentObject = device;
-
-    status = WdfWaitLockCreate(&attributes, &deviceContext->StreamWaitLock);
-    if (!NT_SUCCESS(status))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
-        return status;
-    }
-
-    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.ParentObject = device;
-
-    status = WdfWaitLockCreate(&attributes, &deviceContext->StreamEngineWaitLock);
-    if (!NT_SUCCESS(status))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
-        return status;
-    }
-
-    //
-    // AsioWaitLock protects the AsioBufferObject within a narrower scope compared to StreamWaitLock.
-    // Locking order: StreamWaitLock is acquired first, then AsioWaitLock.
-    // This design ensures proper synchronization and avoids deadlocks.
-    //
-    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.ParentObject = device;
-
-    status = WdfWaitLockCreate(&attributes, &deviceContext->AsioWaitLock);
-    if (!NT_SUCCESS(status))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
-        return status;
-    }
-
     status = ReadAndSelectDescriptors(device);
     if (!NT_SUCCESS(status))
     {
@@ -834,30 +474,18 @@ Return Value:
         return status;
     }
 
+    deviceContext->SupportedControl = g_SupportedControlList[0];
+    for (int i = 1; i < ARRAYSIZE(g_SupportedControlList); ++i)
     {
-        status = LoadInternalParametersFromDeviceRegistry(deviceContext);
-
-        if (!NT_SUCCESS(status))
+        if ((g_SupportedControlList[i].VendorId == deviceContext->UsbDeviceDescriptor.idVendor) &&
+            (g_SupportedControlList[i].ProductId == deviceContext->UsbDeviceDescriptor.idProduct) &&
+            (g_SupportedControlList[i].DeviceRelease ==
+             (deviceContext->UsbDeviceDescriptor.bcdDevice & g_SupportedControlList[i].DeviceReleaseMask)))
         {
-            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "LoadInternalParametersFromDeviceRegistry failed %!STATUS!", status);
-            return status;
+            deviceContext->SupportedControl = g_SupportedControlList[i];
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "This device %s CLASS control requests.", deviceContext->SupportedControl.ClassRequestSupported ? "supports" : "does not support");
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "This device %s VENDOR control requests.", deviceContext->SupportedControl.VendorRequestSupported ? "supports" : "does not support");
         }
-
-        deviceContext->SupportedControl = g_SupportedControlList[0];
-        for (int i = 1; i < ARRAYSIZE(g_SupportedControlList); ++i)
-        {
-            if ((g_SupportedControlList[i].VendorId == deviceContext->UsbDeviceDescriptor.idVendor) &&
-                (g_SupportedControlList[i].ProductId == deviceContext->UsbDeviceDescriptor.idProduct) &&
-                (g_SupportedControlList[i].DeviceRelease ==
-                 (deviceContext->UsbDeviceDescriptor.bcdDevice & g_SupportedControlList[i].DeviceReleaseMask)))
-            {
-                deviceContext->SupportedControl = g_SupportedControlList[i];
-                TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "This device %s CLASS control requests.", deviceContext->SupportedControl.ClassRequestSupported ? "supports" : "does not support");
-                TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "This device %s VENDOR control requests.", deviceContext->SupportedControl.VendorRequestSupported ? "supports" : "does not support");
-            }
-        }
-
-        deviceContext->DesiredSampleFormat = UACSampleFormat::UAC_SAMPLE_FORMAT_PCM;
     }
 
     deviceContext->UsbAudioConfiguration = USBAudioConfiguration::Create(deviceContext, &deviceContext->UsbDeviceDescriptor);
@@ -930,7 +558,7 @@ Return Value:
         deviceContext->LatencyOffsetList = &(g_LatencyOffsetList[0]);
     }
 
-    if (deviceContext->AudioProperty.VendorId == 0)
+    if (deviceContext->VendorId == 0)
     {
         ULONG       retryCount = 0;
         const ULONG maxRetry = 30;
@@ -957,106 +585,70 @@ Return Value:
         }
         RETURN_NTSTATUS_IF_FAILED(status);
 
-        ULONG desiredSampleRate = UAC_DEFAULT_SAMPLE_RATE;
-        LoadSampleRateFromRegistry(deviceContext->Device, desiredSampleRate);
+        deviceContext->NumberOfAudioIsochronousEngines = deviceContext->UsbAudioConfiguration->GetNumOfStreamInterfaceGroup();
 
-        // The default is PCM, but for devices that do not support PCM, the format closest to PCM will be selected.
-        ULONG desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
-        ULONG desiredFormat = NS_USBAudio0200::PCM;
-        for (ULONG sampleFormat = 0; sampleFormat < toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_LAST_ENTRY); sampleFormat++)
+        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+        attributes.ParentObject = deviceContext->UsbDevice;
+
+        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(AudioIsochronousEngine *) * deviceContext->NumberOfAudioIsochronousEngines, &deviceContext->AudioIsochronousEnginesMemory, (PVOID *)&deviceContext->AudioIsochronousEngines));
+
+        RtlZeroMemory(deviceContext->AudioIsochronousEngines, sizeof(AudioIsochronousEngine *) * deviceContext->NumberOfAudioIsochronousEngines);
+
+        ULONG index = 0;
+        for (auto usbAudioStreamInterfaceGroup : *deviceContext->UsbAudioConfiguration)
         {
-            if ((deviceContext->AudioProperty.SupportedSampleFormats & (1 << sampleFormat)))
+            if (index < deviceContext->NumberOfAudioIsochronousEngines)
             {
-                RETURN_NTSTATUS_IF_FAILED(USBAudioDataFormat::ConvertFormatToSampleFormat((UACSampleFormat)sampleFormat, desiredFormatType, desiredFormat));
-                break;
+                DECLARE_UNICODE_STRING_SIZE(circuitName, CIRCUITNAMELENGTH);
+
+                deviceContext->AudioIsochronousEngines[index] = AudioIsochronousEngine::Create(deviceContext, usbAudioStreamInterfaceGroup);
+                RETURN_NTSTATUS_IF_TRUE_ACTION(deviceContext->AudioIsochronousEngines[index] == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, status);
+                RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->Initialize());
+
+                RETURN_NTSTATUS_IF_FAILED(RtlUnicodeStringPrintf(&circuitName, RENDERCIRCUITNAME, index));
+                TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "render device name = %wZ, DeviceName = %ws", &circuitName, deviceContext->DeviceName);
+                RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->AddStaticRender(device, &CODEC_RENDER_COMPONENT_GUID, &circuitName));
+
+                //
+                // The driver uses this DDI to associate a circuit to a device. After
+                // this call the circuit is not visible until the device goes in D0.
+                // For a real driver there should be a check here to make sure the
+                // circuit has not been added already (there could be a situation where
+                // prepareHardware is called multiple times and releaseHardware is only
+                // called once).
+                //
+                RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->AddRenderCircuit(device));
+
+                RETURN_NTSTATUS_IF_FAILED(RtlUnicodeStringPrintf(&circuitName, CAPTURECIRCUITNAME, index));
+                TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "capture device name = %wZ, DeviceName = %ws", &circuitName, deviceContext->DeviceName);
+                RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->AddStaticCapture(device, &CODEC_CAPTURE_COMPONENT_GUID, &MIC_CUSTOM_NAME, &circuitName));
+
+                //
+                // The driver uses this DDI to associate a circuit to a device. After
+                // this call the circuit is not visible until the device goes in D0.
+                // For a real driver there should be a check here to make sure the
+                // circuit has not been added already (there could be a situation where
+                // prepareHardware is called multiple times and releaseHardware is only
+                // called once).
+                //
+                RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->AddCaptureCircuit(device));
+
+                // if (deviceContext->Render != nullptr)
+                // {
+                // 	RETURN_NTSTATUS_IF_FAILED(AcxDeviceAddCircuit(device, deviceContext->Render));
+                // }
+
+                // if (deviceContext->Capture != nullptr)
+                // {
+                // 	RETURN_NTSTATUS_IF_FAILED(AcxDeviceAddCircuit(device, deviceContext->Capture));
+                // }
+
+                deviceContext->AudioIsochronousEngines[index]->ReportInternalParameters();
             }
+            index++;
         }
-
-        RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetNearestSupportedSampleRate(desiredSampleRate));
-
-        ULONG inputBytesPerSample = 0;
-        ULONG inputValidBitsPerSample = 0;
-        ULONG outputBytesPerSample = 0;
-        ULONG outputValidBitsPerSample = 0;
-
-        if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
-        {
-            RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample));
-        }
-        if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-        {
-            RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample));
-        }
-
-        RETURN_NTSTATUS_IF_FAILED(ActivateAudioInterface(deviceContext, desiredSampleRate, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample, outputBytesPerSample, outputValidBitsPerSample, true));
-
-        if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-        {
-            RETURN_NTSTATUS_IF_FAILED(SelectAlternateInterface(IsoDirection::Out, deviceContext, deviceContext->OutputProperty.InterfaceNumber, 0));
-        }
-        if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
-        {
-            RETURN_NTSTATUS_IF_FAILED(SelectAlternateInterface(IsoDirection::In, deviceContext, deviceContext->InputProperty.InterfaceNumber, 0));
-        }
-
-        ULONG numOfInputDevices = 0, numOfOutputDevices = 0;
-        RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamDevices(true, numOfInputDevices));
-        RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamDevices(false, numOfOutputDevices));
-
-        RETURN_NTSTATUS_IF_FAILED(deviceContext->RtPacketObject->AssignDevices(numOfInputDevices, numOfOutputDevices));
-
-        if (numOfInputDevices != 0)
-        {
-            WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-            attributes.ParentObject = deviceContext->Device;
-
-            RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(CStreamEngine *) * numOfInputDevices, &deviceContext->CaptureStreamEngineMemory, (PVOID *)&deviceContext->CaptureStreamEngine));
-            RtlZeroMemory(deviceContext->CaptureStreamEngine, sizeof(CStreamEngine *) * numOfInputDevices);
-        }
-        deviceContext->NumOfInputDevices = numOfInputDevices;
-
-        if (numOfOutputDevices != 0)
-        {
-            WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-            attributes.ParentObject = deviceContext->Device;
-
-            RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(CStreamEngine *) * numOfOutputDevices, &deviceContext->RenderStreamEngineMemory, (PVOID *)&deviceContext->RenderStreamEngine));
-            RtlZeroMemory(deviceContext->RenderStreamEngine, sizeof(CStreamEngine *) * numOfOutputDevices);
-        }
-        deviceContext->NumOfOutputDevices = numOfOutputDevices;
     }
     ReportInternalParameters(deviceContext);
-
-    //
-    // To prevent the DMA buffer from becoming a double buffer on a PC
-    // with 4GB or more of memory, contiguous memory is allocated in
-    // an area less than 4GB.
-    //
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->ContiguousMemory->Allocate(deviceContext->UsbAudioConfiguration, deviceContext->SupportedControl.MaxBurstOverride, UAC_MAX_CLASSIC_FRAMES_PER_IRP, deviceContext->FramesPerMs));
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "renderDeviceName = %wZ, DeviceName = %ws", &renderCircuitName, deviceContext->DeviceName);
-    RETURN_NTSTATUS_IF_FAILED(CodecR_AddStaticRender(device, &CODEC_RENDER_COMPONENT_GUID, &renderCircuitName));
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "captureDeviceName = %wZ, DeviceName = %ws", &captureCircuitName, deviceContext->DeviceName);
-    RETURN_NTSTATUS_IF_FAILED(CodecC_AddStaticCapture(device, &CODEC_CAPTURE_COMPONENT_GUID, &MIC_CUSTOM_NAME, &captureCircuitName));
-
-    //
-    // The driver uses this DDI to associate a circuit to a device. After
-    // this call the circuit is not visible until the device goes in D0.
-    // For a real driver there should be a check here to make sure the
-    // circuit has not been added already (there could be a situation where
-    // prepareHardware is called multiple times and releaseHardware is only
-    // called once).
-    //
-    if (deviceContext->Render != nullptr)
-    {
-        RETURN_NTSTATUS_IF_FAILED(AcxDeviceAddCircuit(device, deviceContext->Render));
-    }
-
-    if (deviceContext->Capture != nullptr)
-    {
-        RETURN_NTSTATUS_IF_FAILED(AcxDeviceAddCircuit(device, deviceContext->Capture));
-    }
 
     if (deviceContext->InterruptMessageProperty.IsValid)
     {
@@ -1109,19 +701,26 @@ Return Value:
     deviceContext = GetDeviceContext(device);
     NT_ASSERT(deviceContext != nullptr);
 
-    if (deviceContext->IsPrepareHardwareSucceeded)
-    {
-        SaveInternalParametersToDeviceRegistry(deviceContext);
-
-        SaveSampleRateToRegistry(deviceContext->Device, deviceContext->AudioProperty.SampleRate);
-    }
-
     USBAudioAcxDriverStopInterruptDataReception(deviceContext);
 
-    if (deviceContext->ContiguousMemory != nullptr)
+    if ((deviceContext->AudioIsochronousEnginesMemory != nullptr) && (deviceContext->AudioIsochronousEngines != nullptr))
     {
-        delete deviceContext->ContiguousMemory;
-        deviceContext->ContiguousMemory = nullptr;
+        for (ULONG index = 0; index < deviceContext->NumberOfAudioIsochronousEngines; index++)
+        {
+            if (deviceContext->AudioIsochronousEngines[index] != nullptr)
+            {
+                //
+                // The driver uses this DDI to delete a circuit from the current device.
+                //
+                deviceContext->AudioIsochronousEngines[index]->RemoveRenderCircuit(device);
+                deviceContext->AudioIsochronousEngines[index]->RemoveCaptureCircuit(device);
+                delete deviceContext->AudioIsochronousEngines[index];
+                deviceContext->AudioIsochronousEngines[index] = nullptr;
+            }
+        }
+        WdfObjectDelete(deviceContext->AudioIsochronousEnginesMemory);
+        deviceContext->AudioIsochronousEnginesMemory = nullptr;
+        deviceContext->AudioIsochronousEngines = nullptr;
     }
 
     if (deviceContext->UsbAudioConfiguration != nullptr)
@@ -1130,43 +729,10 @@ Return Value:
         deviceContext->UsbAudioConfiguration = nullptr;
     }
 
-    if (deviceContext->RtPacketObject != nullptr)
-    {
-        delete deviceContext->RtPacketObject;
-        deviceContext->RtPacketObject = nullptr;
-    }
-
-    if (deviceContext->StreamObject != nullptr)
-    {
-        delete deviceContext->StreamObject;
-        deviceContext->StreamObject = nullptr;
-    }
-
-    if (deviceContext->AsioBufferObject != nullptr)
-    {
-        delete deviceContext->AsioBufferObject;
-        deviceContext->AsioBufferObject = nullptr;
-    }
-
     if (deviceContext->ErrorStatistics != nullptr)
     {
         delete deviceContext->ErrorStatistics;
         deviceContext->ErrorStatistics = nullptr;
-    }
-
-    //
-    // The driver uses this DDI to delete a circuit from the current device.
-    //
-    if (deviceContext->Render != nullptr)
-    {
-        AcxDeviceRemoveCircuit(device, deviceContext->Render);
-        deviceContext->Render = nullptr;
-    }
-
-    if (deviceContext->Capture != nullptr)
-    {
-        AcxDeviceRemoveCircuit(device, deviceContext->Capture);
-        deviceContext->Capture = nullptr;
     }
 
     if (deviceContext->UsbConfigurationDescriptorHandle != nullptr)
@@ -1196,18 +762,6 @@ Return Value:
         deviceContext->Pairs = nullptr;
     }
 
-    if (deviceContext->CaptureStreamEngineMemory != nullptr)
-    {
-        WdfObjectDelete(deviceContext->CaptureStreamEngineMemory);
-        deviceContext->CaptureStreamEngineMemory = nullptr;
-    }
-
-    if (deviceContext->RenderStreamEngineMemory != nullptr)
-    {
-        WdfObjectDelete(deviceContext->RenderStreamEngineMemory);
-        deviceContext->RenderStreamEngineMemory = nullptr;
-    }
-
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
@@ -1228,9 +782,15 @@ VOID USBAudioAcxDriverEvtDeviceSurpriseRemoval(
     deviceContext = GetDeviceContext(device);
     NT_ASSERT(deviceContext != nullptr);
 
-    if (deviceContext->StreamObject != nullptr)
+    if (deviceContext->AudioIsochronousEngines != nullptr)
     {
-        deviceContext->StreamObject->SetTerminateStream();
+        for (ULONG index = 0; index < deviceContext->NumberOfAudioIsochronousEngines; index++)
+        {
+            if (deviceContext->AudioIsochronousEngines[index] != nullptr)
+            {
+                deviceContext->AudioIsochronousEngines[index]->SetTerminateStream();
+            }
+        }
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
@@ -1254,7 +814,16 @@ USBAudioAcxDriverEvtDeviceD0Entry(
     deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
 
-    deviceContext->AudioProperty.IsAccessible = TRUE;
+    if (deviceContext->AudioIsochronousEngines != nullptr)
+    {
+        for (ULONG index = 0; index < deviceContext->NumberOfAudioIsochronousEngines; index++)
+        {
+            if (deviceContext->AudioIsochronousEngines[index] != nullptr)
+            {
+                deviceContext->AudioIsochronousEngines[index]->D0Entry();
+            }
+        }
+    }
 
     if (deviceContext->InterruptMessageProperty.IsValid && deviceContext->InterruptInterfaceAndPipe.Pipe != nullptr)
     {
@@ -1287,34 +856,16 @@ USBAudioAcxDriverEvtDeviceD0Exit(
     deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
 
-    deviceContext->AudioProperty.IsAccessible = FALSE;
-
-    if (deviceContext->StreamObject != nullptr)
+    if (deviceContext->AudioIsochronousEngines != nullptr)
     {
-        deviceContext->StreamObject->SetTerminateStream();
-    }
-
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-    if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
-    {
-        WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-        if (deviceContext->AsioBufferObject != nullptr)
+        for (ULONG index = 0; index < deviceContext->NumberOfAudioIsochronousEngines; index++)
         {
-            deviceContext->AsioBufferObject->Clear();
+            if (deviceContext->AudioIsochronousEngines[index] != nullptr)
+            {
+                deviceContext->AudioIsochronousEngines[index]->D0Exit();
+            }
         }
-        WdfWaitLockRelease(deviceContext->AsioWaitLock);
-        if (deviceContext->ContiguousMemory != nullptr)
-        {
-            deviceContext->ContiguousMemory->Clear();
-        }
-        TraceEvents(TRACE_LEVEL_INFORMATION, FLAG_POWER, "Stop USB isochronous transfer.");
-
-        StopIsoStream(deviceContext);
-
-        InterlockedExchange(&deviceContext->StartCounterAsio, 0);
-        InterlockedExchange(&deviceContext->StartCounterWdmAudio, 0);
     }
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     if (deviceContext->InterruptMessageProperty.IsValid && deviceContext->InterruptInterfaceAndPipe.Pipe != nullptr)
     {
@@ -1384,7 +935,7 @@ Codec_SetPowerPolicy(
     idleSettings.IdleTimeout = IDLE_POWER_TIMEOUT;
     idleSettings.IdleTimeoutType = SystemManagedIdleTimeoutWithHint;
     idleSettings.ExcludeD3Cold = deviceContext->ExcludeD3Cold;
-    
+
     if (deviceContext->UsbAudioConfiguration->HasInterruptDataMessageInterfaces() && deviceContext->InterruptMessageProperty.IsValid)
     {
         //
@@ -1406,6 +957,57 @@ Codec_SetPowerPolicy(
     TraceEvents(TRACE_LEVEL_INFORMATION, FLAG_POWER, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
+RetrieveDeviceInformation(
+    WDFDEVICE device
+)
+{
+    PDEVICE_CONTEXT            deviceContext;
+    WDF_USB_DEVICE_INFORMATION info;
+    NTSTATUS                   status;
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
+    deviceContext = GetDeviceContext(device);
+
+    WDF_USB_DEVICE_INFORMATION_INIT(&info);
+
+    //
+    // Retrieve USBD version information, port driver capabilities and device
+    // capabilities such as speed, power, etc.
+    //
+    status = WdfUsbTargetDeviceRetrieveInformation(deviceContext->UsbDevice, &info);
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed %!STATUS!", status);
+        return status;
+    }
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - HcdPortCapabilities = 0x%x, Traits = 0x%x", info.HcdPortCapabilities, info.Traits);
+    deviceContext->IsDeviceHighSpeed = (info.Traits & WDF_USB_DEVICE_TRAIT_AT_HIGH_SPEED) ? true : false;
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " - DeviceIsHighSpeed: %!bool!", deviceContext->IsDeviceHighSpeed);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " - IsDeviceSelfPowered: %!bool!", (info.Traits & WDF_USB_DEVICE_TRAIT_SELF_POWERED) ? TRUE : FALSE);
+
+    deviceContext->IsDeviceRemoteWakeable = (info.Traits & WDF_USB_DEVICE_TRAIT_REMOTE_WAKE_CAPABLE) ? true : false;
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " - IsDeviceRemoteWakeable: %!bool!", deviceContext->IsDeviceRemoteWakeable);
+
+    status = GetStackCapability(deviceContext, &GUID_USB_CAPABILITY_DEVICE_CONNECTION_SUPER_SPEED_COMPATIBLE, 0, nullptr);
+    if (NT_SUCCESS(status))
+    {
+        deviceContext->IsDeviceSuperSpeed = true;
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " - DeviceIsSuperSpeed: %!bool!", deviceContext->IsDeviceSuperSpeed);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+
+    return STATUS_SUCCESS;
 }
 
 NONPAGED_CODE_SEG
@@ -1623,702 +1225,6 @@ Return Value:
 }
 
 PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS
-AbortPipes(
-    IsoDirection direction,
-    WDFDEVICE    device
-)
-/*++
-
-Routine Description
-
-    sends an abort pipe request on all open pipes.
-
-Arguments:
-
-    device - Handle to a framework device
-
-Return Value:
-
-    NT status value
-
---*/
-{
-    ULONG           count;
-    NTSTATUS        status;
-    PDEVICE_CONTEXT deviceContext;
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-    //
-    // initialize variables
-    //
-    deviceContext = GetDeviceContext(device);
-
-    DEVICE_CONTEXT::SelectedInterfaceAndPipe & selectedInterfaceAndPipe = (direction == IsoDirection::In) ? deviceContext->InputInterfaceAndPipe : (direction == IsoDirection::Out) ? deviceContext->OutputInterfaceAndPipe
-                                                                                                                                                                                    : deviceContext->FeedbackInterfaceAndPipe;
-
-    count = selectedInterfaceAndPipe.NumberConfiguredPipes;
-
-    if (selectedInterfaceAndPipe.UsbInterface != nullptr)
-    {
-        for (UCHAR pipeIndex = 0; pipeIndex < count; pipeIndex++)
-        {
-            WDFUSBPIPE pipe;
-            pipe = WdfUsbInterfaceGetConfiguredPipe(selectedInterfaceAndPipe.UsbInterface, pipeIndex, nullptr);
-
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "Aborting open pipe %d", pipeIndex);
-
-            status = WdfUsbTargetPipeAbortSynchronously(pipe,
-                                                        WDF_NO_HANDLE, // WDFREQUEST
-                                                        nullptr);      // PWDF_REQUEST_SEND_OPTIONS
-
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed WdfUsbTargetPipeAbortSynchronously failed %!STATUS!", status);
-                break;
-            }
-        }
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
-
-    return STATUS_SUCCESS;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS
-InitializePipeContextForSuperSpeedDevice(
-    PDEVICE_CONTEXT deviceContext,
-    WDFUSBINTERFACE Interface,
-    UCHAR           selectedAlternateSetting,
-    WDFUSBPIPE      pipe
-)
-/*++
-
-Routine Description
-
-    This function initialize pipe context for super speed isoch and
-    bulk endpoints.
-
-Return Value:
-
-    NT status value
-
---*/
-{
-    WDF_USB_PIPE_INFORMATION pipeInfo;
-    NTSTATUS                 status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    WDF_USB_PIPE_INFORMATION_INIT(&pipeInfo);
-    WdfUsbTargetPipeGetInformation(pipe, &pipeInfo);
-
-    //
-    // We only use pipe context for super speed isoch and bulk speed bulk endpoints.
-    //
-    if ((WdfUsbPipeTypeIsochronous == pipeInfo.PipeType))
-    {
-
-        status = InitializePipeContextForSuperSpeedIsochPipe(deviceContext, WdfUsbInterfaceGetInterfaceNumber(Interface), selectedAlternateSetting, pipe);
-    }
-    else if (WdfUsbPipeTypeBulk == pipeInfo.PipeType)
-    {
-
-        ASSERT(WdfUsbPipeTypeBulk != pipeInfo.PipeType);
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-PUSB_ENDPOINT_DESCRIPTOR
-GetEndpointDescriptorForEndpointAddress(
-    PDEVICE_CONTEXT                                 deviceContext,
-    UCHAR                                           InterfaceNumber,
-    UCHAR                                           selectedAlternateSetting,
-    UCHAR                                           endpointAddress,
-    PUSB_SUPERSPEED_ENDPOINT_COMPANION_DESCRIPTOR * endpointCompanionDescriptor
-)
-/*++
-
-Routine Description:
-
-    The helper routine gets the Endpoint Descriptor matched with endpointAddress and return
-    its Endpoint Companion Descriptor if it has.
-
-    USBAudioAcxDriverValidateConfigurationDescriptor already validates that descriptors lie within
-    allocated buffer.
-
-Arguments:
-
-    deviceContext - pointer to the device context which includes configuration descriptor
-
-    interfaceNumber - interfaceNumber of selected interface
-
-    endpointAddress - endpointAddress of the Pipe
-
-    endpointCompanionDescriptor - pointer to the Endpoint Companion Descriptor pointer
-
-Return Value:
-
-    Pointer to Endpoint Descriptor
-
---*/
-{
-
-    PUSB_COMMON_DESCRIPTOR        pCommonDescriptorHeader = nullptr;
-    PUSB_CONFIGURATION_DESCRIPTOR pConfigurationDescriptor = nullptr;
-    PUSB_INTERFACE_DESCRIPTOR     pInterfaceDescriptor = nullptr;
-    PUSB_ENDPOINT_DESCRIPTOR      pEndpointDescriptor = nullptr;
-    PUCHAR                        startingPosition;
-    ULONG                         index;
-    bool                          found = false;
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - interface %u, alternate %u, endpoint %u", InterfaceNumber, selectedAlternateSetting, endpointAddress);
-
-    pConfigurationDescriptor = deviceContext->UsbConfigurationDescriptor;
-
-    *endpointCompanionDescriptor = nullptr;
-
-    //
-    // Parse the ConfigurationDescriptor (including all Interface and
-    // Endpoint Descriptors) and locate a Interface Descriptor which
-    // matches the interfaceNumber, AlternateSetting, InterfaceClass,
-    // InterfaceSubClass, and InterfaceProtocol parameters.
-    //
-    pInterfaceDescriptor = USBD_ParseConfigurationDescriptorEx(
-        pConfigurationDescriptor,
-        pConfigurationDescriptor,
-        InterfaceNumber,
-        selectedAlternateSetting,
-        -1, // InterfaceClass, don't care
-        -1, // InterfaceSubClass, don't care
-        -1  // InterfaceProtocol, don't care
-    );
-
-    if (pInterfaceDescriptor == nullptr)
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! USBD_ParseConfigurationDescriptorEx failed to retrieve Interface Descriptor.");
-        goto End;
-    }
-
-    startingPosition = (PUCHAR)pInterfaceDescriptor;
-
-    for (index = 0; index < pInterfaceDescriptor->bNumEndpoints; index++)
-    {
-        pCommonDescriptorHeader = USBD_ParseDescriptors(pConfigurationDescriptor, pConfigurationDescriptor->wTotalLength, startingPosition, USB_ENDPOINT_DESCRIPTOR_TYPE);
-        if (pCommonDescriptorHeader == nullptr)
-        {
-            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! USBD_ParseDescriptors failed to retrieve SuperSpeed Endpoint Descriptor unexpectedly");
-            goto End;
-        }
-
-        //
-        // USBAudioAcxDriverValidateConfigurationDescriptor validates all descriptors.
-        // This means that the descriptor pointed to by pCommonDescriptorHeader( received above ) is completely
-        // contained within the buffer representing ConfigurationDescriptor and
-        // it also verifies that pCommonDescriptorHeader->bLength is equal to sizeof(USB_ENDPOINT_DESCRIPTOR).
-        //
-
-        pEndpointDescriptor = (PUSB_ENDPOINT_DESCRIPTOR)pCommonDescriptorHeader;
-
-        //
-        // Search an Endpoint Descriptor that matches the endpointAddress
-        //
-        if (pEndpointDescriptor->bEndpointAddress == endpointAddress)
-        {
-
-            found = true;
-
-            break;
-        }
-
-        //
-        // Skip the current Endpoint Descriptor and search for the next.
-        //
-        startingPosition = (PUCHAR)pCommonDescriptorHeader + pCommonDescriptorHeader->bLength;
-    }
-
-    if (found)
-    {
-        //
-        // Locate the SuperSpeed Endpoint Companion Descriptor associated with the endpoint descriptor
-        //
-        pCommonDescriptorHeader = USBD_ParseDescriptors(pConfigurationDescriptor, pConfigurationDescriptor->wTotalLength, pEndpointDescriptor, USB_SUPERSPEED_ENDPOINT_COMPANION_DESCRIPTOR_TYPE);
-        if (pCommonDescriptorHeader != nullptr)
-        {
-
-            //
-            // USBAudioAcxDriverValidateConfigurationDescriptor validates all descriptors.
-            // This means that the descriptor pointed to by pCommonDescriptorHeader( received above ) is completely
-            // contained within the buffer representing ConfigurationDescriptor and
-            // it also verifies that pCommonDescriptorHeader->bLength is >= sizeof(USB_SUPERSPEED_ENDPOINT_COMPANION_DESCRIPTOR)
-            //
-
-            *endpointCompanionDescriptor =
-                (PUSB_SUPERSPEED_ENDPOINT_COMPANION_DESCRIPTOR)pCommonDescriptorHeader;
-        }
-        else
-        {
-            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! USBD_ParseDescriptors failed to retrieve SuperSpeed Endpoint Companion Descriptor unexpectedly");
-        }
-    }
-
-End:
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
-    return pEndpointDescriptor;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS
-InitializePipeContextForSuperSpeedIsochPipe(
-    PDEVICE_CONTEXT deviceContext,
-    UCHAR           interfaceNumber,
-    UCHAR           selectedAlternateSetting,
-    WDFUSBPIPE      pipe
-)
-/*++
-
-Routine Description
-
-    This function validates all the isoch related fields in the endpoint descriptor
-    to make sure it's in conformance with the spec and Microsoft core stack
-    implementation and initializes the pipe context.
-
-    The TransferSizePerMicroframe and TransferSizePerFrame values will be
-    used in the I/O path to do read and write transfers.
-
-Return Value:
-
-    NT status value
-
--*/
-{
-    WDF_USB_PIPE_INFORMATION                      pipeInfo;
-    PPIPE_CONTEXT                                 pipeContext;
-    UCHAR                                         endpointAddress;
-    PUSB_ENDPOINT_DESCRIPTOR                      pEndpointDescriptor;
-    PUSB_SUPERSPEED_ENDPOINT_COMPANION_DESCRIPTOR pEndpointCompanionDescriptor;
-    USHORT                                        wMaxPacketSize;
-    UCHAR                                         bMaxBurst;
-    UCHAR                                         bMult;
-    USHORT                                        wBytesPerInterval;
-
-    PAGED_CODE();
-
-    WDF_USB_PIPE_INFORMATION_INIT(&pipeInfo);
-    WdfUsbTargetPipeGetInformation(pipe, &pipeInfo);
-
-    //
-    // We use the pipe context only for isoch endpoints.
-    //
-    if ((WdfUsbPipeTypeIsochronous != pipeInfo.PipeType))
-    {
-
-        return STATUS_SUCCESS;
-    }
-
-    pipeContext = GetPipeContext(pipe);
-
-    endpointAddress = pipeInfo.EndpointAddress;
-
-    pEndpointDescriptor = GetEndpointDescriptorForEndpointAddress(
-        deviceContext,
-        interfaceNumber,
-        selectedAlternateSetting,
-        endpointAddress,
-        &pEndpointCompanionDescriptor
-    );
-
-    if (pEndpointDescriptor == nullptr || pEndpointCompanionDescriptor == nullptr)
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. pEndpointDescriptor or pEndpointCompanionDescriptor is invalid (nullptr)");
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    //
-    // For SuperSpeed isoch endpoint, it uses wBytesPerInterval from its
-    // endpoint companion descriptor. If bMaxBurst field in its endpoint
-    // companion descriptor is greater than zero, wMaxPacketSize must be
-    // 1024. If the value in the bMaxBurst field is set to zero then
-    // wMaxPacketSize can have any value from 0 to 1024.
-    //
-    wBytesPerInterval = pEndpointCompanionDescriptor->wBytesPerInterval;
-    wMaxPacketSize = pEndpointDescriptor->wMaxPacketSize;
-    bMaxBurst = pEndpointCompanionDescriptor->bMaxBurst;
-    bMult = pEndpointCompanionDescriptor->bmAttributes.Isochronous.Mult;
-
-    if (wBytesPerInterval > (wMaxPacketSize * (bMaxBurst + 1) * (bMult + 1)))
-    {
-
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. SuperSpeed isochronous endpoints's wBytesPerInterval value (%d) is greater than wMaxPacketSize * (bMaxBurst+1) * (Mult +1) (%d) ", wBytesPerInterval, (wMaxPacketSize * (bMaxBurst + 1) * (bMult + 1)));
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    if (bMaxBurst > 0)
-    {
-
-        if (wMaxPacketSize != USB_ENDPOINT_SUPERSPEED_ISO_MAX_PACKET_SIZE)
-        {
-
-            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. SuperSpeed isochronous endpoints must have wMaxPacketSize value of %d bytes when bMaxpBurst is %d ", USB_ENDPOINT_SUPERSPEED_ISO_MAX_PACKET_SIZE, bMaxBurst);
-            return STATUS_INVALID_PARAMETER;
-        }
-    }
-    else
-    {
-
-        if (wMaxPacketSize > USB_ENDPOINT_SUPERSPEED_ISO_MAX_PACKET_SIZE)
-        {
-
-            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. SuperSpeed isochronous endpoints must have wMaxPacketSize value no more than %d bytes when bMaxpBurst is %d ", USB_ENDPOINT_SUPERSPEED_ISO_MAX_PACKET_SIZE, bMaxBurst);
-            return STATUS_INVALID_PARAMETER;
-        }
-    }
-
-    //
-    // This sample demos how to use wBytesPerInterval from its Endpoint
-    // Companion Descriptor. Actually, for Superspeed isochronous endpoints,
-    // MaximumPacketSize in WDF_USB_PIPE_INFORMATION and USBD_PIPE_INFORMATION
-    // is returned with the value of wBytesPerInterval in the endpoint
-    // companion descriptor. This is different than the true MaxPacketSize of
-    // the endpoint descriptor.
-    //
-    NT_ASSERT(pipeInfo.MaximumPacketSize == wBytesPerInterval);
-    pipeContext->TransferSizePerMicroframe = wBytesPerInterval;
-
-    //
-    // Microsoft USB 3.0 stack only supports bInterval value of 1, 2, 3 and 4
-    // (or polling period of 1, 2, 4 and 8).
-    // For super-speed isochronous endpoints, the bInterval value is used as
-    // the exponent for a 2^(bInterval-1) value expressed in microframes;
-    // e.g., a bInterval of 4 means a period of 8 (2^(4-1)) microframes.
-    //
-    if (pipeInfo.Interval == 0 || pipeInfo.Interval > 4)
-    {
-
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. bInterval value %u in pipeInfo is invalid (0 or > 4)", pipeInfo.Interval);
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    switch (pipeInfo.Interval)
-    {
-    case 1:
-        //
-        // Transfer period is every microframe (8 times a frame).
-        //
-        pipeContext->TransferSizePerFrame = pipeContext->TransferSizePerMicroframe * 8;
-        break;
-
-    case 2:
-        //
-        // Transfer period is every 2 microframes (4 times a frame).
-        //
-        pipeContext->TransferSizePerFrame = pipeContext->TransferSizePerMicroframe * 4;
-        break;
-
-    case 3:
-        //
-        // Transfer period is every 4 microframes (2 times a frame).
-        //
-        pipeContext->TransferSizePerFrame = pipeContext->TransferSizePerMicroframe * 2;
-        break;
-
-    case 4:
-        //
-        // Transfer period is every 8 microframes (1 times a frame).
-        //
-        pipeContext->TransferSizePerFrame = pipeContext->TransferSizePerMicroframe;
-        break;
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "MaxPacketSize = %d, bInterval = %d", pipeInfo.MaximumPacketSize, pipeInfo.Interval);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "TransferSizePerFrame = %d, TransferSizePerMicroframe = %d", pipeContext->TransferSizePerFrame, pipeContext->TransferSizePerMicroframe);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
-
-    return STATUS_SUCCESS;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS
-InitializePipeContextForHighSpeedDevice(
-    WDFUSBPIPE pipe
-)
-/*++
-
-Routine Description
-
-    This function validates all the isoch related fields in the endpoint descriptor
-    to make sure it's in conformance with the spec and Microsoft core stack
-    implementation and initializes the pipe context.
-
-    The TransferSizePerMicroframe and TransferSizePerFrame values will be
-    used in the I/O path to do read and write transfers.
-
-Return Value:
-
-    NT status value
-
---*/
-{
-    WDF_USB_PIPE_INFORMATION pipeInfo;
-    PPIPE_CONTEXT            pipeContext;
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    WDF_USB_PIPE_INFORMATION_INIT(&pipeInfo);
-    WdfUsbTargetPipeGetInformation(pipe, &pipeInfo);
-
-    //
-    // We use the pipe context only for isoch endpoints.
-    //
-    if ((WdfUsbPipeTypeIsochronous != pipeInfo.PipeType))
-    {
-        return STATUS_SUCCESS;
-    }
-
-    pipeContext = GetPipeContext(pipe);
-
-    if (pipeInfo.MaximumPacketSize == 0)
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. MaximumPacketSize in the pipeInfo is invalid (zero)");
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    //
-    // Universal Serial Bus Specification Revision 2.0 5.6.3 Isochronous Transfer
-    // Packet Size Constraints: High-speed endpoints are allowed up to 1024-byte data
-    // payloads per microframe and allowed up to a maximum of 3 transactions per microframe.
-    //
-    // For highspeed isoch endpoints, bits 12-11 of wMaxPacketSize in the endpoint descriptor
-    // specify the number of additional transactions oppurtunities per microframe.
-    // 00 - None (1 transaction per microframe)
-    // 01 - 1 additional (2 per microframe)
-    // 10 - 2 additional (3 per microframe)
-    // 11 - Reserved.
-    //
-    // Note: MaximumPacketSize of WDF_USB_PIPE_INFORMATION is already adjusted to include
-    // additional transactions if it is a high bandwidth pipe.
-    //
-
-    if (pipeInfo.MaximumPacketSize > 1024 * 3)
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. MaximumPacketSize in the endpoint descriptor is invalid (>1024*3)");
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    //
-    // Microsoft USB stack only supports bInterval value of 1, 2, 3 and 4 (or polling period of 1, 2, 4 and 8).
-    //
-    if (pipeInfo.Interval == 0 || pipeInfo.Interval > 4)
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. bInterval value %u in pipeInfo is invalid (0 or > 4)", pipeInfo.Interval);
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    pipeContext->TransferSizePerMicroframe = pipeInfo.MaximumPacketSize;
-
-    //
-    // For high-speed isochronous endpoints, the bInterval value is used
-    // as the exponent for a 2^(bInterval-1) value expressed in
-    // microframes; e.g., a bInterval of 4 means a period of 8 (2^(4-1))
-    // microframes. The bInterval value must be from 1 to 16.  NOTE: The
-    // USBPORT.SYS driver only supports high-speed isochronous bInterval
-    // values of {1, 2, 3, 4}.
-    //
-    switch (pipeInfo.Interval)
-    {
-    case 1:
-        //
-        // Transfer period is every microframe (8 times a frame).
-        //
-        pipeContext->TransferSizePerFrame = pipeContext->TransferSizePerMicroframe * 8;
-        break;
-
-    case 2:
-        //
-        // Transfer period is every 2 microframes (4 times a frame).
-        //
-        pipeContext->TransferSizePerFrame = pipeContext->TransferSizePerMicroframe * 4;
-        break;
-
-    case 3:
-        //
-        // Transfer period is every 4 microframes (2 times a frame).
-        //
-        pipeContext->TransferSizePerFrame = pipeContext->TransferSizePerMicroframe * 2;
-        break;
-
-    case 4:
-        //
-        // Transfer period is every 8 microframes (1 times a frame).
-        //
-        pipeContext->TransferSizePerFrame = pipeContext->TransferSizePerMicroframe;
-        break;
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "MaxPacketSize = %d, bInterval = %d", pipeInfo.MaximumPacketSize, pipeInfo.Interval);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "TransferSizePerFrame = %d, TransferSizePerMicroframe = %d", pipeContext->TransferSizePerFrame, pipeContext->TransferSizePerMicroframe);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
-
-    return STATUS_SUCCESS;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS
-InitializePipeContextForFullSpeedDevice(
-    WDFUSBPIPE pipe
-)
-/*++
-
-Routine Description
-
-    This function validates all the isoch related fields in the endpoint descriptor
-    to make sure it's in conformance with the spec and Microsoft core stack
-    implementation and initializes the pipe context.
-
-    The TransferSizePerMicroframe and TransferSizePerFrame values will be
-    used in the I/O path to do read and write transfers.
-
-Return Value:
-
-    NT status value
-
---*/
-{
-    WDF_USB_PIPE_INFORMATION pipeInfo;
-    PPIPE_CONTEXT            pipeContext;
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    WDF_USB_PIPE_INFORMATION_INIT(&pipeInfo);
-    WdfUsbTargetPipeGetInformation(pipe, &pipeInfo);
-
-    //
-    // We use the pipe context only for isoch endpoints.
-    //
-    if ((WdfUsbPipeTypeIsochronous != pipeInfo.PipeType))
-    {
-        return STATUS_SUCCESS;
-    }
-
-    pipeContext = GetPipeContext(pipe);
-
-    if (pipeInfo.MaximumPacketSize == 0)
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. MaximumPacketSize in the endpoint descriptor is invalid");
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    //
-    // Universal Serial Bus Specification Revision 2.0
-    // 5.6.3 Isochronous Transfer Packet Size Constraints
-    //
-    // The USB limits the maximum data payload size to 1,023 bytes
-    // for each full-speed isochronous endpoint.
-    //
-    if (pipeInfo.MaximumPacketSize > 1023)
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. MaximumPacketSize in the endpoint descriptor is invalid");
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    //
-    // Microsoft USB stack only supports bInterval value of 1 for
-    // full-speed isochronous endpoints.
-    //
-    if (pipeInfo.Interval != 1)
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed. bInterval value in endpoint descriptor is invalid");
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    pipeContext->TransferSizePerFrame = pipeInfo.MaximumPacketSize;
-    pipeContext->TransferSizePerMicroframe = 0;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "TransferSizePerFrame = %d", pipeContext->TransferSizePerFrame);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
-
-    return STATUS_SUCCESS;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS
-RetrieveDeviceInformation(
-    WDFDEVICE device
-)
-{
-    PDEVICE_CONTEXT            deviceContext;
-    WDF_USB_DEVICE_INFORMATION info;
-    NTSTATUS                   status;
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    deviceContext = GetDeviceContext(device);
-
-    WDF_USB_DEVICE_INFORMATION_INIT(&info);
-
-    //
-    // Retrieve USBD version information, port driver capabilities and device
-    // capabilities such as speed, power, etc.
-    //
-    status = WdfUsbTargetDeviceRetrieveInformation(deviceContext->UsbDevice, &info);
-    if (!NT_SUCCESS(status))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed %!STATUS!", status);
-        return status;
-    }
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - HcdPortCapabilities = 0x%x, Traits = 0x%x", info.HcdPortCapabilities, info.Traits);
-    deviceContext->IsDeviceHighSpeed = (info.Traits & WDF_USB_DEVICE_TRAIT_AT_HIGH_SPEED) ? true : false;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " - DeviceIsHighSpeed: %!bool!", deviceContext->IsDeviceHighSpeed);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " - IsDeviceSelfPowered: %!bool!", (info.Traits & WDF_USB_DEVICE_TRAIT_SELF_POWERED) ? TRUE : FALSE);
-
-    deviceContext->IsDeviceRemoteWakeable = (info.Traits & WDF_USB_DEVICE_TRAIT_REMOTE_WAKE_CAPABLE) ? true : false;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " - IsDeviceRemoteWakeable: %!bool!", deviceContext->IsDeviceRemoteWakeable);
-
-    status = GetStackCapability(deviceContext, &GUID_USB_CAPABILITY_DEVICE_CONNECTION_SUPER_SPEED_COMPATIBLE, 0, nullptr);
-    if (NT_SUCCESS(status))
-    {
-        deviceContext->IsDeviceSuperSpeed = true;
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " - DeviceIsSuperSpeed: %!bool!", deviceContext->IsDeviceSuperSpeed);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
-
-    return STATUS_SUCCESS;
-}
-
-PAGED_CODE_SEG
 _Use_decl_annotations_
 VOID USBAudioAcxDriverEvtDeviceContextCleanup(
     WDFOBJECT wdfDevice
@@ -2498,536 +1404,6 @@ NTSTATUS SelectConfiguration(
 
 PAGED_CODE_SEG
 static _Use_decl_annotations_
-NTSTATUS SelectAlternateInterface(
-    IsoDirection    direction,
-    PDEVICE_CONTEXT deviceContext,
-    UCHAR           interfaceNumber,
-    UCHAR           alternateSetting
-)
-{
-    NTSTATUS                                   status = STATUS_SUCCESS;
-    DEVICE_CONTEXT::SelectedInterfaceAndPipe & selectedInterfaceAndPipe = (direction == IsoDirection::In) ? deviceContext->InputInterfaceAndPipe : (direction == IsoDirection::Out) ? deviceContext->OutputInterfaceAndPipe
-                                                                                                                                                                                    : deviceContext->FeedbackInterfaceAndPipe;
-    ASSERT(direction != IsoDirection::Feedback);
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, interfaceNumber = %u, alternateSetting = %u", interfaceNumber, alternateSetting);
-
-    if (deviceContext->SupportedControl.AvoidToSetSameAlternate && (selectedInterfaceAndPipe.SelectedAlternateSetting == alternateSetting))
-    {
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "Skipping (already selected) Interface %u, Alternate %u.", interfaceNumber, alternateSetting);
-        return STATUS_SUCCESS;
-    }
-
-    //
-    // Get the interface descriptor for the specified interface number
-    // and alternate setting.
-    //
-    PUSB_CONFIGURATION_DESCRIPTOR configDesc = deviceContext->UsbConfigurationDescriptor;
-    PUSB_INTERFACE_DESCRIPTOR     interfaceDesc = USBD_ParseConfigurationDescriptorEx(
-        configDesc,
-        configDesc,
-        interfaceNumber,
-        alternateSetting,
-        -1,
-        -1,
-        -1
-    );
-
-    IF_TRUE_ACTION_JUMP(interfaceDesc == nullptr, status = STATUS_INVALID_PARAMETER, SelectAlternateInterface_Exit);
-
-    WDF_USB_INTERFACE_SELECT_SETTING_PARAMS selectSettingParams;
-    UCHAR                                   numberAlternateSettings = 0;
-    UCHAR                                   numberConfiguredPipes = 0;
-    WDF_OBJECT_ATTRIBUTES                   pipeAttributes;
-
-    if (WdfUsbTargetDeviceGetNumInterfaces(deviceContext->UsbDevice) > 0)
-    {
-        status = RetrieveDeviceInformation(deviceContext->Device);
-        RETURN_NTSTATUS_IF_FAILED_MSG(status, "RetrieveDeviceInformation failed");
-    }
-    WDFUSBINTERFACE usbInterface = nullptr;
-
-    UCHAR numInterfaces = WdfUsbTargetDeviceGetNumInterfaces(deviceContext->UsbDevice);
-    for (UCHAR interfaceIndex = 0; interfaceIndex < numInterfaces; interfaceIndex++)
-    {
-        if (WdfUsbInterfaceGetInterfaceNumber(deviceContext->Pairs[interfaceIndex].UsbInterface) == interfaceNumber)
-        {
-            usbInterface = deviceContext->Pairs[interfaceIndex].UsbInterface;
-            break;
-        }
-    }
-
-    IF_TRUE_ACTION_JUMP(usbInterface == nullptr, status = STATUS_INVALID_PARAMETER, SelectAlternateInterface_Exit);
-
-    numberAlternateSettings = WdfUsbInterfaceGetNumSettings(usbInterface);
-
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - interfaceNumber %u, WdfUsbInterfaceGetInterfaceNumber %u, AlternateSetting %u", interfaceNumber, WdfUsbInterfaceGetInterfaceNumber(usbInterface), alternateSetting);
-
-    ASSERT(numberAlternateSettings > 0);
-
-    WDF_USB_INTERFACE_SELECT_SETTING_PARAMS_INIT_SETTING(&selectSettingParams, alternateSetting);
-
-    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&pipeAttributes, PIPE_CONTEXT);
-
-    pipeAttributes.EvtCleanupCallback = USBAudioAcxDriverEvtPipeContextCleanup;
-
-    //
-    // If an alternate setting has already been specified, this call
-    // will invoke USBAudioAcxDriverEvtPipeContextCleanup() and
-    // initialize DEVICE_CONTEXT::SelectedInterfaceAndPipe.
-    // Therefore, DEVICE_CONTEXT::SelectedInterfaceAndPipe should not
-    // be used until it has been updated.
-    //
-    status = WdfUsbInterfaceSelectSetting(usbInterface, &pipeAttributes, &selectSettingParams);
-
-    if (NT_SUCCESS(status))
-    {
-        numberConfiguredPipes = WdfUsbInterfaceGetNumConfiguredPipes(usbInterface);
-
-        selectedInterfaceAndPipe.UsbInterface = usbInterface;
-        selectedInterfaceAndPipe.InterfaceDescriptor = interfaceDesc;
-        selectedInterfaceAndPipe.SelectedAlternateSetting = alternateSetting;
-        selectedInterfaceAndPipe.NumberConfiguredPipes = numberConfiguredPipes;
-        if (numberConfiguredPipes > 0)
-        {
-
-            switch (direction)
-            {
-            case IsoDirection::In:
-                selectedInterfaceAndPipe.MaximumTransferSize = deviceContext->InputProperty.IsoPacketSize * UAC_MAX_CLASSIC_FRAMES_PER_IRP * deviceContext->FramesPerMs;
-                break;
-            case IsoDirection::Out:
-                selectedInterfaceAndPipe.MaximumTransferSize = deviceContext->OutputProperty.IsoPacketSize * UAC_MAX_CLASSIC_FRAMES_PER_IRP * deviceContext->FramesPerMs;
-                break;
-            case IsoDirection::Feedback:
-                selectedInterfaceAndPipe.MaximumTransferSize = deviceContext->OutputProperty.IsoPacketSize * UAC_MAX_CLASSIC_FRAMES_PER_IRP * deviceContext->FramesPerMs;
-                ASSERT(false);
-                break;
-            default:
-                ASSERT(false);
-                break;
-            }
-
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - SelectedAlternateSettings %u, NumberConfiguredPipes %u", selectedInterfaceAndPipe.SelectedAlternateSetting, selectedInterfaceAndPipe.NumberConfiguredPipes);
-        }
-    }
-SelectAlternateInterface_Exit:
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS
-ActivateAudioInterface(
-    PDEVICE_CONTEXT deviceContext,
-    ULONG           desiredSampleRate,
-    ULONG           desiredFormatType,
-    ULONG           desiredFormat,
-    ULONG           desiredBytesPerSampleIn,
-    ULONG           desiredValidBitsPerSampleIn,
-    ULONG           desiredBytesPerSampleOut,
-    ULONG           desiredValidBitsPerSampleOut,
-    bool            forceSetSampleRate /* = false */
-)
-{
-    NTSTATUS                      status = STATUS_SUCCESS;
-    PUAC_AUDIO_PROPERTY           audioProp = &deviceContext->AudioProperty;
-    PUSB_CONFIGURATION_DESCRIPTOR configDescriptor = deviceContext->UsbConfigurationDescriptor;
-    ULONG                         previousSampleRate = audioProp->SampleRate;
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, %u, %u, %u, %u, %u, %u, %u, %!bool!", desiredSampleRate, desiredFormatType, desiredFormat, desiredBytesPerSampleIn, desiredValidBitsPerSampleIn, desiredBytesPerSampleOut, desiredValidBitsPerSampleOut, forceSetSampleRate);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "<PID %04x>", audioProp->ProductId);
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    auto activateAudioInterfaceScope = wil::scope_exit([&]() {
-        deviceContext->LastActivationStatus = status;
-    });
-
-    deviceContext->LastActivationStatus = STATUS_UNSUCCESSFUL;
-    if (audioProp == nullptr || configDescriptor == nullptr)
-    {
-        status = STATUS_DEVICE_NOT_READY;
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! failed %!STATUS!", status);
-        return status;
-    }
-
-    {
-        status = deviceContext->UsbAudioConfiguration->ActivateAudioInterface(desiredSampleRate, desiredFormatType, desiredFormat, desiredBytesPerSampleIn, desiredValidBitsPerSampleIn, desiredBytesPerSampleOut, desiredValidBitsPerSampleOut, forceSetSampleRate);
-        RETURN_NTSTATUS_IF_FAILED_MSG(status, "ActivateAudioInterface failed");
-
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "<PID %04x>", audioProp->ProductId);
-
-        RtlZeroMemory(&deviceContext->UsbLatency, sizeof(UAC_USB_LATENCY));
-        CalculateUsbLatency(deviceContext, &deviceContext->UsbLatency);
-
-        audioProp->InputLatencyOffset = deviceContext->UsbLatency.InputLatency;
-        audioProp->OutputLatencyOffset = deviceContext->UsbLatency.OutputLatency;
-
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "<PID %04x>", audioProp->ProductId);
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Re-calculated Latency Offset In %d samples, Out %d samples", audioProp->InputLatencyOffset, audioProp->OutputLatencyOffset);
-
-        // For some USB devices, switching the sample rate before SetInterface
-        // can cause a STATUS_UNSUCCESSFUL error and a Code 10 error when
-        // selecting the alternate interface.
-        status = SetPipeInformation(deviceContext);
-    }
-    RETURN_NTSTATUS_IF_FAILED_MSG(status, "SetPipeInformation failed");
-
-    BuildChannelMap(deviceContext);
-
-    deviceContext->AcClockSources = 1;
-    deviceContext->CurrentClockSource = 0;
-    RtlStringCchCopyW(deviceContext->ClockSourceName[0], UAC_MAX_CLOCK_SOURCE_NAME_LENGTH, L"Internal");
-
-    if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface() || deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-    {
-        bool notify = false;
-        if (previousSampleRate != audioProp->SampleRate)
-        {
-            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-            if (deviceContext->AsioBufferObject != nullptr)
-            {
-                deviceContext->AsioBufferObject->UpdateCurrentSampleRate();
-                notify |= deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::SampleRateChanged);
-            }
-            WdfWaitLockRelease(deviceContext->AsioWaitLock);
-        }
-
-        //
-        // If clock source changes are implemented, include a check for state changes here.
-        // When a change occurs, set `notify` to true.
-        //
-
-        if (notify)
-        {
-            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-            if (deviceContext->AsioBufferObject != nullptr)
-            {
-                deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::ResetRequired);
-                deviceContext->AsioBufferObject->SendNotificationToAsio();
-            }
-            WdfWaitLockRelease(deviceContext->AsioWaitLock);
-        }
-        status = STATUS_SUCCESS;
-    }
-    else
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%!FUNC! ActivateAudioInterface() failed. InputBytesPerBlock %u, OutputBytesPerBlock %u", deviceContext->InputProperty.BytesPerBlock, deviceContext->OutputProperty.BytesPerBlock);
-        status = STATUS_UNSUCCESSFUL;
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS CalculateUsbLatency(
-    PDEVICE_CONTEXT  deviceContext,
-    PUAC_USB_LATENCY usbLatency
-)
-{
-    ULONG classicFramesPerIrp1 = deviceContext->Params.ClassicFramesPerIrp;
-    ULONG classicFramesPerIrp2 = deviceContext->Params.ClassicFramesPerIrp2;
-    ULONG classicFramesPerIrp = deviceContext->FramesPerMs > 1 ? classicFramesPerIrp2 : classicFramesPerIrp1;
-    ULONG inBufferOperationOffset = deviceContext->Params.InputBufferOperationOffset;
-    ULONG inHubOffset = deviceContext->Params.InputHubOffset;
-    ULONG outBufferOperationOffset = deviceContext->Params.OutputBufferOperationOffset;
-    ULONG outHubOffset = deviceContext->Params.OutputHubOffset;
-    ULONG sampleRate = deviceContext->AudioProperty.SampleRate;
-    bool  hub = deviceContext->HubCount > 1;
-    ULONG inRawOffset = (inBufferOperationOffset & 0x0fffffffUL);
-    ULONG inHardwareMs = 0;
-    ULONG inHubMs = 0;
-    ULONG outRawOffset = (outBufferOperationOffset & 0x0fffffffUL);
-    ULONG outHardwareMs = 0;
-    ULONG outHubMs = 0;
-
-    PAGED_CODE();
-
-    switch ((inBufferOperationOffset & 0x30000000UL) >> 28)
-    {
-    case 0x00:
-        inHubMs = hub ? inHubOffset : 0;
-        break;
-    case 0x01:
-        inHardwareMs = deviceContext->LatencyOffsetList->InputBufferOperationOffset;
-        inHubMs = hub ? deviceContext->LatencyOffsetList->InputHubOffset : 0;
-        break;
-    case 0x02:
-        break;
-    case 0x03:
-        inHubMs = hub ? deviceContext->LatencyOffsetList->InputHubOffset : 0;
-        break;
-    default:
-        break;
-    }
-
-    if ((inBufferOperationOffset & 0x40000000UL) != 0)
-    {
-        usbLatency->InputOffsetFrame = (inHardwareMs + inHubMs) * deviceContext->FramesPerMs + (inRawOffset * deviceContext->FramesPerMs / 8);
-        usbLatency->InputOffsetMs = usbLatency->InputOffsetFrame / deviceContext->FramesPerMs;
-    }
-    else
-    {
-        usbLatency->InputOffsetMs = inHardwareMs + inHubMs + inRawOffset;
-        usbLatency->InputOffsetFrame = usbLatency->InputOffsetMs * deviceContext->FramesPerMs;
-    }
-
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "In  Offset : %ums, %uframes", usbLatency->InputOffsetMs, usbLatency->InputOffsetFrame);
-
-    switch ((outBufferOperationOffset & 0x30000000UL) >> 28)
-    {
-    case 0x00:
-        outHubMs = hub ? outHubOffset : 0;
-        break;
-    case 0x01:
-        outHardwareMs = deviceContext->LatencyOffsetList->OutputBufferOperationOffset;
-        outHubMs = hub ? deviceContext->LatencyOffsetList->OutputHubOffset : 0;
-        break;
-    case 0x02:
-        break;
-    case 0x03:
-        outHubMs = hub ? deviceContext->LatencyOffsetList->OutputHubOffset : 0;
-        break;
-    default:
-        break;
-    }
-
-    if ((outBufferOperationOffset & 0x40000000UL) != 0)
-    {
-        usbLatency->OutputOffsetFrame = (outHardwareMs + outHubMs) * deviceContext->FramesPerMs + (outRawOffset * deviceContext->FramesPerMs / 8);
-        usbLatency->OutputOffsetMs = usbLatency->OutputOffsetFrame / deviceContext->FramesPerMs;
-        if (outHardwareMs != 0)
-        {
-            usbLatency->OutputMinOffsetFrame = (outHubMs + 1) * deviceContext->FramesPerMs + (outRawOffset * 8 / deviceContext->FramesPerMs);
-        }
-        else
-        {
-            usbLatency->OutputMinOffsetFrame = 1;
-        }
-    }
-    else
-    {
-        usbLatency->OutputOffsetMs = outHardwareMs + outHubMs + outRawOffset;
-        usbLatency->OutputOffsetFrame = usbLatency->OutputOffsetMs * deviceContext->FramesPerMs;
-        if (outHardwareMs != 0)
-        {
-            usbLatency->OutputMinOffsetFrame = (outHubMs + outRawOffset + 1) * deviceContext->FramesPerMs;
-        }
-        else
-        {
-            usbLatency->OutputMinOffsetFrame = 1;
-        }
-    }
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Out Offset : %ums, %uframes, %uframes minimum", usbLatency->OutputOffsetMs, usbLatency->OutputOffsetFrame, usbLatency->OutputMinOffsetFrame);
-
-    usbLatency->InputDriverBuffer = (ULONG)((double)(sampleRate * (classicFramesPerIrp * deviceContext->FramesPerMs + usbLatency->InputOffsetFrame)) / (double)(deviceContext->FramesPerMs * 1000));
-    usbLatency->OutputDriverBuffer = (ULONG)((double)(sampleRate * usbLatency->OutputOffsetFrame /* - usbLatency->InputOffsetFrame */) / (double)(deviceContext->FramesPerMs * 1000));
-
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Driver Internal Buffer : In %usamples, Out %usamples", usbLatency->InputDriverBuffer, usbLatency->OutputDriverBuffer);
-
-    if ((inBufferOperationOffset & 0x80000000UL) != 0)
-    {
-        usbLatency->InputLatency = usbLatency->InputDriverBuffer;
-    }
-    else
-    {
-        usbLatency->InputLatency = (inHardwareMs + inHubMs) * sampleRate / 1000;
-    }
-    if ((outBufferOperationOffset & 0x80000000UL) != 0)
-    {
-        usbLatency->OutputLatency = usbLatency->OutputDriverBuffer;
-    }
-    else
-    {
-        usbLatency->OutputLatency = (outHardwareMs + outHubMs) * sampleRate / 1000;
-    }
-
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Total Latency : In %usamples, Out %usamples", usbLatency->InputLatency, usbLatency->OutputLatency);
-
-    return STATUS_SUCCESS;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-void BuildChannelMap(
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    PAGED_CODE();
-
-    deviceContext->AudioProperty.InputAsioChannels = deviceContext->InputProperty.UsbChannels;
-    deviceContext->AudioProperty.OutputAsioChannels = deviceContext->OutputProperty.UsbChannels;
-
-    for (ULONG asioInChannel = 0; asioInChannel < deviceContext->AudioProperty.InputAsioChannels; asioInChannel++)
-    {
-        WDFMEMORY memory = nullptr;
-        PWSTR     channelName = nullptr;
-        NTSTATUS  status = deviceContext->UsbAudioConfiguration->GetChannelName(true, asioInChannel, memory, channelName);
-
-        if (NT_SUCCESS(status))
-        {
-            RtlStringCchCopyW(deviceContext->InputAsioChannelName[asioInChannel], UAC_MAX_CHANNEL_NAME_LENGTH, channelName);
-            WdfObjectDelete(memory);
-            memory = nullptr;
-            channelName = nullptr;
-        }
-        else
-        {
-            RtlStringCchCopyW(deviceContext->InputAsioChannelName[asioInChannel], UAC_MAX_CHANNEL_NAME_LENGTH, deviceContext->AudioProperty.ProductName);
-        }
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - in asio channel name [%d] %ws", asioInChannel, deviceContext->InputAsioChannelName[asioInChannel]);
-    }
-
-    for (ULONG asioOutChannel = 0; asioOutChannel < deviceContext->AudioProperty.OutputAsioChannels; asioOutChannel++)
-    {
-        WDFMEMORY memory = nullptr;
-        PWSTR     channelName = nullptr;
-        NTSTATUS  status = deviceContext->UsbAudioConfiguration->GetChannelName(false, asioOutChannel, memory, channelName);
-
-        if (NT_SUCCESS(status))
-        {
-            RtlStringCchCopyW(deviceContext->OutputAsioChannelName[asioOutChannel], UAC_MAX_CHANNEL_NAME_LENGTH, channelName);
-            WdfObjectDelete(memory);
-            memory = nullptr;
-            channelName = nullptr;
-        }
-        else
-        {
-            RtlStringCchCopyW(deviceContext->OutputAsioChannelName[asioOutChannel], UAC_MAX_CHANNEL_NAME_LENGTH, deviceContext->AudioProperty.ProductName);
-        }
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - out asio channel name [%d] %ws", asioOutChannel, deviceContext->OutputAsioChannelName[asioOutChannel]);
-    }
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS SetPipeInformation(
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    // deviceContext->PipeInformationIn       = nullptr;
-    // deviceContext->PipeInformationOut      = nullptr;
-    // deviceContext->PipeInformationFeedback = nullptr;
-    bool failed = false;
-
-    if (deviceContext->OutputProperty.InterfaceNumber != 0)
-    {
-        status = SelectAlternateInterface(IsoDirection::Out, deviceContext, deviceContext->OutputProperty.InterfaceNumber, deviceContext->OutputProperty.AlternateSetting);
-
-        if (NT_SUCCESS(status))
-        {
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputInterfaceAndPipe.NumberConfiguredPipes %u", deviceContext->OutputInterfaceAndPipe.NumberConfiguredPipes);
-            for (UCHAR pipeIndex = 0; pipeIndex < deviceContext->OutputInterfaceAndPipe.NumberConfiguredPipes; pipeIndex++)
-            {
-                WDFUSBPIPE               pipe;
-                WDF_USB_PIPE_INFORMATION pipeInfo;
-
-                pipe = WdfUsbInterfaceGetConfiguredPipe(deviceContext->OutputInterfaceAndPipe.UsbInterface, pipeIndex, nullptr);
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u] %p", pipeIndex, pipe);
-                if (pipe != nullptr)
-                {
-                    WDF_USB_PIPE_INFORMATION_INIT(&pipeInfo);
-                    WdfUsbTargetPipeGetInformation(pipe, &pipeInfo);
-                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u], EndpointAddress 0x%x OutputEndpointNumber 0x%x", pipeIndex, pipeInfo.EndpointAddress, deviceContext->OutputProperty.EndpointNumber);
-                    if (pipeInfo.EndpointAddress == deviceContext->OutputProperty.EndpointNumber)
-                    {
-                        deviceContext->OutputInterfaceAndPipe.Pipe = pipe;
-                        deviceContext->OutputInterfaceAndPipe.PipeInfo = pipeInfo;
-                        PPIPE_CONTEXT pipeContext = GetPipeContext(pipe);
-                        pipeContext->SelectedInterfaceAndPipe = &(deviceContext->OutputInterfaceAndPipe);
-                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - set OutputInterfaceAndPipe.Pipe");
-                    }
-                    else if (pipeInfo.EndpointAddress == deviceContext->FeedbackProperty.FeedbackEndpointNumber)
-                    {
-                        deviceContext->FeedbackInterfaceAndPipe.InterfaceDescriptor = deviceContext->OutputInterfaceAndPipe.InterfaceDescriptor;
-                        deviceContext->FeedbackInterfaceAndPipe.UsbInterface = deviceContext->OutputInterfaceAndPipe.UsbInterface;
-                        deviceContext->FeedbackInterfaceAndPipe.SelectedAlternateSetting = deviceContext->OutputInterfaceAndPipe.SelectedAlternateSetting;
-                        deviceContext->FeedbackInterfaceAndPipe.NumberConfiguredPipes = deviceContext->OutputInterfaceAndPipe.NumberConfiguredPipes;
-                        deviceContext->FeedbackInterfaceAndPipe.MaximumTransferSize = deviceContext->OutputInterfaceAndPipe.MaximumTransferSize;
-                        deviceContext->FeedbackInterfaceAndPipe.Pipe = pipe;
-                        deviceContext->FeedbackInterfaceAndPipe.PipeInfo = pipeInfo;
-                        PPIPE_CONTEXT pipeContext = GetPipeContext(pipe);
-                        pipeContext->SelectedInterfaceAndPipe = &(deviceContext->FeedbackInterfaceAndPipe);
-                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - set FeedbackInterfaceAndPipe.Pipe");
-                    }
-                }
-            }
-        }
-        else
-        {
-            failed = true;
-        }
-    }
-
-    if (deviceContext->InputProperty.InterfaceNumber != 0)
-    {
-        status = SelectAlternateInterface(IsoDirection::In, deviceContext, deviceContext->InputProperty.InterfaceNumber, deviceContext->InputProperty.AlternateSetting);
-
-        if (NT_SUCCESS(status))
-        {
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputInterfaceAndPipe.NumberConfiguredPipes %u", deviceContext->InputInterfaceAndPipe.NumberConfiguredPipes);
-            for (UCHAR pipeIndex = 0; pipeIndex < deviceContext->InputInterfaceAndPipe.NumberConfiguredPipes; pipeIndex++)
-            {
-                WDFUSBPIPE               pipe;
-                WDF_USB_PIPE_INFORMATION pipeInfo;
-
-                WDF_USB_PIPE_INFORMATION_INIT(&pipeInfo);
-                pipe = WdfUsbInterfaceGetConfiguredPipe(deviceContext->InputInterfaceAndPipe.UsbInterface, pipeIndex, &pipeInfo);
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u] %p", pipeIndex, pipe);
-                if (pipe != nullptr)
-                {
-                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - [%u], EndpointAddress 0x%x InputEndpointNumber 0x%x", pipeIndex, pipeInfo.EndpointAddress, deviceContext->InputProperty.EndpointNumber);
-                    if (pipeInfo.EndpointAddress == deviceContext->InputProperty.EndpointNumber)
-                    {
-                        deviceContext->InputInterfaceAndPipe.Pipe = pipe;
-                        deviceContext->InputInterfaceAndPipe.PipeInfo = pipeInfo;
-                        PPIPE_CONTEXT pipeContext = GetPipeContext(pipe);
-                        pipeContext->SelectedInterfaceAndPipe = &(deviceContext->InputInterfaceAndPipe);
-                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - set InputInterfaceAndPipe.Pipe");
-                    }
-                }
-            }
-        }
-        else
-        {
-            failed = true;
-        }
-    }
-
-    if (failed)
-    {
-        deviceContext->ErrorStatistics->SetBandWidthError();
-        status = STATUS_UNSUCCESSFUL;
-    }
-    else
-    {
-        deviceContext->ErrorStatistics->ClearBandWidthError();
-        status = STATUS_SUCCESS;
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
 NTSTATUS SetInterruptPipeInformation(
     PDEVICE_CONTEXT deviceContext
 )
@@ -3095,34 +1471,6 @@ NTSTATUS SetInterruptPipeInformation(
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
     return status;
 }
-
-#if 0
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS ResetPipeInformation(
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    // deviceContext->PipeInformationFeedback = nullptr;
-    // deviceContext->PipeInformationIn       = nullptr;
-    // deviceContext->PipeInformationOut      = nullptr;
-    // deviceContext->PipeInformationFeedback = nullptr;
-
-    deviceContext->InputInterfaceAndPipe.Pipe = nullptr;
-    RtlZeroMemory(&(deviceContext->InputInterfaceAndPipe.PipeInfo), sizeof(deviceContext->InputInterfaceAndPipe.PipeInfo));
-    deviceContext->OutputInterfaceAndPipe.Pipe = nullptr;
-    RtlZeroMemory(&(deviceContext->OutputInterfaceAndPipe.PipeInfo), sizeof(deviceContext->OutputInterfaceAndPipe.PipeInfo));
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-#endif
 
 NONPAGED_CODE_SEG
 _Use_decl_annotations_
@@ -3312,256 +1660,6 @@ USBAudioAcxDriverStreamGetCurrentTimeUs(
     return currentTime;
 }
 
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamPrepareHardware(
-    bool            isInput,
-    ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext,
-    CStreamEngine * streamEngine
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    auto prepareHardwareScope = wil::scope_exit([&]() {
-        WdfWaitLockRelease(deviceContext->StreamEngineWaitLock);
-    });
-
-    WdfWaitLockAcquire(deviceContext->StreamEngineWaitLock, nullptr);
-    if (isInput)
-    {
-        RETURN_NTSTATUS_IF_TRUE(deviceContext->CaptureStreamEngine == nullptr, STATUS_UNSUCCESSFUL);
-        RETURN_NTSTATUS_IF_TRUE(deviceIndex >= deviceContext->NumOfInputDevices, STATUS_INVALID_PARAMETER);
-        RETURN_NTSTATUS_IF_TRUE(deviceContext->CaptureStreamEngine[deviceIndex] != nullptr, STATUS_UNSUCCESSFUL);
-        deviceContext->CaptureStreamEngine[deviceIndex] = streamEngine;
-    }
-    else
-    {
-        RETURN_NTSTATUS_IF_TRUE(deviceContext->RenderStreamEngine == nullptr, STATUS_UNSUCCESSFUL);
-        RETURN_NTSTATUS_IF_TRUE(deviceIndex >= deviceContext->NumOfOutputDevices, STATUS_INVALID_PARAMETER);
-        RETURN_NTSTATUS_IF_TRUE(deviceContext->RenderStreamEngine[deviceIndex] != nullptr, STATUS_UNSUCCESSFUL);
-        deviceContext->RenderStreamEngine[deviceIndex] = streamEngine;
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamReleaseHardware(
-    bool            isInput,
-    ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    auto releaseHardwareScope = wil::scope_exit([&]() {
-        WdfWaitLockRelease(deviceContext->StreamEngineWaitLock);
-    });
-
-    WdfWaitLockAcquire(deviceContext->StreamEngineWaitLock, nullptr);
-    if (isInput)
-    {
-        RETURN_NTSTATUS_IF_TRUE(deviceContext->CaptureStreamEngine == nullptr, STATUS_UNSUCCESSFUL);
-        RETURN_NTSTATUS_IF_TRUE(deviceIndex >= deviceContext->NumOfInputDevices, STATUS_INVALID_PARAMETER);
-        deviceContext->CaptureStreamEngine[deviceIndex] = nullptr;
-    }
-    else
-    {
-        RETURN_NTSTATUS_IF_TRUE(deviceContext->RenderStreamEngine == nullptr, STATUS_UNSUCCESSFUL);
-        RETURN_NTSTATUS_IF_TRUE(deviceIndex >= deviceContext->NumOfOutputDevices, STATUS_INVALID_PARAMETER);
-        deviceContext->RenderStreamEngine[deviceIndex] = nullptr;
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamSetDataFormat(
-    bool            isInput,
-    ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext,
-    ACXDATAFORMAT   dataFormat
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, %!bool!", isInput);
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
-    if (deviceContext->RtPacketObject != nullptr)
-    {
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - data format %u, %llu, %u, %u, %u, %u, %u, %u, %u", AcxDataFormatGetChannelsCount(dataFormat), AcxDataFormatGetChannelMask(dataFormat), AcxDataFormatGetSampleSize(dataFormat), AcxDataFormatGetBitsPerSample(dataFormat), AcxDataFormatGetValidBitsPerSample(dataFormat), AcxDataFormatGetSamplesPerBlock(dataFormat), AcxDataFormatGetBlockAlign(dataFormat), AcxDataFormatGetSampleRate(dataFormat), AcxDataFormatGetAverageBytesPerSec(dataFormat));
-
-        TraceAcxDataFormat(TRACE_LEVEL_VERBOSE, dataFormat);
-
-        status = deviceContext->RtPacketObject->SetDataFormat(isInput, dataFormat);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        ACXDATAFORMAT inputDataFormatBeforeChange = nullptr;
-        ACXDATAFORMAT outputDataFormatBeforeChange = nullptr;
-        ACXDATAFORMAT inputDataFormatAfterChange = nullptr;
-        ACXDATAFORMAT outputDataFormatAfterChange = nullptr;
-        ULONG         formatType, format;
-        bool          streamRunning = false;
-        ULONG         desiredBytesPerSampleIn = deviceContext->InputProperty.BytesPerSample;
-        ULONG         desiredValidBitsPerSampleIn = deviceContext->InputProperty.ValidBitsPerSample;
-        ULONG         desiredBytesPerSampleOut = deviceContext->OutputProperty.BytesPerSample;
-        ULONG         desiredValidBitsPerSampleOut = deviceContext->OutputProperty.ValidBitsPerSample;
-
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatBeforeChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatBeforeChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        status = ConvertAudioDataFormat(dataFormat, formatType, format);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        if (isInput)
-        {
-            desiredBytesPerSampleIn = AcxDataFormatGetBitsPerSample(dataFormat) / 8;
-            desiredValidBitsPerSampleIn = AcxDataFormatGetValidBitsPerSample(dataFormat);
-
-            status = deviceContext->UsbAudioConfiguration->GetNearestSupportedValidBitsPerSamples(isInput, formatType, format, desiredBytesPerSampleOut, desiredValidBitsPerSampleOut);
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-        }
-        else
-        {
-            desiredBytesPerSampleOut = AcxDataFormatGetBitsPerSample(dataFormat) / 8;
-            desiredValidBitsPerSampleOut = AcxDataFormatGetValidBitsPerSample(dataFormat);
-
-            status = deviceContext->UsbAudioConfiguration->GetNearestSupportedValidBitsPerSamples(isInput, formatType, format, desiredBytesPerSampleIn, desiredValidBitsPerSampleIn);
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-        }
-
-        if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface() && deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-        {
-            IF_TRUE_JUMP((deviceContext->AudioProperty.SampleRate == AcxDataFormatGetSampleRate(dataFormat)) &&
-						 (deviceContext->InputProperty.FormatType == formatType) && 
-						 (deviceContext->InputProperty.Format == format) && 
-						 (deviceContext->InputProperty.BytesPerSample == desiredBytesPerSampleIn) && 
-						 (deviceContext->InputProperty.ValidBitsPerSample == desiredValidBitsPerSampleIn) && 
-						 (deviceContext->OutputProperty.FormatType == formatType) && 
-						 (deviceContext->OutputProperty.Format == format) && 
-						 (deviceContext->OutputProperty.BytesPerSample == desiredBytesPerSampleOut) && 
-						 (deviceContext->OutputProperty.ValidBitsPerSample == desiredValidBitsPerSampleOut), Exit_BeforeWaitLockRelease);
-        }
-        else if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
-        {
-            IF_TRUE_JUMP((deviceContext->AudioProperty.SampleRate == AcxDataFormatGetSampleRate(dataFormat)) && 
-						 (deviceContext->InputProperty.FormatType == formatType) && 
-						 (deviceContext->InputProperty.Format == format) && 
-						 (deviceContext->InputProperty.BytesPerSample == desiredBytesPerSampleIn) && 
-						 (deviceContext->InputProperty.ValidBitsPerSample == desiredValidBitsPerSampleIn), Exit_BeforeWaitLockRelease);
-        }
-        else if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-        {
-            IF_TRUE_JUMP((deviceContext->AudioProperty.SampleRate == AcxDataFormatGetSampleRate(dataFormat)) && 
-						 (deviceContext->OutputProperty.FormatType == formatType) && 
-						 (deviceContext->OutputProperty.Format == format) && 
-						 (deviceContext->OutputProperty.BytesPerSample == desiredBytesPerSampleOut) && 
-						 (deviceContext->OutputProperty.ValidBitsPerSample == desiredValidBitsPerSampleOut), Exit_BeforeWaitLockRelease);
-        }
-
-        if (deviceContext->StreamObject != nullptr)
-        {
-            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-            if (deviceContext->AsioBufferObject == nullptr)
-            {
-                streamRunning = true;
-            }
-            WdfWaitLockRelease(deviceContext->AsioWaitLock);
-            if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
-            {
-                StopIsoStream(deviceContext);
-            }
-        }
-        if (deviceContext->RtPacketObject != nullptr)
-        {
-            deviceContext->RtPacketObject->Pause();
-        }
-        status = ActivateAudioInterface(deviceContext, AcxDataFormatGetSampleRate(dataFormat), formatType, format, desiredBytesPerSampleIn, desiredValidBitsPerSampleIn, desiredBytesPerSampleOut, desiredValidBitsPerSampleOut);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        if (streamRunning && NT_SUCCESS(status))
-        {
-            if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
-            {
-                StartIsoStream(deviceContext);
-            }
-        }
-
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        if ((deviceContext->Render != nullptr) && (outputDataFormatBeforeChange != nullptr) && (outputDataFormatAfterChange != nullptr) && !AcxDataFormatIsEqual(outputDataFormatBeforeChange, outputDataFormatAfterChange))
-        {
-            for (ULONG renderDeviceIndex = 0; renderDeviceIndex < deviceContext->NumOfOutputDevices; renderDeviceIndex++)
-            {
-                if (isInput || (!isInput && (renderDeviceIndex != deviceIndex)))
-                {
-                    ACXPIN pin = AcxCircuitGetPinById(deviceContext->Render, renderDeviceIndex * CodecRenderPinCount + CodecRenderHostPin);
-                    if (pin != nullptr)
-                    {
-                        status = NotifyDataFormatChange(deviceContext->Device, deviceContext->Render, pin, outputDataFormatAfterChange);
-                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - render pin %u, PinNotifyDataFormatChange %!STATUS!", renderDeviceIndex * 2, status);
-                        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-                    }
-                }
-            }
-        }
-        if ((deviceContext->Capture != nullptr) && (inputDataFormatBeforeChange != nullptr) && (inputDataFormatAfterChange != nullptr) && !AcxDataFormatIsEqual(inputDataFormatBeforeChange, inputDataFormatAfterChange))
-        {
-            for (ULONG captureDeviceIndex = 0; captureDeviceIndex < deviceContext->NumOfInputDevices; captureDeviceIndex++)
-            {
-                if (!isInput || (isInput && (captureDeviceIndex != deviceIndex)))
-                {
-                    ACXPIN pin = AcxCircuitGetPinById(deviceContext->Capture, captureDeviceIndex * CodecCapturePinCount + CodecCaptureHostPin);
-                    if (pin != nullptr)
-                    {
-                        status = NotifyDataFormatChange(deviceContext->Device, deviceContext->Capture, pin, inputDataFormatAfterChange);
-                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - capture pin %u, AcxPinNotifyDataFormatChange %!STATUS!", captureDeviceIndex * 2, status);
-                        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-                    }
-                }
-            }
-        }
-    }
-Exit_BeforeWaitLockRelease:
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
 NONPAGED_CODE_SEG
 _Use_decl_annotations_
 VOID USBAudioAcxDriverEvtIsoRequestContextCleanup(
@@ -3592,369 +1690,6 @@ VOID USBAudioAcxDriverEvtIsoRequestContextCleanup(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamSetRtPackets(
-    bool            isInput,
-    ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext,
-    PVOID *         packets,
-    ULONG           packetsCount,
-    ULONG           packetSize,
-    ULONG           channel,
-    ULONG           numOfChannelsPerDevice
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, %s, packetsCount = %d, packetSize = %d", isInput ? "Input" : "Output", packetsCount, packetSize);
-
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
-    if (deviceContext->RtPacketObject != nullptr)
-    {
-        status = deviceContext->RtPacketObject->SetRtPackets(isInput, deviceIndex, packets, packetsCount, packetSize, channel, numOfChannelsPerDevice);
-    }
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-void USBAudioAcxDriverStreamUnsetRtPackets(
-    bool            isInput,
-    ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
-    if (deviceContext->RtPacketObject != nullptr)
-    {
-        deviceContext->RtPacketObject->UnsetRtPackets(isInput, deviceIndex);
-    }
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamRun(
-    bool            isInput,
-    ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-    if ((deviceContext->StartCounterAsio == 0) && (deviceContext->StartCounterWdmAudio == 0))
-    {
-        status = StartIsoStream(deviceContext);
-    }
-    else
-    {
-        if (deviceContext->RtPacketObject != nullptr)
-        {
-            deviceContext->RtPacketObject->ResetInternal(isInput, deviceIndex);
-        }
-        status = STATUS_SUCCESS;
-    }
-    if (NT_SUCCESS(status))
-    {
-        if (deviceContext->RtPacketObject != nullptr)
-        {
-            deviceContext->RtPacketObject->Resume(isInput, deviceIndex);
-        }
-        InterlockedIncrement(&deviceContext->StartCounterWdmAudio);
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-    }
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamPause(
-    bool /* isInput */,
-    ULONG /* deviceIndex */,
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-    // AbortPipes(IsoDirection::In, deviceContext->Device);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-    if (deviceContext->StartCounterWdmAudio)
-    {
-        InterlockedDecrement(&deviceContext->StartCounterWdmAudio);
-        if ((deviceContext->StartCounterAsio == 0) && (deviceContext->StartCounterWdmAudio == 0))
-        {
-            status = StopIsoStream(deviceContext);
-        }
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-    }
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamGetCurrentPacket(
-    bool            isInput,
-    ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext,
-    PULONG          currentPacket
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    IF_TRUE_ACTION_JUMP(deviceContext == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCurrentPacket_Exit);
-    IF_TRUE_ACTION_JUMP(deviceContext->RtPacketObject == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCurrentPacket_Exit);
-    IF_TRUE_ACTION_JUMP(currentPacket == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCurrentPacket_Exit);
-
-    status = deviceContext->RtPacketObject->GetCurrentPacket(isInput, deviceIndex, currentPacket);
-
-USBAudioAcxDriverStreamGetCurrentPacket_Exit:
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamResetCurrentPacket(
-    bool            isInput,
-    ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    IF_TRUE_ACTION_JUMP(deviceContext == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamResetCurrentPacket_Exit);
-    IF_TRUE_ACTION_JUMP(deviceContext->RtPacketObject == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamResetCurrentPacket_Exit);
-
-    status = deviceContext->RtPacketObject->ResetCurrentPacket(isInput, deviceIndex);
-
-USBAudioAcxDriverStreamResetCurrentPacket_Exit:
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamResetInternal(
-    bool            isInput,
-    ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    IF_TRUE_ACTION_JUMP(deviceContext == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamResetInternal_Exit);
-    IF_TRUE_ACTION_JUMP(deviceContext->RtPacketObject == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamResetInternal_Exit);
-
-    deviceContext->RtPacketObject->ResetInternal(isInput, deviceIndex);
-
-USBAudioAcxDriverStreamResetInternal_Exit:
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamGetCapturePacket(
-    PDEVICE_CONTEXT deviceContext,
-    ULONG           deviceIndex,
-    PULONG          lastCapturePacket,
-    PULONGLONG      qpcPacketStart
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    IF_TRUE_ACTION_JUMP(deviceContext == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCapturePacket_Exit);
-    IF_TRUE_ACTION_JUMP(deviceContext->RtPacketObject == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCapturePacket_Exit);
-    IF_TRUE_ACTION_JUMP(lastCapturePacket == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCapturePacket_Exit);
-    IF_TRUE_ACTION_JUMP(qpcPacketStart == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCapturePacket_Exit);
-
-    status = deviceContext->RtPacketObject->GetCapturePacket(deviceIndex, lastCapturePacket, qpcPacketStart);
-
-USBAudioAcxDriverStreamGetCapturePacket_Exit:
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS
-USBAudioAcxDriverStreamGetPresentationPosition(
-    bool            isInput,
-    ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext,
-    PULONGLONG      positionInBlocks,
-    PULONGLONG      qpcPosition
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    _IRQL_limited_to_(PASSIVE_LEVEL);
-
-    IF_TRUE_ACTION_JUMP(deviceContext == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCapturePacket_Exit);
-    IF_TRUE_ACTION_JUMP(deviceContext->RtPacketObject == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCapturePacket_Exit);
-    IF_TRUE_ACTION_JUMP(positionInBlocks == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCapturePacket_Exit);
-    IF_TRUE_ACTION_JUMP(qpcPosition == nullptr, status = STATUS_INVALID_PARAMETER, USBAudioAcxDriverStreamGetCapturePacket_Exit);
-
-    status = deviceContext->RtPacketObject->GetPresentationPosition(isInput, deviceIndex, positionInBlocks, qpcPosition);
-
-USBAudioAcxDriverStreamGetCapturePacket_Exit:
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS USBAudioAcxDriverGetCurrentDataFormat(
-    PDEVICE_CONTEXT deviceContext,
-    bool            isInput,
-    ACXDATAFORMAT & dataFormat
-)
-{
-    UCHAR                               numOfChannels = 0;
-    KSDATAFORMAT_WAVEFORMATEXTENSIBLE * ksDataFormatWaveFormatExtensible = nullptr;
-    WDFMEMORY                           ksDataFormatWaveFormatExtensibleMemory = nullptr;
-
-    PAGED_CODE();
-
-    ASSERT(deviceContext->Device != nullptr);
-
-    auto createInterfaceScope = wil::scope_exit([&]() {
-        if (ksDataFormatWaveFormatExtensibleMemory != nullptr)
-        {
-            WdfObjectDelete(ksDataFormatWaveFormatExtensibleMemory);
-            ksDataFormatWaveFormatExtensibleMemory = nullptr;
-        }
-        ksDataFormatWaveFormatExtensible = nullptr;
-    });
-
-    RtlZeroMemory(&dataFormat, sizeof(dataFormat));
-
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannels(isInput, numOfChannels));
-
-    if (isInput)
-    {
-        ASSERT(deviceContext->Capture != nullptr);
-
-        if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
-        {
-            RETURN_NTSTATUS_IF_FAILED(USBAudioDataFormat::BuildWaveFormatExtensible(
-                deviceContext->UsbDevice,
-                deviceContext->AudioProperty.SampleRate,
-                numOfChannels,
-                (UCHAR)deviceContext->InputProperty.BytesPerSample,
-                (UCHAR)deviceContext->InputProperty.ValidBitsPerSample,
-                deviceContext->InputProperty.FormatType,
-                deviceContext->InputProperty.Format,
-                false,
-                ksDataFormatWaveFormatExtensible,
-                ksDataFormatWaveFormatExtensibleMemory
-            ));
-            ASSERT(ksDataFormatWaveFormatExtensible != nullptr);
-            RETURN_NTSTATUS_IF_FAILED(AllocateFormat(ksDataFormatWaveFormatExtensible, deviceContext->Capture, deviceContext->Device, &dataFormat));
-        }
-    }
-    else
-    {
-        ASSERT(deviceContext->Render != nullptr);
-
-        if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-        {
-            RETURN_NTSTATUS_IF_FAILED(USBAudioDataFormat::BuildWaveFormatExtensible(
-                deviceContext->UsbDevice,
-                deviceContext->AudioProperty.SampleRate,
-                numOfChannels,
-                (UCHAR)deviceContext->OutputProperty.BytesPerSample,
-                (UCHAR)deviceContext->OutputProperty.ValidBitsPerSample,
-                deviceContext->OutputProperty.FormatType,
-                deviceContext->OutputProperty.Format,
-                false,
-                ksDataFormatWaveFormatExtensible,
-                ksDataFormatWaveFormatExtensibleMemory
-            ));
-            ASSERT(ksDataFormatWaveFormatExtensible != nullptr);
-            RETURN_NTSTATUS_IF_FAILED(AllocateFormat(ksDataFormatWaveFormatExtensible, deviceContext->Render, deviceContext->Device, &dataFormat));
-        }
-    }
-
-    return STATUS_SUCCESS;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
 bool USBAudioAcxDriverHasAsioOwnership(
     PDEVICE_CONTEXT deviceContext
 )
@@ -3965,559 +1700,12 @@ bool USBAudioAcxDriverHasAsioOwnership(
 
     PAGED_CODE();
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
-    hasAsioOwnership = (deviceContext->AsioOwner != nullptr);
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    {
+        hasAsioOwnership = deviceContext->AudioIsochronousEngines[0]->HasAsioOwnership();
+    }
 
     return hasAsioOwnership;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS LoadInternalParametersFromDeviceRegistry(
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC!");
-
-    WDFKEY   registryKey = nullptr;
-    NTSTATUS status = WdfDeviceOpenRegistryKey(deviceContext->Device, PLUGPLAY_REGKEY_DEVICE, KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "WdfDeviceOpenRegistryKey = %!STATUS!", status);
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    struct NameAndDataAddress
-    {
-        const WCHAR * name;
-        DWORD *       dataAddless;
-    } internalParametersNameAndDataAddressTable[] = {
-        {c_FirstPacketLatencyName, reinterpret_cast<DWORD *>(&deviceContext->Params.FirstPacketLatency)},
-        {c_ClassicFramesPerIrpName, reinterpret_cast<DWORD *>(&deviceContext->Params.ClassicFramesPerIrp)},
-        {c_MaxIrpNumberName, reinterpret_cast<DWORD *>(&deviceContext->Params.MaxIrpNumber)},
-        {c_PreSendFramesName, reinterpret_cast<DWORD *>(&deviceContext->Params.PreSendFrames)},
-        {c_OutputFrameDelayName, reinterpret_cast<DWORD *>(&deviceContext->Params.OutputFrameDelay)},
-        {c_DelayedOutputBufferSwitchName, reinterpret_cast<DWORD *>(&deviceContext->Params.DelayedOutputBufferSwitch)},
-        {c_InputBufferOperationOffsetName, reinterpret_cast<DWORD *>(&deviceContext->Params.InputBufferOperationOffset)},
-        {c_InputHubOffsetName, reinterpret_cast<DWORD *>(&deviceContext->Params.InputHubOffset)},
-        {c_OutputBufferOperationOffsetName, reinterpret_cast<DWORD *>(&deviceContext->Params.OutputBufferOperationOffset)},
-        {c_OutputHubOffsetName, reinterpret_cast<DWORD *>(&deviceContext->Params.OutputHubOffset)},
-        {c_BufferThreadPriorityName, reinterpret_cast<DWORD *>(&deviceContext->Params.BufferThreadPriority)},
-        {c_ClassicFramesPerIrp2Name, reinterpret_cast<DWORD *>(&deviceContext->Params.ClassicFramesPerIrp2)},
-        {c_SuggestedBufferPeriodName, reinterpret_cast<DWORD *>(&deviceContext->Params.SuggestedBufferPeriod)},
-    };
-
-    const ULONG internalParametersNameAndDataAddressTableSize = SIZEOF_ARRAY(internalParametersNameAndDataAddressTable);
-
-    for (ULONG index = 0; index < internalParametersNameAndDataAddressTableSize; ++index)
-    {
-        UNICODE_STRING valueName;
-        ULONG          resultLength = 0;
-        DWORD          value;
-
-        RtlInitUnicodeString(&valueName, internalParametersNameAndDataAddressTable[index].name);
-
-        status = WdfRegistryQueryValue(
-            registryKey,   // Key
-            &valueName,    // ValueName
-            sizeof(value), // ValueLength
-            &value,        // Value
-            &resultLength, // ValueLengthQueried
-            nullptr        // ValueType
-        );
-
-        if (!NT_SUCCESS(status))
-        {
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "index = %u, name = %ls, status = %!STATUS!", index, internalParametersNameAndDataAddressTable[index].name, status);
-            break;
-        }
-
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "index = %u, name = %ls, status = %!STATUS!, value(ULONG) = %u, value(LONG) = %d", index, internalParametersNameAndDataAddressTable[index].name, status, value, value);
-
-        *internalParametersNameAndDataAddressTable[index].dataAddless = value;
-    }
-
-    WdfRegistryClose(registryKey);
-
-    // Check InternalParameters
-    BOOL isValid = IsValidInternalParameters(deviceContext->Params);
-
-    if (!isValid)
-    {
-        deviceContext->Params.FirstPacketLatency = UAC_DEFAULT_FIRST_PACKET_LATENCY;
-        deviceContext->Params.ClassicFramesPerIrp = UAC_DEFAULT_CLASSIC_FRAMES_PER_IRP;
-        deviceContext->Params.MaxIrpNumber = UAC_DEFAULT_MAX_IRP_NUMBER;
-        deviceContext->Params.PreSendFrames = UAC_DEFAULT_PRE_SEND_FRAMES;
-        deviceContext->Params.OutputFrameDelay = UAC_DEFAULT_OUTPUT_FRAME_DELAY;
-        deviceContext->Params.DelayedOutputBufferSwitch = UAC_DEFAULT_DELAYED_OUTPUT_BUFFER_SWITCH;
-        deviceContext->Params.InputBufferOperationOffset = UAC_DEFAULT_IN_BUFFER_OPERATION_OFFSET;
-        deviceContext->Params.InputHubOffset = UAC_DEFAULT_IN_HUB_OFFSET;
-        deviceContext->Params.OutputBufferOperationOffset = UAC_DEFAULT_OUT_BUFFER_OPERATION_OFFSET;
-        deviceContext->Params.OutputHubOffset = UAC_DEFAULT_OUT_HUB_OFFSET;
-        deviceContext->Params.BufferThreadPriority = UAC_DEFAULT_BUFFER_THREAD_PRIORITY;
-        deviceContext->Params.ClassicFramesPerIrp2 = UAC_DEFAULT_CLASSIC_FRAMES_PER_IRP;
-        deviceContext->Params.SuggestedBufferPeriod = UAC_DEFAULT_SUGGESTED_BUFFER_PERIOD;
-
-        status = SaveInternalParametersToDeviceRegistry(deviceContext);
-
-        if (!NT_SUCCESS(status))
-        {
-            ASSERT(NT_SUCCESS(status));
-            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "SaveInternalParametersToDeviceRegistry failed %!STATUS!", status);
-            return status;
-        }
-    }
-
-    status = UpdateFramePerIrp(deviceContext, deviceContext->Params.SuggestedBufferPeriod);
-    if (!NT_SUCCESS(status))
-    {
-        ASSERT(NT_SUCCESS(status));
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "UpdateFramePerIrp failed %!STATUS!", status);
-        return status;
-    }
-
-    status = UpdateBufferOperationOffset(deviceContext, deviceContext->Params.SuggestedBufferPeriod);
-    if (!NT_SUCCESS(status))
-    {
-        ASSERT(NT_SUCCESS(status));
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "UpdateBufferOperationOffset failed %!STATUS!", status);
-    }
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-NTSTATUS SaveInternalParametersToDeviceRegistry(
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC!");
-
-    WDFKEY   registryKey = nullptr;
-    NTSTATUS status = WdfDeviceOpenRegistryKey(deviceContext->Device, PLUGPLAY_REGKEY_DEVICE, KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "WdfDeviceOpenRegistryKey = %!STATUS!", status);
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    const struct NameAndDataAddress
-    {
-        const WCHAR * name;
-        DWORD *       dataAddless;
-    } internalParametersNameAndDataAddressTable[] = {
-        {c_FirstPacketLatencyName, reinterpret_cast<DWORD *>(&deviceContext->Params.FirstPacketLatency)},
-        {c_ClassicFramesPerIrpName, reinterpret_cast<DWORD *>(&deviceContext->Params.ClassicFramesPerIrp)},
-        {c_MaxIrpNumberName, reinterpret_cast<DWORD *>(&deviceContext->Params.MaxIrpNumber)},
-        {c_PreSendFramesName, reinterpret_cast<DWORD *>(&deviceContext->Params.PreSendFrames)},
-        {c_OutputFrameDelayName, reinterpret_cast<DWORD *>(&deviceContext->Params.OutputFrameDelay)},
-        {c_DelayedOutputBufferSwitchName, reinterpret_cast<DWORD *>(&deviceContext->Params.DelayedOutputBufferSwitch)},
-        {c_InputBufferOperationOffsetName, reinterpret_cast<DWORD *>(&deviceContext->Params.InputBufferOperationOffset)},
-        {c_InputHubOffsetName, reinterpret_cast<DWORD *>(&deviceContext->Params.InputHubOffset)},
-        {c_OutputBufferOperationOffsetName, reinterpret_cast<DWORD *>(&deviceContext->Params.OutputBufferOperationOffset)},
-        {c_OutputHubOffsetName, reinterpret_cast<DWORD *>(&deviceContext->Params.OutputHubOffset)},
-        {c_BufferThreadPriorityName, reinterpret_cast<DWORD *>(&deviceContext->Params.BufferThreadPriority)},
-        {c_ClassicFramesPerIrp2Name, reinterpret_cast<DWORD *>(&deviceContext->Params.ClassicFramesPerIrp2)},
-        {c_SuggestedBufferPeriodName, reinterpret_cast<DWORD *>(&deviceContext->Params.SuggestedBufferPeriod)},
-    };
-
-    const ULONG internalParametersNameAndDataAddressTableSize = SIZEOF_ARRAY(internalParametersNameAndDataAddressTable);
-
-    for (ULONG index = 0; index < internalParametersNameAndDataAddressTableSize; ++index)
-    {
-        UNICODE_STRING valueName;
-
-        RtlInitUnicodeString(&valueName, internalParametersNameAndDataAddressTable[index].name);
-
-        DWORD value = *internalParametersNameAndDataAddressTable[index].dataAddless;
-
-        status = WdfRegistryAssignValue(
-            registryKey,   // Key
-            &valueName,    // ValueName
-            REG_DWORD,     // ValueType
-            sizeof(value), // ValueLength
-            &value         // Value
-        );
-
-        if (!NT_SUCCESS(status))
-        {
-            break;
-        }
-
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "index = %u, name = %ls, status = %!STATUS!, value(ULONG) = %u, value(LONG) = %d", index, internalParametersNameAndDataAddressTable[index].name, status, value, value);
-    }
-
-    WdfRegistryClose(registryKey);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS SaveAsioDeviceToRegistry(
-    PUNICODE_STRING asioDevice
-)
-{
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    NTSTATUS status = STATUS_SUCCESS;
-    WDFKEY   registryKey = nullptr;
-
-    auto exitProcess = wil::scope_exit(
-        [&]() {
-            if (registryKey != nullptr)
-            {
-                WdfRegistryClose(registryKey);
-            }
-
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-        }
-    );
-
-    if (asioDevice == nullptr)
-    {
-        status = STATUS_INVALID_PARAMETER;
-        return status;
-    }
-
-    status = WdfRegistryOpenKey(nullptr, &g_RegistryPath, KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey);
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    UNICODE_STRING valueName;
-    RtlInitUnicodeString(&valueName, c_AsioDeviceName);
-
-    WDFSTRING value = nullptr;
-    status = WdfStringCreate(asioDevice, WDF_NO_OBJECT_ATTRIBUTES, &value);
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    status = WdfRegistryAssignString(
-        registryKey, // Key
-        &valueName,  // ValueName
-        value        // String
-    );
-
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS LoadAsioDeviceFromRegistry(
-    PUNICODE_STRING asioDevice
-)
-{
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    NTSTATUS status = STATUS_SUCCESS;
-    WDFKEY   registryKey = nullptr;
-
-    auto exitProcess = wil::scope_exit(
-        [&]() {
-            if (registryKey != nullptr)
-            {
-                WdfRegistryClose(registryKey);
-            }
-
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-        }
-    );
-
-    if (asioDevice == nullptr)
-    {
-        status = STATUS_INVALID_PARAMETER;
-        return status;
-    }
-
-    status = WdfRegistryOpenKey(nullptr, &g_RegistryPath, KEY_READ, WDF_NO_OBJECT_ATTRIBUTES, &registryKey);
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    UNICODE_STRING valueName;
-    RtlInitUnicodeString(&valueName, c_AsioDeviceName);
-
-    WDFSTRING value = nullptr;
-    status = WdfStringCreate(nullptr, WDF_NO_OBJECT_ATTRIBUTES, &value);
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    status = WdfRegistryQueryString(
-        registryKey, // Key
-        &valueName,  // ValueName
-        value        // String
-    );
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    WdfStringGetUnicodeString(value, asioDevice);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "asioDevice->Buffer = %ls", asioDevice->Buffer);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "asioDevice->Length = %u", asioDevice->Length);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "asioDevice->MaximumLength = %u", asioDevice->MaximumLength);
-
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS SaveSampleRateToRegistry(
-    WDFDEVICE device,
-    ULONG     sampleRate
-)
-{
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    NTSTATUS status = STATUS_SUCCESS;
-    WDFKEY   registryKey = nullptr;
-
-    auto exitProcess = wil::scope_exit(
-        [&]() {
-            if (registryKey != nullptr)
-            {
-                WdfRegistryClose(registryKey);
-            }
-
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-        }
-    );
-
-    if (device == nullptr)
-    {
-        status = STATUS_INVALID_PARAMETER;
-        return status;
-    }
-
-    status = WdfDeviceOpenRegistryKey(device, PLUGPLAY_REGKEY_DEVICE, KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey);
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    UNICODE_STRING valueName;
-    RtlInitUnicodeString(&valueName, c_SampleRateName);
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    status = WdfRegistryAssignValue(
-        registryKey,        // Key
-        &valueName,         // ValueName
-        REG_DWORD,          // ValueType
-        sizeof(sampleRate), // ValueLength
-        &sampleRate         // Value
-    );
-
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS LoadSampleRateFromRegistry(
-    WDFDEVICE device,
-    ULONG &   sampleRate
-)
-{
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    NTSTATUS status = STATUS_SUCCESS;
-    WDFKEY   registryKey = nullptr;
-
-    auto exitProcess = wil::scope_exit(
-        [&]() {
-            if (registryKey != nullptr)
-            {
-                WdfRegistryClose(registryKey);
-            }
-
-            if (!NT_SUCCESS(status))
-            {
-                sampleRate = UAC_DEFAULT_SAMPLE_RATE;
-            }
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-        }
-    );
-
-    if (device == nullptr)
-    {
-        status = STATUS_INVALID_PARAMETER;
-        return status;
-    }
-
-    status = WdfDeviceOpenRegistryKey(device, PLUGPLAY_REGKEY_DEVICE, KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey);
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    UNICODE_STRING valueName;
-    RtlInitUnicodeString(&valueName, c_SampleRateName);
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    ULONG value = 0;
-    ULONG resultLength = 0;
-
-    status = WdfRegistryQueryValue(
-        registryKey,   // Key
-        &valueName,    // ValueName
-        sizeof(ULONG), // ValueLength
-        &value,        // Value
-        &resultLength, // ValueLengthQueried
-        nullptr        // ValueType
-    );
-
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
-
-    sampleRate = value;
-
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-bool IsValidInternalParameters(
-    const DEVICE_CONTEXT::INTERNAL_PARAMETERS & internalParameters
-)
-{
-    bool isValid = false;
-
-    PAGED_CODE();
-
-    if ((internalParameters.FirstPacketLatency > USBD_ISO_START_FRAME_RANGE) ||
-        /* (internalParameters.ClassicFramesPerIrp < UAC_MIN_CLASSIC_FRAMES_PER_IRP) || */
-        (internalParameters.ClassicFramesPerIrp > UAC_MAX_CLASSIC_FRAMES_PER_IRP) ||
-        (internalParameters.MaxIrpNumber < UAC_MIN_MAX_IRP_NUMBER) ||
-        (internalParameters.MaxIrpNumber > UAC_MAX_IRP_NUMBER) ||
-        (internalParameters.PreSendFrames > UAC_MAX_PRE_SEND_FRAMES) ||
-        (internalParameters.OutputFrameDelay < UAC_MIN_OUTPUT_FRAME_DELAY) ||
-        (internalParameters.OutputFrameDelay > UAC_MAX_OUTPUT_FRAME_DELAY) ||
-        //(internalParameters.BufferOperationThread > UAC_MAX_BUFFER_OPERATION_THREAD) ||
-        ((internalParameters.InputBufferOperationOffset & 0xfffffff) > UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_IRP_NUMBER * 8) ||
-        (internalParameters.InputHubOffset > UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_IRP_NUMBER * 8) ||
-        ((internalParameters.OutputBufferOperationOffset & 0xfffffff) > UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_IRP_NUMBER * 8) ||
-        (internalParameters.OutputHubOffset > UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_IRP_NUMBER * 8) ||
-        (internalParameters.BufferThreadPriority > HIGH_PRIORITY))
-    {
-        isValid = false;
-    }
-    else
-    {
-        isValid = true;
-    }
-
-    return isValid;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS UpdateFramePerIrp(
-    PDEVICE_CONTEXT deviceContext,
-    ULONG           bufferPeriod
-)
-{
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC!");
-
-    if (deviceContext == nullptr)
-    {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    int bufferSizeIndex = 0;
-    for (; bufferSizeIndex < (ARRAYSIZE(g_DriverSettingsTable) - 1); ++bufferSizeIndex)
-    {
-        if (g_DriverSettingsTable[bufferSizeIndex].PeriodFrames == bufferPeriod)
-        {
-            break;
-        }
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "ClassicFramesPerIrp  %u -> %u", deviceContext->Params.ClassicFramesPerIrp, g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "ClassicFramesPerIrp2 %u -> %u", deviceContext->Params.ClassicFramesPerIrp2, g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp2);
-
-    deviceContext->Params.ClassicFramesPerIrp = g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp;
-    deviceContext->Params.ClassicFramesPerIrp2 = g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp2;
-
-    return STATUS_SUCCESS;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS UpdateBufferOperationOffset(
-    PDEVICE_CONTEXT deviceContext,
-    ULONG           bufferPeriod
-)
-{
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC!");
-
-    if (deviceContext == nullptr)
-    {
-        return STATUS_INVALID_PARAMETER;
-    }
-
-    int bufferSizeIndex = 0;
-
-    for (; bufferSizeIndex < (ARRAYSIZE(g_DriverSettingsTable) - 1); ++bufferSizeIndex)
-    {
-        if (g_DriverSettingsTable[bufferSizeIndex].PeriodFrames == bufferPeriod)
-        {
-            break;
-        }
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "OutputBufferOperationOffset  0x%08x -> 0x%08x", deviceContext->Params.OutputBufferOperationOffset, g_DriverSettingsTable[bufferSizeIndex].Parameter.OutputBufferOperationOffset);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "InputBufferOperationOffset   0x%08x -> 0x%08x", deviceContext->Params.InputBufferOperationOffset, g_DriverSettingsTable[bufferSizeIndex].Parameter.InputBufferOperationOffset);
-
-    deviceContext->Params.OutputBufferOperationOffset = g_DriverSettingsTable[bufferSizeIndex].Parameter.OutputBufferOperationOffset;
-    deviceContext->Params.InputBufferOperationOffset = g_DriverSettingsTable[bufferSizeIndex].Parameter.InputBufferOperationOffset;
-
-    return STATUS_SUCCESS;
 }
 
 PAGED_CODE_SEG
@@ -4563,16 +1751,10 @@ VOID EvtUSBAudioAcxDriverGetAudioProperty(
     ULONG               minValueSize = sizeof(UAC_AUDIO_PROPERTY);
     PUAC_AUDIO_PROPERTY audioProperty = static_cast<PUAC_AUDIO_PROPERTY>(params.Parameters.Property.Value);
 
-    deviceContext->AudioProperty.InputDriverBuffer = deviceContext->UsbLatency.InputDriverBuffer;
-    deviceContext->AudioProperty.OutputDriverBuffer = deviceContext->UsbLatency.OutputDriverBuffer;
-    // deviceContext->AudioProperty.CurrentSampleFormat = deviceContext->CurrentSampleFormat;
-
-    *audioProperty = deviceContext->AudioProperty;
-
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputAsioChannels  %d", audioProperty->InputAsioChannels);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputAsioChannels %d", audioProperty->OutputAsioChannels);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - IsAccessible    %!bool!", audioProperty->IsAccessible);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - PowerState      %d", WdfDeviceGetDevicePowerState(device));
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    {
+        status = deviceContext->AudioIsochronousEngines[0]->GetAudioProperty(*audioProperty);
+    }
 
     outDataCb = minValueSize;
 
@@ -4595,14 +1777,14 @@ VOID EvtUSBAudioAcxDriverGetChannelInfo(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
+    PAGED_CODE();
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
     WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
     ASSERT(device != nullptr);
 
     PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
     ACX_REQUEST_PARAMETERS_INIT(&params);
     AcxRequestGetParameters(request, &params);
@@ -4619,41 +1801,13 @@ VOID EvtUSBAudioAcxDriverGetChannelInfo(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    ULONG numChannels = deviceContext->AudioProperty.InputAsioChannels + deviceContext->AudioProperty.OutputAsioChannels;
-    ULONG minValueSize = offsetof(UAC_GET_CHANNEL_INFO_CONTEXT, Channel) + (sizeof(UAC_CHANNEL_INFO) * numChannels);
-    if (params.Parameters.Property.ValueCb == 0)
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
     {
-        outDataCb = minValueSize;
-        status = STATUS_BUFFER_OVERFLOW;
-    }
-    else if (params.Parameters.Property.ValueCb < minValueSize)
-    {
-        outDataCb = 0;
-        status = STATUS_BUFFER_TOO_SMALL;
-    }
-    else
-    {
+        ULONG                         minValueSize = 0;
         PUAC_GET_CHANNEL_INFO_CONTEXT channelInfo = static_cast<PUAC_GET_CHANNEL_INFO_CONTEXT>(params.Parameters.Property.Value);
-        channelInfo->NumChannels = numChannels;
-        BOOL  input = deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface() ? TRUE : FALSE;
-        ULONG asioCh = 0;
-        for (ULONG i = 0; i < numChannels; ++i)
-        {
-            RtlStringCchCopyW(channelInfo->Channel[i].Name, UAC_MAX_CHANNEL_NAME_LENGTH, input ? deviceContext->InputAsioChannelName[asioCh] : deviceContext->OutputAsioChannelName[asioCh]);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - channel info. channel name [%d] %ws", i, channelInfo->Channel[i].Name);
-            channelInfo->Channel[i].Index = asioCh;
-            channelInfo->Channel[i].IsInput = input;
-            channelInfo->Channel[i].IsActive = 0;     // not used
-            channelInfo->Channel[i].ChannelGroup = 0; // not used
-            ++asioCh;
-            if (input && asioCh >= deviceContext->AudioProperty.InputAsioChannels)
-            {
-                input = FALSE;
-                asioCh = 0;
-            }
-        }
+
+        status = deviceContext->AudioIsochronousEngines[0]->GetChannelInfo(channelInfo, params.Parameters.Property.ValueCb, minValueSize);
         outDataCb = minValueSize;
-        status = STATUS_SUCCESS;
     }
 Exit:
     WdfRequestCompleteWithInformation(request, status, outDataCb);
@@ -4673,14 +1827,14 @@ VOID EvtUSBAudioAcxDriverGetClockInfo(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
+    PAGED_CODE();
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
     WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
     ASSERT(device != nullptr);
 
     PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
     ACX_REQUEST_PARAMETERS_INIT(&params);
     AcxRequestGetParameters(request, &params);
@@ -4697,133 +1851,17 @@ VOID EvtUSBAudioAcxDriverGetClockInfo(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    ULONG numClockSources = deviceContext->AcClockSources;
-    ULONG minValueSize = offsetof(UAC_GET_CLOCK_INFO_CONTEXT, ClockSource) + (sizeof(UAC_CLOCK_INFO) * numClockSources);
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    {
+        ULONG                         minValueSize = 0;
+        PUAC_GET_CHANNEL_INFO_CONTEXT channelInfo = (PUAC_GET_CHANNEL_INFO_CONTEXT)(params.Parameters.Property.Value);
 
-    if (params.Parameters.Property.ValueCb == 0)
-    {
+        status = deviceContext->AudioIsochronousEngines[0]->GetChannelInfo(channelInfo, params.Parameters.Property.ValueCb, minValueSize);
         outDataCb = minValueSize;
-        status = STATUS_BUFFER_OVERFLOW;
     }
-    else if (params.Parameters.Property.ValueCb < minValueSize)
-    {
-        outDataCb = 0;
-        status = STATUS_BUFFER_TOO_SMALL;
-    }
-    else
-    {
-        PUAC_GET_CLOCK_INFO_CONTEXT clockInfo = (PUAC_GET_CLOCK_INFO_CONTEXT)(params.Parameters.Property.Value);
-        clockInfo->NumClockSource = numClockSources;
-        for (ULONG i = 0; i < numClockSources; ++i)
-        {
-            clockInfo->ClockSource[i].Index = i;
-            clockInfo->ClockSource[i].AssociatedChannel = 0; // not used
-            clockInfo->ClockSource[i].AssociatedGroup = 0;   // not used
-            clockInfo->ClockSource[i].IsCurrentSource = (i == deviceContext->CurrentClockSource);
-            clockInfo->ClockSource[i].IsLocked = 0;          // not used
-            RtlStringCchCopyW(clockInfo->ClockSource[i].Name, UAC_MAX_CLOCK_SOURCE_NAME_LENGTH, deviceContext->ClockSourceName[i]);
-        }
-        outDataCb = minValueSize;
-        status = STATUS_SUCCESS;
-    }
-
 Exit:
     WdfRequestCompleteWithInformation(request, status, outDataCb);
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
-VOID EvtUSBAudioAcxDriverGetLatencyOffsetOfSampleRate(
-    WDFOBJECT /* object */,
-    WDFREQUEST request
-)
-{
-    NTSTATUS               status = STATUS_NOT_SUPPORTED;
-    ACX_REQUEST_PARAMETERS params{};
-    ULONG_PTR              outDataCb = 0;
-    // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
-    // ASSERT(stream != nullptr);
-
-    // WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    // ASSERT(device != nullptr);
-
-    // PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    // ASSERT(deviceContext != nullptr);
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    ACX_REQUEST_PARAMETERS_INIT(&params);
-    AcxRequestGetParameters(request, &params);
-
-    ASSERT(params.Type == AcxRequestTypeProperty);
-    ASSERT(params.Parameters.Property.Verb == AcxPropertyVerbGet);
-    ASSERT(params.Parameters.Property.Control != nullptr);
-    ASSERT(params.Parameters.Property.ControlCb >= sizeof(UAC_SET_FLAGS_CONTEXT));
-
-    IF_TRUE_ACTION_JUMP(((params.Parameters.Property.Control == nullptr) ||
-                         (params.Parameters.Property.ControlCb < sizeof(UAC_SET_FLAGS_CONTEXT)) ||
-                         ((params.Parameters.Property.ValueCb != 0) && (params.Parameters.Property.Value == nullptr))),
-                        ASSERT(FALSE);
-                        outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
-                                                                         Exit);
-
-#if false
-	// TBD
-    if ((deviceContext->LatencyOffsetList != nullptr) && (deviceContext->LatencyOffsetList->NumLatencyOffsetTable != 0))
-    {
-        ULONG minValueSize = sizeof(UAC_LATENCY_OFFSET_OF_SAMPLERATE_CONTEXT) * deviceContext->LatencyOffsetList->NumLatencyOffsetTable;
-        if (params.Parameters.Property.ValueCb == 0)
-        {
-            // 0 buffer length requests the buffer size needed.
-            outDataCb = minValueSize;
-            status    = STATUS_BUFFER_OVERFLOW;
-        }
-        else if (params.Parameters.Property.ValueCb < minValueSize)
-        {
-            outDataCb = 0;
-            status    = STATUS_BUFFER_TOO_SMALL;
-        }
-        else
-        {
-            UAC_SET_FLAGS_CONTEXT flags = {0};
-            if (params.Parameters.Property.ControlCb >= sizeof(UAC_SET_FLAGS_CONTEXT))
-            {
-                PUAC_SET_FLAGS_CONTEXT flagsInput = (PUAC_SET_FLAGS_CONTEXT)params.Parameters.Property.Control;
-                if (IsValidFlags(flagsInput))
-                {
-                    flags = *flagsInput;
-                    ConvertFlags(&flags);
-                }
-            }
-            PUAC_LATENCY_OFFSET_OF_SAMPLERATE_CONTEXT latencyOffset = (PUAC_LATENCY_OFFSET_OF_SAMPLERATE_CONTEXT)params.Parameters.Property.Value;
-            const UAC_LATENCY_OFFSET_LIST *           list          = deviceContext->LatencyOffsetList;
-            for (int sampleRateIndex = 0; sampleRateIndex < list->NumLatencyOffsetTable; ++sampleRateIndex)
-            {
-                UAC_USB_LATENCY latency = {0};
-                CalculateUsbLatency(deviceContext, &flags, list->LatencyOffsetTable[sampleRateIndex].SampleRate, &latency);
-                latencyOffset[sampleRateIndex].SampleRate          = list->LatencyOffsetTable[sampleRateIndex].SampleRate;
-                latencyOffset[sampleRateIndex].InputLatencyOffset  = latency.InLatency;
-                latencyOffset[sampleRateIndex].OutputLatencyOffset = latency.OutputLatency;
-            }
-            outDataCb = minValueSize;
-            status    = STATUS_SUCCESS;
-        }
-        else
-        {
-            status = STATUS_INVALID_PARAMETER;
-        }
-    }
-    else
-#endif
-    {
-        status = STATUS_DEVICE_NOT_READY;
-    }
-
-Exit:
-    WdfRequestCompleteWithInformation(request, status, outDataCb);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 }
 
@@ -4840,14 +1878,14 @@ VOID EvtUSBAudioAcxDriverSetClockSource(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
+    PAGED_CODE();
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
     WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
     ASSERT(device != nullptr);
 
     PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
     ACX_REQUEST_PARAMETERS_INIT(&params);
     AcxRequestGetParameters(request, &params);
@@ -4867,45 +1905,15 @@ VOID EvtUSBAudioAcxDriverSetClockSource(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    PUAC_SET_CLOCK_SOURCE_CONTEXT context = (PUAC_SET_CLOCK_SOURCE_CONTEXT)params.Parameters.Property.Value;
-    if (context->Index == deviceContext->CurrentClockSource)
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
     {
-        status = STATUS_SUCCESS;
+        ULONG                         minValueSize = 0;
+        PUAC_SET_CLOCK_SOURCE_CONTEXT clockSource = (PUAC_SET_CLOCK_SOURCE_CONTEXT)params.Parameters.Property.Value;
+
+        status = deviceContext->AudioIsochronousEngines[0]->SetClockSource(clockSource, params.Parameters.Property.ValueCb, minValueSize);
+        outDataCb = minValueSize;
     }
-    else if (deviceContext->AcClockSources > 1)
-    {
-        status = ControlRequestSetClockSelector(deviceContext, deviceContext->AudioControlInterfaceNumber, deviceContext->ClockSelectorId, deviceContext->AcClockSourceInfo[(USHORT)context->Index].ClockSelectorIndex);
 
-        WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-        if (deviceContext->ClockObservationThread != nullptr && NT_SUCCESS(status))
-        {
-            deviceContext->CurrentClockSource = context->Index;
-            ULONG newRate = deviceContext->AudioProperty.SampleRate;
-
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-            if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
-            {
-                StopIsoStream(deviceContext);
-            }
-            deviceContext->ResetRequestOwner = deviceContext->AsioOwner;
-
-            ULONG desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
-            ULONG desiredFormat = NS_USBAudio0200::PCM;
-
-            USBAudioDataFormat::ConvertFormatToSampleFormat(deviceContext->AudioProperty.CurrentSampleFormat, desiredFormatType, desiredFormat);
-
-            status = ActivateAudioInterface(deviceContext, newRate, desiredFormatType, desiredFormat, deviceContext->InputProperty.BytesPerSample, deviceContext->InputProperty.ValidBitsPerSample, deviceContext->OutputProperty.BytesPerSample, deviceContext->OutputProperty.ValidBitsPerSample);
-            if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
-            {
-                StartIsoStream(deviceContext);
-            }
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-        }
-        WdfWaitLockRelease(deviceContext->StreamWaitLock);
-    }
-    else
-    {
-    }
 Exit:
     WdfRequestCompleteWithInformation(request, status, outDataCb);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -4951,31 +1959,11 @@ VOID EvtUSBAudioAcxDriverSetSampleFormat(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    UACSampleFormat sampleFormat = (UACSampleFormat)(*(PULONG)params.Parameters.Property.Value);
-    if ((deviceContext->AudioProperty.SupportedSampleFormats & (1 << toULong(sampleFormat))) == 0)
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
     {
-        status = STATUS_INVALID_PARAMETER;
-    }
-    else if (sampleFormat == deviceContext->AudioProperty.CurrentSampleFormat)
-    {
-        status = STATUS_SUCCESS;
-    }
-    else
-    {
-        ULONG formatType = 0;
-        ULONG format = 0;
+        UACSampleFormat sampleFormat = (UACSampleFormat)(*(PULONG)params.Parameters.Property.Value);
 
-        WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
-        StopIsoStream(deviceContext);
-        deviceContext->DesiredSampleFormat = sampleFormat;
-        status = USBAudioDataFormat::ConvertFormatToSampleFormat(sampleFormat, formatType, format);
-        if (NT_SUCCESS(status))
-        {
-            status = ActivateAudioInterface(deviceContext, deviceContext->AudioProperty.SampleRate, formatType, format, deviceContext->InputProperty.BytesPerSample, deviceContext->InputProperty.ValidBitsPerSample, deviceContext->OutputProperty.BytesPerSample, deviceContext->OutputProperty.ValidBitsPerSample);
-        }
-        WdfWaitLockRelease(deviceContext->StreamWaitLock);
-        status = STATUS_SUCCESS;
+        status = deviceContext->AudioIsochronousEngines[0]->SetSampleFormat(sampleFormat);
     }
 
 Exit:
@@ -5023,78 +2011,12 @@ VOID EvtUSBAudioAcxDriverChangeSampleRate(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    ULONG desiredRate = *((ULONG *)params.Parameters.Property.Value);
-    bool  streamRunning = false;
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-    if (deviceContext->StreamObject != nullptr)
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
     {
-        WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-        if (deviceContext->AsioBufferObject == nullptr)
-        {
-            streamRunning = true;
-        }
-        WdfWaitLockRelease(deviceContext->AsioWaitLock);
-        if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
-        {
-            StopIsoStream(deviceContext);
-        }
+        ULONG desiredSampleRate = *((ULONG *)params.Parameters.Property.Value);
+
+        status = deviceContext->AudioIsochronousEngines[0]->ChangeSampleRate(desiredSampleRate);
     }
-    ACXDATAFORMAT inputDataFormatBeforeChange = nullptr;
-    ACXDATAFORMAT outputDataFormatBeforeChange = nullptr;
-    ACXDATAFORMAT inputDataFormatAfterChange = nullptr;
-    ACXDATAFORMAT outputDataFormatAfterChange = nullptr;
-
-    if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
-    {
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatBeforeChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-    }
-    if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-    {
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatBeforeChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-    }
-    if (NT_SUCCESS(status))
-    {
-        ULONG desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
-        ULONG desiredFormat = NS_USBAudio0200::PCM;
-
-        USBAudioDataFormat::ConvertFormatToSampleFormat(deviceContext->AudioProperty.CurrentSampleFormat, desiredFormatType, desiredFormat);
-
-        status = ActivateAudioInterface(deviceContext, desiredRate, desiredFormatType, desiredFormat, deviceContext->InputProperty.BytesPerSample, deviceContext->InputProperty.ValidBitsPerSample, deviceContext->OutputProperty.BytesPerSample, deviceContext->OutputProperty.ValidBitsPerSample);
-        if (streamRunning && NT_SUCCESS(status))
-        {
-            if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
-            {
-                StartIsoStream(deviceContext);
-            }
-        }
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-    }
-
-    IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-    if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface() && (outputDataFormatBeforeChange != nullptr))
-    {
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        status = NotifyAllPinsDataFormatChange(false, deviceContext, outputDataFormatBeforeChange, outputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-    }
-    if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface() && (inputDataFormatBeforeChange != nullptr))
-    {
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        status = NotifyAllPinsDataFormatChange(true, deviceContext, inputDataFormatBeforeChange, inputDataFormatAfterChange);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-    }
-    status = STATUS_SUCCESS;
-
-Exit_BeforeWaitLockRelease:
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
 Exit:
     WdfRequestCompleteWithInformation(request, status, outDataCb);
@@ -5153,108 +2075,11 @@ Return Value:
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    KeQuerySystemTime(&systemTime);
-    if (deviceContext->AsioOwner != nullptr || systemTime.QuadPart < deviceContext->ResetEnableTime.QuadPart)
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
     {
-        status = STATUS_ACCESS_DENIED;
+        status = deviceContext->AudioIsochronousEngines[0]->GetAsioOwnership(WdfRequestGetFileObject(request));
     }
-    else
-    {
-        ULONG         inputBytesPerSample = 0;
-        ULONG         inputValidBitsPerSample = 0;
-        ULONG         outputBytesPerSample = 0;
-        ULONG         outputValidBitsPerSample = 0;
-        ULONG         desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
-        ULONG         desiredFormat = NS_USBAudio0200::PCM;
-        ACXDATAFORMAT inputDataFormatBeforeChange = nullptr;
-        ACXDATAFORMAT outputDataFormatBeforeChange = nullptr;
-        ACXDATAFORMAT inputDataFormatAfterChange = nullptr;
-        ACXDATAFORMAT outputDataFormatAfterChange = nullptr;
 
-        WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
-        if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
-        {
-            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatBeforeChange);
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-        }
-        if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-        {
-            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatBeforeChange);
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-        }
-        status = USBAudioDataFormat::ConvertFormatToSampleFormat(deviceContext->AudioProperty.CurrentSampleFormat, desiredFormatType, desiredFormat);
-        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-        if (!deviceContext->UsbAudioConfiguration->IsEnableASIO())
-        {
-            status = STATUS_INVALID_DEVICE_REQUEST;
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-        }
-
-        if (deviceContext->AudioProperty.SupportedSampleFormats & (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT)))
-        {
-            deviceContext->SampleFormatBackup = deviceContext->AudioProperty.CurrentSampleFormat;
-            desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
-            desiredFormat = NS_USBAudio0200::IEEE_FLOAT;
-        }
-        else if (deviceContext->AudioProperty.SupportedSampleFormats & (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_PCM)))
-        {
-            deviceContext->SampleFormatBackup = deviceContext->AudioProperty.CurrentSampleFormat;
-            desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
-            desiredFormat = NS_USBAudio0200::PCM;
-        }
-
-        if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
-        {
-            status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample);
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-        }
-        if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-        {
-            status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample);
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-        }
-        //
-        // When using ASIO, the maximum bit depth is used independently for input and output.
-        //
-        status = ActivateAudioInterface(deviceContext, deviceContext->AudioProperty.SampleRate, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample, outputBytesPerSample, outputValidBitsPerSample);
-
-        WDFFILEOBJECT fileObject = WdfRequestGetFileObject(request);
-        if (fileObject != nullptr)
-        {
-            deviceContext->AsioOwner = fileObject;
-
-            PFILE_CONTEXT fileContext = GetFileContext(fileObject);
-            if (fileContext != nullptr)
-            {
-                fileContext->DeviceContext = deviceContext;
-            }
-            status = STATUS_SUCCESS;
-        }
-        else
-        {
-            status = STATUS_INVALID_DEVICE_REQUEST;
-        }
-        if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface() && (outputDataFormatBeforeChange != nullptr))
-        {
-            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-            status = NotifyAllPinsDataFormatChange(false, deviceContext, outputDataFormatBeforeChange, outputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-        }
-        if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface() && (inputDataFormatBeforeChange != nullptr))
-        {
-            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-
-            status = NotifyAllPinsDataFormatChange(true, deviceContext, inputDataFormatBeforeChange, inputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
-        }
-    Exit_BeforeWaitLockRelease:
-        WdfWaitLockRelease(deviceContext->StreamWaitLock);
-    }
 Exit:
     WdfRequestCompleteWithInformation(request, status, outDataCb);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -5300,39 +2125,10 @@ VOID EvtUSBAudioAcxDriverStartAsioStream(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-    if (deviceContext->StartCounterAsio == 0)
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
     {
-        if (deviceContext->StartCounterWdmAudio == 0)
-        {
-            status = StartIsoStream(deviceContext);
-        }
-        else
-        {
-            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-            if (deviceContext->AsioBufferObject != nullptr)
-            {
-                deviceContext->AsioBufferObject->SetReady();
-                status = STATUS_SUCCESS;
-            }
-            else
-            {
-                status = STATUS_UNSUCCESSFUL;
-            }
-            WdfWaitLockRelease(deviceContext->AsioWaitLock);
-        }
-        if (NT_SUCCESS(status))
-        {
-            InterlockedIncrement(&deviceContext->StartCounterAsio);
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-        }
+        status = deviceContext->AudioIsochronousEngines[0]->StartAsioStream();
     }
-    else
-    {
-        status = STATUS_SUCCESS;
-    }
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
 Exit:
     WdfRequestCompleteWithInformation(request, status, outDataCb);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -5378,28 +2174,10 @@ VOID EvtUSBAudioAcxDriverStopAsioStream(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-    if (deviceContext->StartCounterAsio)
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
     {
-        InterlockedDecrement(&deviceContext->StartCounterAsio);
-        if ((deviceContext->StartCounterAsio == 0) && (deviceContext->StartCounterWdmAudio == 0))
-        {
-            status = StopIsoStream(deviceContext);
-        }
-        else
-        {
-            status = STATUS_SUCCESS;
-        }
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
+        status = deviceContext->AudioIsochronousEngines[0]->StopAsioStream();
     }
-    else
-    {
-        status = STATUS_SUCCESS;
-    }
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
 Exit:
     WdfRequestCompleteWithInformation(request, status, outDataCb);
@@ -5438,8 +2216,6 @@ VOID EvtUSBAudioAcxDriverSetAsioBuffer(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(params.Parameters.Property.ValueCb >= sizeof(UAC_ASIO_REC_BUFFER_HEADER));
 
-    WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-
     IF_TRUE_ACTION_JUMP(((params.Parameters.Property.Control == nullptr) ||
                          (params.Parameters.Property.ControlCb < sizeof(UAC_ASIO_PLAY_BUFFER_HEADER)) ||
                          (params.Parameters.Property.Value == nullptr) ||
@@ -5447,15 +2223,6 @@ VOID EvtUSBAudioAcxDriverSetAsioBuffer(
                         ASSERT(FALSE);
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
-
-    IF_TRUE_ACTION_JUMP((deviceContext->AsioBufferOwner != nullptr) || (deviceContext->AsioBufferObject != nullptr),
-                        outDataCb = 0;
-                        status = STATUS_DEVICE_BUSY;, Exit);
-
-    deviceContext->AsioBufferObject = AsioBufferObject::Create(deviceContext);
-    IF_TRUE_ACTION_JUMP(deviceContext->AsioBufferObject == nullptr,
-                        outDataCb = 0;
-                        STATUS_INSUFFICIENT_RESOURCES, Exit);
 
     PIRP irp = WdfRequestWdmGetIrp(request);
 
@@ -5467,18 +2234,21 @@ VOID EvtUSBAudioAcxDriverSetAsioBuffer(
     ULONG              inBufferLength = irpStack->Parameters.DeviceIoControl.InputBufferLength;
     ULONG              outBufferLength = irpStack->Parameters.DeviceIoControl.OutputBufferLength;
 
-    outDataCb = params.Parameters.Property.ValueCb;
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    {
+        outDataCb = params.Parameters.Property.ValueCb;
 
-    status = deviceContext->AsioBufferObject->SetBuffer(
-        static_cast<ULONG>(outBufferLength),
-        (PBYTE)outBuffer,
-        0,
-        static_cast<ULONG>(inBufferLength),
-        (PBYTE)inBuffer,
-        sizeof(KSPROPERTY)
-    );
+        status = deviceContext->AudioIsochronousEngines[0]->SetAsioBuffer(
+            static_cast<ULONG>(outBufferLength),
+            (PBYTE)outBuffer,
+            0,
+            static_cast<ULONG>(inBufferLength),
+            (PBYTE)inBuffer,
+            sizeof(KSPROPERTY)
+        );
+    }
+
 Exit:
-    WdfWaitLockRelease(deviceContext->AsioWaitLock);
 
     WdfRequestCompleteWithInformation(request, status, outDataCb);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -5516,8 +2286,6 @@ VOID EvtUSBAudioAcxDriverUnsetAsioBuffer(
     ASSERT(params.Parameters.Property.Value == nullptr);
     ASSERT(params.Parameters.Property.ValueCb == 0);
 
-    WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-
     IF_TRUE_ACTION_JUMP(((params.Parameters.Property.Control != nullptr) ||
                          (params.Parameters.Property.ControlCb != 0) ||
                          (params.Parameters.Property.Value != nullptr) ||
@@ -5526,18 +2294,12 @@ VOID EvtUSBAudioAcxDriverUnsetAsioBuffer(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if (deviceContext->AsioBufferObject != nullptr)
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
     {
-        status = deviceContext->AsioBufferObject->UnsetBuffer();
-        delete deviceContext->AsioBufferObject;
-        deviceContext->AsioBufferObject = nullptr;
+        status = deviceContext->AudioIsochronousEngines[0]->UnsetAsioBuffer();
     }
-    else
-    {
-        status = STATUS_SUCCESS;
-    }
+
 Exit:
-    WdfWaitLockRelease(deviceContext->AsioWaitLock);
 
     WdfRequestCompleteWithInformation(request, status, outDataCb);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -5586,8 +2348,6 @@ Return Value:
     ASSERT(params.Parameters.Property.Value == nullptr);
     ASSERT(params.Parameters.Property.ValueCb == 0);
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
     IF_TRUE_ACTION_JUMP(((params.Parameters.Property.Control != nullptr) ||
                          (params.Parameters.Property.ControlCb != 0) ||
                          (params.Parameters.Property.Value != nullptr) ||
@@ -5596,75 +2356,12 @@ Return Value:
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if (deviceContext->AsioOwner != nullptr)
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
     {
-        if (deviceContext->AsioOwner == WdfRequestGetFileObject(request))
-        {
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "clear asio owner");
-            deviceContext->AsioOwner = nullptr;
-        }
-    }
-    status = STATUS_SUCCESS;
-
-    if ((deviceContext->AudioProperty.SupportedSampleFormats & (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT))) && (deviceContext->SampleFormatBackup != deviceContext->AudioProperty.CurrentSampleFormat))
-    {
-        ULONG         desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
-        ULONG         desiredFormat = NS_USBAudio0200::PCM;
-        ULONG         inputBytesPerSample = 0;
-        ULONG         inputValidBitsPerSample = 0;
-        ULONG         outputBytesPerSample = 0;
-        ULONG         outputValidBitsPerSample = 0;
-        ACXDATAFORMAT inputDataFormatBeforeChange = nullptr;
-        ACXDATAFORMAT outputDataFormatBeforeChange = nullptr;
-        ACXDATAFORMAT inputDataFormatAfterChange = nullptr;
-        ACXDATAFORMAT outputDataFormatAfterChange = nullptr;
-
-        if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
-        {
-            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatBeforeChange);
-            IF_FAILED_JUMP(status, Exit);
-        }
-        if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-        {
-            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatBeforeChange);
-            IF_FAILED_JUMP(status, Exit);
-        }
-        status = USBAudioDataFormat::ConvertFormatToSampleFormat(deviceContext->SampleFormatBackup, desiredFormatType, desiredFormat);
-        IF_FAILED_JUMP(status, Exit);
-
-        if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
-        {
-            status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample);
-            IF_FAILED_JUMP(status, Exit);
-        }
-        if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
-        {
-            status = deviceContext->UsbAudioConfiguration->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample);
-            IF_FAILED_JUMP(status, Exit);
-        }
-        status = ActivateAudioInterface(deviceContext, deviceContext->AudioProperty.SampleRate, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample, outputBytesPerSample, outputValidBitsPerSample);
-        IF_FAILED_JUMP(status, Exit);
-
-        if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface() && (outputDataFormatBeforeChange != nullptr))
-        {
-            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, outputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit);
-
-            status = NotifyAllPinsDataFormatChange(false, deviceContext, outputDataFormatBeforeChange, outputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit);
-        }
-        if (deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface() && (inputDataFormatBeforeChange != nullptr))
-        {
-            status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, inputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit);
-
-            status = NotifyAllPinsDataFormatChange(true, deviceContext, inputDataFormatBeforeChange, inputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit);
-        }
+        status = deviceContext->AudioIsochronousEngines[0]->ReleaseAsioOwnership(WdfRequestGetFileObject(request));
     }
 
 Exit:
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     WdfRequestCompleteWithInformation(request, status, outDataCb);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -5701,8 +2398,6 @@ VOID EvtUSBAudioAcxDriverGetBufferPeriod(
     PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
     IF_TRUE_ACTION_JUMP(
         (
             (params.Parameters.Property.Control != nullptr) ||
@@ -5716,16 +2411,14 @@ VOID EvtUSBAudioAcxDriverGetBufferPeriod(
                                           Exit
     );
 
-    ULONG * bufferPeriod = static_cast<ULONG *>(params.Parameters.Property.Value);
-    outDataCb = sizeof(ULONG);
-    *bufferPeriod = deviceContext->Params.SuggestedBufferPeriod;
-    status = STATUS_SUCCESS;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "BufferPeriod = %u", *bufferPeriod);
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    {
+        ULONG * bufferPeriod = static_cast<ULONG *>(params.Parameters.Property.Value);
+        status = deviceContext->AudioIsochronousEngines[0]->GetBufferPeriod(*bufferPeriod);
+        outDataCb = sizeof(ULONG);
+    }
 
 Exit:
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
@@ -5763,12 +2456,6 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
     PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
 
-    ULONG * bufferPeriod = static_cast<ULONG *>(params.Parameters.Property.Value);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "BufferPeriod = %u", *bufferPeriod);
-
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
     IF_TRUE_ACTION_JUMP(
         (
             (params.Parameters.Property.Control != nullptr) ||
@@ -5782,54 +2469,16 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
                                           Exit
     );
 
-    if (*bufferPeriod != deviceContext->Params.SuggestedBufferPeriod)
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
     {
+        ULONG * bufferPeriod = static_cast<ULONG *>(params.Parameters.Property.Value);
 
-        if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
-        {
-            StopIsoStream(deviceContext);
-        }
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "BufferPeriod = %u", *bufferPeriod);
 
-        status = UpdateFramePerIrp(deviceContext, *bufferPeriod);
-        ASSERT(NT_SUCCESS(status));
-
-        status = UpdateBufferOperationOffset(deviceContext, *bufferPeriod);
-        ASSERT(NT_SUCCESS(status));
-
-        deviceContext->Params.SuggestedBufferPeriod = *bufferPeriod;
-
-        status = ActivateAudioInterface(
-            deviceContext,
-            deviceContext->AudioProperty.SampleRate,
-            NS_USBAudio0200::FORMAT_TYPE_I,
-            NS_USBAudio0200::PCM,
-            deviceContext->InputProperty.BytesPerSample,
-            deviceContext->InputProperty.ValidBitsPerSample,
-            deviceContext->OutputProperty.BytesPerSample,
-            deviceContext->OutputProperty.ValidBitsPerSample
-        );
-
-        if (NT_SUCCESS(status))
-        {
-            if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
-            {
-                StartIsoStream(deviceContext);
-            }
-            else
-            {
-                ASSERT(NT_SUCCESS(status));
-            }
-        }
-    }
-    else
-    {
-        // Nothing is done because there is no change in flag.
-        status = STATUS_SUCCESS;
+        status = deviceContext->AudioIsochronousEngines[0]->SetBufferPeriod(*bufferPeriod);
     }
 
 Exit:
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
@@ -5867,8 +2516,6 @@ VOID EvtUSBAudioAcxDriverGetInputLatency(
     PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
     IF_TRUE_ACTION_JUMP(
         (
             (params.Parameters.Property.Control != nullptr) ||
@@ -5882,16 +2529,17 @@ VOID EvtUSBAudioAcxDriverGetInputLatency(
                                           Exit
     );
 
-    LONG * inputLatency = static_cast<LONG *>(params.Parameters.Property.Value);
-    outDataCb = sizeof(LONG);
-    *inputLatency = deviceContext->Params.SuggestedBufferPeriod + deviceContext->AudioProperty.InputLatencyOffset;
-    status = STATUS_SUCCESS;
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    {
+        LONG * inputLatency = static_cast<LONG *>(params.Parameters.Property.Value);
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "InputLatency = %d", *inputLatency);
+        status = deviceContext->AudioIsochronousEngines[0]->GetInputLatency(*inputLatency);
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "InputLatency = %d", *inputLatency);
+
+        outDataCb = sizeof(LONG);
+    }
 
 Exit:
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
@@ -5929,8 +2577,6 @@ VOID EvtUSBAudioAcxDriverGetOutputLatency(
     PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
     IF_TRUE_ACTION_JUMP(
         (
             (params.Parameters.Property.Control != nullptr) ||
@@ -5944,16 +2590,17 @@ VOID EvtUSBAudioAcxDriverGetOutputLatency(
                                           Exit
     );
 
-    LONG * outputLatency = static_cast<LONG *>(params.Parameters.Property.Value);
-    outDataCb = sizeof(LONG);
-    *outputLatency = deviceContext->Params.SuggestedBufferPeriod + deviceContext->AudioProperty.OutputLatencyOffset;
-    status = STATUS_SUCCESS;
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    {
+        LONG * outputLatency = static_cast<LONG *>(params.Parameters.Property.Value);
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "OutputLatency = %d", *outputLatency);
+        status = deviceContext->AudioIsochronousEngines[0]->GetOutputLatency(*outputLatency);
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "OutputLatency = %d", *outputLatency);
+
+        outDataCb = sizeof(LONG);
+    }
 
 Exit:
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
@@ -5967,6 +2614,8 @@ VOID EvtUSBAudioAcxDriverSetAsioDevice(
     WDFREQUEST request
 )
 {
+    NTSTATUS status = STATUS_NOT_SUPPORTED;
+
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -5988,10 +2637,6 @@ VOID EvtUSBAudioAcxDriverSetAsioDevice(
     PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
-    NTSTATUS status = STATUS_NOT_SUPPORTED;
-
     IF_TRUE_ACTION_JUMP(
         (
             (params.Parameters.Property.Control != nullptr) ||
@@ -6004,14 +2649,15 @@ VOID EvtUSBAudioAcxDriverSetAsioDevice(
                                           Exit
     );
 
-    UNICODE_STRING asioDevice;
-    RtlInitUnicodeString(&asioDevice, (PCWSTR)params.Parameters.Property.Value);
-    status = SaveAsioDeviceToRegistry(&asioDevice);
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    {
+        UNICODE_STRING asioDevice;
+        RtlInitUnicodeString(&asioDevice, (PCWSTR)params.Parameters.Property.Value);
+
+        status = deviceContext->AudioIsochronousEngines[0]->SaveAsioDeviceToRegistry(&asioDevice);
+    }
 
 Exit:
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
-
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
     WdfRequestCompleteWithInformation(request, status, 0);
@@ -6047,8 +2693,6 @@ VOID EvtUSBAudioAcxDriverGetAsioDevice(
     PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
     ASSERT(deviceContext != nullptr);
 
-    WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-
     NTSTATUS status = STATUS_NOT_SUPPORTED;
 
     IF_TRUE_ACTION_JUMP(
@@ -6063,31 +2707,25 @@ VOID EvtUSBAudioAcxDriverGetAsioDevice(
                                           Exit
     );
 
-    UNICODE_STRING asioDevice;
-    status = LoadAsioDeviceFromRegistry(&asioDevice);
-
-    IF_TRUE_ACTION_JUMP(
-        !NT_SUCCESS(status),
-        ASSERT(FALSE),
-        Exit
-    );
-
-    IF_TRUE_ACTION_JUMP(
-        params.Parameters.Property.ValueCb < asioDevice.MaximumLength,
-        status = STATUS_BUFFER_TOO_SMALL,
-        Exit
-    );
-
-    RtlZeroMemory(params.Parameters.Property.Value, params.Parameters.Property.ValueCb);
-
-    RtlCopyMemory(params.Parameters.Property.Value, asioDevice.Buffer, asioDevice.MaximumLength);
-
-    outDataCb = asioDevice.MaximumLength;
-
+    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    {
+        UNICODE_STRING asioDevice;
+        status = deviceContext->AudioIsochronousEngines[0]->GetAsioDevice(asioDevice);
+        if (NT_SUCCESS(status))
+        {
+            if (params.Parameters.Property.ValueCb >= asioDevice.MaximumLength)
+            {
+                RtlZeroMemory(params.Parameters.Property.Value, params.Parameters.Property.ValueCb);
+                RtlCopyMemory(params.Parameters.Property.Value, asioDevice.Buffer, asioDevice.MaximumLength);
+            }
+            else
+            {
+                status = STATUS_BUFFER_TOO_SMALL;
+            }
+            outDataCb = asioDevice.MaximumLength;
+        }
+    }
 Exit:
-
-    WdfWaitLockRelease(deviceContext->StreamWaitLock);
-
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS! outDataCb = %llu", status, outDataCb);
 
     WdfRequestCompleteWithInformation(request, status, outDataCb);
@@ -6122,897 +2760,22 @@ Return Value:
 --*/
 {
     NTSTATUS                     status = STATUS_SUCCESS;
-    USBD_STATUS                  usbdStatus = STATUS_SUCCESS;
     PISOCHRONOUS_REQUEST_CONTEXT requestContext = (PISOCHRONOUS_REQUEST_CONTEXT)context;
-    PDEVICE_CONTEXT              deviceContext = requestContext->DeviceContext;
+    AudioIsochronousEngine *     audioTransferEngine = requestContext->AudioIsochronousEngine;
     StreamObject *               streamObject = requestContext->StreamObject;
     TransferObject *             transferObject = requestContext->TransferObject;
-    ULONGLONG                    currentTimeUs = 0ULL;
-    ULONGLONG                    qpcPosition = 0ULL;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, %p", requestContext);
 
-    ASSERT(deviceContext);
-    ASSERT(transferObject);
+    ASSERT(audioTransferEngine);
     ASSERT(streamObject);
+    ASSERT(transferObject);
 
-    currentTimeUs = USBAudioAcxDriverStreamGetCurrentTimeUs(deviceContext, &qpcPosition);
-
-    status = completionParams->IoStatus.Status;
-    if (!NT_SUCCESS(status) && (status != STATUS_CANCELLED))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "frame %u : %s completion failed with status %!STATUS!", transferObject->GetStartFrame(), GetDirectionString(transferObject->GetDirection()), status);
-    }
-
-    usbdStatus = transferObject->GetUSBDStatus();
-    if (!USBD_SUCCESS(usbdStatus) && (usbdStatus != USBD_STATUS_CANCELED))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "frame %u : %s urb failed with status %08x", transferObject->GetStartFrame(), GetDirectionString(transferObject->GetDirection()), usbdStatus);
-        deviceContext->ErrorStatistics->LogErrorOccurrence(ErrorStatus::UrbFailed, usbdStatus);
-        if (status != STATUS_NO_SUCH_DEVICE) // STATUS_NO_SUCH_DEVICE: surprise remove
-        {
-#if false
-			// TBD Add a recovery process
-#else
-            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "irp at index %d failed (%!STATUS!), but will be reused.", transferObject->GetIndex(), status);
-#endif
-            usbdStatus = USBD_STATUS_SUCCESS;
-            status = STATUS_SUCCESS;
-        }
-    }
-
-    if (requestContext->TransferObject != nullptr)
-    {
-        ULONGLONG periodUs = 0ULL;
-        ULONGLONG periodQPC = 0ULL;
-        requestContext->StreamObject->CompleteRequest(transferObject->GetDirection(), currentTimeUs, qpcPosition, periodUs, periodQPC);
-        transferObject->CompleteRequest(currentTimeUs, qpcPosition, periodUs, periodQPC);
-    }
-
-    if (NT_SUCCESS(status) && USBD_SUCCESS(usbdStatus) && (deviceContext->StartCounterIsoStream != 0))
-    {
-        //		WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-        if ((requestContext->StreamObject != nullptr) && !requestContext->StreamObject->IsTerminateStream())
-        {
-            switch (transferObject->GetDirection())
-            {
-            case IsoDirection::In: {
-                status = ProcessTransferIn(deviceContext, streamObject, transferObject);
-                if (!NT_SUCCESS(status))
-                {
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferIn failed %!STATUS!", status);
-
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-                }
-                // Since the URB is referenced in ProcessTransferIn, the parent request is released here.
-                status = transferObject->FreeRequest();
-                if (!NT_SUCCESS(status))
-                {
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
-
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-                }
-                status = InitializeIsoUrbIn(deviceContext, streamObject, transferObject, transferObject->GetNumPackets());
-                if (!NT_SUCCESS(status))
-                {
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbIn failed %!STATUS!", status);
-
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-                }
-            }
-            break;
-            case IsoDirection::Out: {
-                status = ProcessTransferOut(deviceContext, streamObject, transferObject);
-                if (!NT_SUCCESS(status))
-                {
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferOut failed %!STATUS!", status);
-
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-                }
-
-                streamObject->SetOutputStreaming(transferObject->GetIndex(), transferObject->GetLockDelayCount());
-
-                // Since the URB is referenced in ProcessTransferOut, the parent request is released here.
-                status = transferObject->FreeRequest();
-                if (!NT_SUCCESS(status))
-                {
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
-
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-                }
-                status = InitializeIsoUrbOut(deviceContext, streamObject, transferObject, transferObject->GetNumPackets());
-                if (!NT_SUCCESS(status))
-                {
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbOut failed %!STATUS!", status);
-
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-                }
-            }
-            break;
-            case IsoDirection::Feedback: {
-                status = ProcessTransferFeedback(deviceContext, streamObject, transferObject);
-                if (!NT_SUCCESS(status))
-                {
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferFeedback failed %!STATUS!", status);
-
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-                }
-                // Since the URB is referenced in ProcessTransferFeedback, the parent request is released here.
-                status = transferObject->FreeRequest();
-                if (!NT_SUCCESS(status))
-                {
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
-
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-                }
-
-                status = InitializeIsoUrbFeedback(deviceContext, streamObject, transferObject, transferObject->GetNumPackets());
-                if (!NT_SUCCESS(status))
-                {
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbFeedback failed %!STATUS!", status);
-
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-                }
-            }
-            break;
-            default:
-                break;
-            }
-
-            status = transferObject->SendIsochronousRequest(transferObject->GetDirection(), USBAudioAcxDriverEvtIsoRequestCompletionRoutine);
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "SendIsochronousRequest failed %!STATUS!", status);
-
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-            }
-        }
-        else
-        {
-            status = transferObject->FreeRequest();
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
-
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
-            }
-        }
-        //		WdfWaitLockRelease(deviceContext->StreamWaitLock);
-    }
-
-USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit:
+    audioTransferEngine->IsoRequestCompletionRoutine(completionParams, streamObject, transferObject);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
     return;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS StartIsoStream(
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    auto startIsoStreamScope = wil::scope_exit([&]() {
-        if (!NT_SUCCESS(status) && (deviceContext->StreamObject != nullptr) && (status != STATUS_DEVICE_BUSY))
-        {
-            delete deviceContext->StreamObject;
-            deviceContext->StreamObject = nullptr;
-        }
-        else
-        {
-            InterlockedIncrement(&deviceContext->StartCounterIsoStream);
-            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-            if (deviceContext->AsioBufferObject != nullptr)
-            {
-                deviceContext->AsioBufferObject->SetReady();
-            }
-            WdfWaitLockRelease(deviceContext->AsioWaitLock);
-        }
-
-        if (deviceContext->StreamObject != nullptr)
-        {
-            NTSTATUS statusTemp = WdfDeviceStopIdle(deviceContext->Device, FALSE);
-            if (NT_SUCCESS(statusTemp))
-            {
-                InterlockedExchange(&deviceContext->IsIdleStopSucceeded, TRUE);
-            }
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "WdfDeviceStopIdle %!STATUS!", statusTemp);
-        }
-    });
-
-    RETURN_NTSTATUS_IF_TRUE_ACTION(deviceContext->StreamObject != nullptr, status = STATUS_DEVICE_BUSY, status);
-    InterlockedExchange(&deviceContext->StartCounterIsoStream, 0);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-    status = SetPipeInformation(deviceContext);
-    RETURN_NTSTATUS_IF_FAILED_MSG(status, "SetPipeInformation failed");
-
-    DEVICE_CONTEXT::SelectedInterfaceAndPipe * interfaceAndPipe[] = {
-        &deviceContext->InputInterfaceAndPipe,
-        &deviceContext->OutputInterfaceAndPipe,
-        &deviceContext->FeedbackInterfaceAndPipe,
-    };
-
-    for (ULONG index = 0; index < ARRAYSIZE(interfaceAndPipe); index++)
-    {
-        if (interfaceAndPipe[index]->MaximumTransferSize != 0)
-        {
-            if (deviceContext->IsDeviceSuperSpeed && deviceContext->SuperSpeedCompatible)
-            {
-                status = InitializePipeContextForSuperSpeedDevice(deviceContext, interfaceAndPipe[index]->UsbInterface, interfaceAndPipe[index]->SelectedAlternateSetting, interfaceAndPipe[index]->Pipe);
-            }
-            else if (deviceContext->IsDeviceHighSpeed)
-            {
-                status = InitializePipeContextForHighSpeedDevice(interfaceAndPipe[index]->Pipe);
-            }
-            else
-            {
-                status = InitializePipeContextForFullSpeedDevice(interfaceAndPipe[index]->Pipe);
-            }
-            if (!NT_SUCCESS(status))
-            {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializePipeContext failed ");
-                break;
-            }
-            if ((WdfUsbPipeTypeIsochronous != interfaceAndPipe[index]->PipeInfo.PipeType))
-            {
-                status = STATUS_INVALID_DEVICE_REQUEST;
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "Pipe type is not Isochronous");
-                break;
-            }
-
-            if (interfaceAndPipe[index] == &deviceContext->InputInterfaceAndPipe)
-            {
-                if (WdfUsbTargetPipeIsInEndpoint(interfaceAndPipe[index]->Pipe) == FALSE)
-                {
-                    status = STATUS_INVALID_PARAMETER;
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "Invalid pipe - not an input pipe");
-                    break;
-                }
-            }
-            else if (interfaceAndPipe[index] == &deviceContext->OutputInterfaceAndPipe)
-            {
-                if (WdfUsbTargetPipeIsOutEndpoint(interfaceAndPipe[index]->Pipe) == FALSE)
-                {
-                    status = STATUS_INVALID_PARAMETER;
-                    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "Invalid pipe - not an output pipe");
-                    break;
-                }
-            }
-        }
-    }
-    RETURN_NTSTATUS_IF_FAILED(status);
-
-    if ((deviceContext->OutputInterfaceAndPipe.Pipe != nullptr) && (deviceContext->InputInterfaceAndPipe.Pipe == nullptr))
-    { // output only
-        deviceContext->StreamObject = StreamObject::Create(deviceContext, StreamStatuses::OutputStable, StreamStatuses::OutputStreaming, (StreamStatuses)(toInt(StreamStatuses::OutputStable) | toInt(StreamStatuses::OutputStreaming)));
-    }
-    else if ((deviceContext->OutputInterfaceAndPipe.Pipe == nullptr) && (deviceContext->InputInterfaceAndPipe.Pipe != nullptr))
-    { // input only
-        deviceContext->StreamObject = StreamObject::Create(deviceContext, StreamStatuses::InputStable, StreamStatuses::InputStreaming, (StreamStatuses)(toInt(StreamStatuses::InputStable) | toInt(StreamStatuses::InputStreaming)));
-    }
-    else
-    {
-        deviceContext->StreamObject = StreamObject::Create(deviceContext, StreamStatuses::IoStable, StreamStatuses::IoStreaming, StreamStatuses::IoSteady);
-    }
-
-    RETURN_NTSTATUS_IF_TRUE_ACTION(deviceContext->StreamObject == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, status);
-
-    deviceContext->StreamObject->ResetNextMeasureFrames(deviceContext->InputProperty.PacketsPerSec, deviceContext->OutputProperty.PacketsPerSec);
-
-    // Before measurement, initialize with the nominal sample rate.
-    deviceContext->InputProperty.MeasuredSampleRate = deviceContext->AudioProperty.SampleRate;
-    deviceContext->OutputProperty.MeasuredSampleRate = deviceContext->AudioProperty.SampleRate;
-
-    status = deviceContext->StreamObject->CreateMixingEngineThread(HIGH_PRIORITY, 100);
-    RETURN_NTSTATUS_IF_FAILED(status);
-
-    if (deviceContext->RtPacketObject != nullptr)
-    {
-        deviceContext->RtPacketObject->ResetInternal(true);
-        deviceContext->RtPacketObject->ResetInternal(false);
-    }
-
-    deviceContext->StreamObject->SetStartIsoFrame(GetCurrentFrame(deviceContext), deviceContext->Params.OutputFrameDelay);
-    deviceContext->StreamObject->SetIsoFrameDelay(deviceContext->Params.FirstPacketLatency);
-    deviceContext->StreamObject->ResetIsoRequestCompletionTime();
-    deviceContext->StreamObject->SaveStartPCUs();
-
-    for (ULONG i = 0; i < deviceContext->Params.MaxIrpNumber; i++)
-    {
-        if (deviceContext->FeedbackInterfaceAndPipe.Pipe != nullptr)
-        {
-            status = StartTransfer(deviceContext, deviceContext->StreamObject, i, IsoDirection::Feedback);
-            RETURN_NTSTATUS_IF_FAILED(status);
-        }
-        if (deviceContext->InputInterfaceAndPipe.Pipe != nullptr)
-        {
-            status = StartTransfer(deviceContext, deviceContext->StreamObject, i, IsoDirection::In);
-            RETURN_NTSTATUS_IF_FAILED(status);
-        }
-        if (deviceContext->OutputInterfaceAndPipe.Pipe != nullptr)
-        {
-            status = StartTransfer(deviceContext, deviceContext->StreamObject, i, IsoDirection::Out);
-        }
-        RETURN_NTSTATUS_IF_FAILED(status);
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
-    return status;
-}
-
-#if false
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS FreeTransferObject(
-    TransferObject * /* transferObject */
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-#endif
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS StartTransfer(
-    PDEVICE_CONTEXT deviceContext,
-    StreamObject *  streamObject,
-    ULONG           index,
-    IsoDirection    direction
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-    ULONG    maxXferSize = 0;
-    ULONG    isoPacketSize = 0;
-    ULONG    numIsoPackets = 0;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    IF_TRUE_ACTION_JUMP(streamObject == nullptr, status = STATUS_INVALID_PARAMETER, StartTransfer_Exit);
-    IF_TRUE_ACTION_JUMP(deviceContext->ContiguousMemory == nullptr, status = STATUS_INVALID_PARAMETER, StartTransfer_Exit);
-    IF_TRUE_ACTION_JUMP(!deviceContext->ContiguousMemory->IsValid(index, direction), status = STATUS_INVALID_PARAMETER, StartTransfer_Exit);
-
-    switch (direction)
-    {
-    case IsoDirection::In:
-        maxXferSize = deviceContext->InputInterfaceAndPipe.MaximumTransferSize;
-        isoPacketSize = deviceContext->InputInterfaceAndPipe.PipeInfo.MaximumPacketSize * deviceContext->SupportedControl.MaxBurstOverride;
-        numIsoPackets = deviceContext->ClassicFramesPerIrp * deviceContext->FramesPerMs;
-        numIsoPackets >>= (deviceContext->InputInterfaceAndPipe.PipeInfo.Interval - 1);
-        if (numIsoPackets > 128)
-        { // Ensure the number of packets is within the WDK limit.
-            numIsoPackets = 128;
-            maxXferSize = isoPacketSize * numIsoPackets;
-        }
-        break;
-    case IsoDirection::Out:
-        maxXferSize = deviceContext->OutputInterfaceAndPipe.MaximumTransferSize;
-        // isoPacketSize is not used.
-        isoPacketSize = deviceContext->OutputInterfaceAndPipe.PipeInfo.MaximumPacketSize * deviceContext->SupportedControl.MaxBurstOverride;
-        numIsoPackets = deviceContext->ClassicFramesPerIrp * deviceContext->FramesPerMs;
-        numIsoPackets >>= (deviceContext->OutputInterfaceAndPipe.PipeInfo.Interval - 1);
-        break;
-    case IsoDirection::Feedback:
-        maxXferSize = deviceContext->FeedbackInterfaceAndPipe.MaximumTransferSize;
-        isoPacketSize = deviceContext->FeedbackInterfaceAndPipe.PipeInfo.MaximumPacketSize;
-        numIsoPackets = deviceContext->ClassicFramesPerIrp * deviceContext->FramesPerMs;
-        numIsoPackets >>= (deviceContext->FeedbackProperty.FeedbackInterval - 1);
-        break;
-    default:
-        ASSERT(false);
-        break;
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "num packets = %u, Classic frames per irp = %u, frames per ms = %u", numIsoPackets, deviceContext->ClassicFramesPerIrp, deviceContext->FramesPerMs);
-
-    TransferObject * transferObject = streamObject->GetTransferObject(index, direction);
-    if (transferObject == nullptr)
-    {
-        transferObject = TransferObject::Create(deviceContext, streamObject, index, direction);
-        IF_TRUE_ACTION_JUMP(transferObject == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, StartTransfer_Exit);
-
-        transferObject->AttachDataBuffer(deviceContext->ContiguousMemory->GetDataBuffer(index, direction), numIsoPackets, isoPacketSize, maxXferSize);
-
-        streamObject->SetTransferObject(index, direction, transferObject);
-    }
-
-    transferObject->Reset();
-
-    ULONG lockDelayCount = 0;
-    if (!deviceContext->SupportedControl.SkipInitialSamples)
-    {
-        lockDelayCount = 0;
-    }
-    else
-    {
-        switch (direction)
-        {
-        case IsoDirection::In:
-            if (deviceContext->InputProperty.LockDelay != 0)
-            {
-                lockDelayCount = (deviceContext->InputProperty.LockDelay + deviceContext->Params.MaxIrpNumber - 1) / deviceContext->Params.MaxIrpNumber;
-            }
-            else
-            {
-                lockDelayCount = UAC_DEFAULT_LOCK_DELAY;
-            }
-            break;
-        case IsoDirection::Out:
-        case IsoDirection::Feedback:
-            if (deviceContext->OutputProperty.LockDelay != 0)
-            {
-                lockDelayCount = (deviceContext->OutputProperty.LockDelay + deviceContext->Params.MaxIrpNumber - 1) / deviceContext->Params.MaxIrpNumber;
-            }
-            else
-            {
-                lockDelayCount = UAC_DEFAULT_LOCK_DELAY;
-            }
-            break;
-            break;
-        default:
-            break;
-        }
-    }
-    transferObject->SetLockDelayCount(lockDelayCount);
-
-    switch (direction)
-    {
-    case IsoDirection::In:
-        status = InitializeIsoUrbIn(deviceContext, streamObject, transferObject, numIsoPackets);
-        RETURN_NTSTATUS_IF_FAILED_MSG(status, "InitializeIsoUrbIn failed");
-        break;
-    case IsoDirection::Out:
-        status = InitializeIsoUrbOut(deviceContext, streamObject, transferObject, numIsoPackets);
-        RETURN_NTSTATUS_IF_FAILED_MSG(status, "InitializeIsoUrbOut failed");
-
-        //
-        // Advance half a screen as the initial transfer position. If
-        // playback starts late, reconsider this position.
-        //
-        deviceContext->RtPacketObject->FeedOutputWriteBytes(numIsoPackets * isoPacketSize / 2);
-        break;
-    case IsoDirection::Feedback:
-        status = InitializeIsoUrbFeedback(deviceContext, streamObject, transferObject, numIsoPackets);
-        RETURN_NTSTATUS_IF_FAILED_MSG(status, "InitializeIsoUrbFeedback failed");
-        break;
-    default:
-        break;
-    }
-
-    status = transferObject->SendIsochronousRequest(direction, USBAudioAcxDriverEvtIsoRequestCompletionRoutine);
-    RETURN_NTSTATUS_IF_FAILED_MSG(status, "SendIsochronousRequest failed");
-
-StartTransfer_Exit:
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-NONPAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS InitializeIsoUrbIn(
-    PDEVICE_CONTEXT  deviceContext,
-    StreamObject *   streamObject,
-    TransferObject * transferObject,
-    ULONG            numPackets
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    ULONG startFrame = streamObject->GetStartFrame(IsoDirection::In, numPackets);
-
-    bool asap = false;
-
-    if (deviceContext->UsbAudioConfiguration->GetClockEntityCountForTerminal() > 1)
-    {
-        // TBD
-        // For devices that handle I/O processing independently, consider whether `asap` should be set to true from the first run.
-        // This is because devices like Creative Sound Blaster G3 require `asap` to be true initially; otherwise,
-        // even with sufficient StartFrame margin in the URB, USBD_STATUS_ISO_NOT_ACCESSED_LATE may still occur.
-        //
-        asap = true;
-    }
-
-    if (streamObject->IsIoSteady())
-    {
-        asap = true;
-    }
-    status = transferObject->SetUrbIsochronousParametersInput(startFrame, deviceContext->InputInterfaceAndPipe.Pipe, asap, USBAudioAcxDriverEvtIsoRequestContextCleanup);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-NONPAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS InitializeIsoUrbOut(
-    PDEVICE_CONTEXT  deviceContext,
-    StreamObject *   streamObject,
-    TransferObject * transferObject,
-    ULONG            numPackets
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    ULONG startFrame = streamObject->GetStartFrame(IsoDirection::Out, numPackets);
-
-    bool asap = false;
-
-    if (deviceContext->UsbAudioConfiguration->GetClockEntityCountForTerminal() > 1)
-    {
-        // TBD
-        // For devices that handle I/O processing independently, consider whether `asap` should be set to true from the first run.
-        // This is because devices like Creative Sound Blaster G3 require `asap` to be true initially; otherwise,
-        // even with sufficient StartFrame margin in the URB, USBD_STATUS_ISO_NOT_ACCESSED_LATE may still occur.
-        //
-        asap = true;
-    }
-
-    if (streamObject->IsIoSteady())
-    {
-        asap = true;
-    }
-
-    status = transferObject->SetUrbIsochronousParametersOutput(startFrame, deviceContext->OutputInterfaceAndPipe.Pipe, asap, USBAudioAcxDriverEvtIsoRequestContextCleanup);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-NONPAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS InitializeIsoUrbFeedback(
-    PDEVICE_CONTEXT  deviceContext,
-    StreamObject *   streamObject,
-    TransferObject * transferObject,
-    ULONG            numPackets
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    ULONG startFrame = streamObject->GetStartFrame(IsoDirection::Feedback, numPackets);
-
-    bool asap = false;
-
-    if (deviceContext->UsbAudioConfiguration->GetClockEntityCountForTerminal() > 1)
-    {
-        // TBD
-        // For devices that handle I/O processing independently, consider whether `asap` should be set to true from the first run.
-        // This is because devices like Creative Sound Blaster G3 require `asap` to be true initially; otherwise,
-        // even with sufficient StartFrame margin in the URB, USBD_STATUS_ISO_NOT_ACCESSED_LATE may still occur.
-        //
-        asap = true;
-    }
-
-    if (streamObject->IsIoSteady())
-    {
-        asap = true;
-    }
-
-    status = transferObject->SetUrbIsochronousParametersFeedback(startFrame, deviceContext->FeedbackInterfaceAndPipe.Pipe, asap, USBAudioAcxDriverEvtIsoRequestContextCleanup);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-NONPAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS ProcessTransferIn(
-    PDEVICE_CONTEXT  deviceContext,
-    StreamObject *   streamObject,
-    TransferObject * transferObject
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    USBD_STATUS usbdStatus = transferObject->GetUSBDStatus();
-    if (!USBD_SUCCESS(usbdStatus))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "in frame %u : urb failed with status %08x", transferObject->GetStartFrame(), usbdStatus);
-    }
-
-    ULONG transferredBytesInThisIrp = 0;
-    ULONG invalidPacket = 0;
-    status = transferObject->UpdateTransferredBytesInThisIrp(transferredBytesInThisIrp, &invalidPacket);
-    ULONG transferredSamplesInThisIrp = transferredBytesInThisIrp / deviceContext->InputProperty.BytesPerBlock;
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "in frame %u : transfer bytes in this irp = %d", transferObject->GetStartFrame(), transferredBytesInThisIrp);
-
-    if (!NT_SUCCESS(status))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "Input irp at index %d failed (%!STATUS!), but will be reused.", transferObject->GetIndex(), status);
-        status = STATUS_SUCCESS;
-    }
-
-    if (NT_SUCCESS(status))
-    {
-        // Update the number of completed packets recorded in the streamObject
-        streamObject->UpdateCompletedPacket(TRUE, transferObject->GetIndex(), transferObject->GetNumberOfPacketsInThisIrp());
-
-        transferObject->RecordIsoPacketLength();
-    }
-
-    bool isLockDelay = transferObject->DecrementLockDelayCount();
-
-    // transferObject->DumpUrbPacket("ProcessTransferIn");
-
-    if (isLockDelay)
-    {
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "LOCK DELAY : input %u samples", transferredSamplesInThisIrp);
-    }
-
-    // Determine if the input is stable
-    if (streamObject->CheckInputStability(transferObject->GetIndex(), transferObject->GetNumberOfPacketsInThisIrp(), transferObject->GetStartFrameInThisIrp(), transferredBytesInThisIrp, invalidPacket))
-    {
-        streamObject->SetInputStreaming();
-    }
-
-    transferObject->UpdatePositionsIn(transferredSamplesInThisIrp);
-
-    transferObject->CompensateNonFeedbackOutput(transferredSamplesInThisIrp);
-
-    transferObject->FreeUrb();
-
-    if (NT_SUCCESS(status))
-    {
-        streamObject->WakeupMixingEngineThread();
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-NONPAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS ProcessTransferOut(
-    PDEVICE_CONTEXT /* deviceContext */,
-    StreamObject *   streamObject,
-    TransferObject * transferObject
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    USBD_STATUS usbdStatus = transferObject->GetUSBDStatus();
-    if (!USBD_SUCCESS(usbdStatus))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "out frame %u : urb failed with status %08x", transferObject->GetStartFrame(), usbdStatus);
-    }
-
-    ULONG transferredBytesInThisIrp = 0;
-
-    status = transferObject->UpdateTransferredBytesInThisIrp(transferredBytesInThisIrp, nullptr);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "out frame %u : transfer bytes in this irp = %d", transferObject->GetStartFrame(), transferredBytesInThisIrp);
-
-    if (!NT_SUCCESS(status))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "Output irp at index %d failed (%!STATUS!), but will be reused.", transferObject->GetIndex(), status);
-        status = STATUS_SUCCESS;
-    }
-
-    if (NT_SUCCESS(status))
-    {
-        if (transferObject->GetLockDelayCount() == 0)
-        {
-            // Determine whether the input is stable. Update the
-            // number of completed packets recorded in the
-            // streamObject.
-            streamObject->UpdateCompletedPacket(FALSE, transferObject->GetIndex(), transferObject->GetNumberOfPacketsInThisIrp());
-        }
-        streamObject->SetOutputStable();
-    }
-
-    // transferObject->DumpUrbPacket("ProcessTransferOut");
-
-    transferObject->FreeUrb();
-
-    if (NT_SUCCESS(status))
-    {
-        streamObject->WakeupMixingEngineThread();
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-NONPAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS ProcessTransferFeedback(
-    PDEVICE_CONTEXT /* deviceContext */,
-    StreamObject *   streamObject,
-    TransferObject * transferObject
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    USBD_STATUS usbdStatus = transferObject->GetUSBDStatus();
-    if (!USBD_SUCCESS(usbdStatus))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "feedback frame %u : urb failed with status %08x", transferObject->GetStartFrame(), usbdStatus);
-    }
-
-    ULONG transferredBytesInThisIrp = 0;
-    ULONG feedbackSum = 0;
-    ULONG validFeedback = 0;
-
-    status = transferObject->UpdateTransferredBytesInThisIrp(transferredBytesInThisIrp, nullptr);
-
-    if (!NT_SUCCESS(status))
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "Feedback irp at index %d failed (%!STATUS!), but will be reused.", transferObject->GetIndex(), status);
-        status = STATUS_SUCCESS;
-    }
-
-    if (NT_SUCCESS(status))
-    {
-        feedbackSum = transferObject->GetFeedbackSum(validFeedback);
-
-        ULONG lastFeedbackSize = streamObject->UpdatePositionsFeedback(transferObject, feedbackSum, validFeedback);
-
-        transferObject->DecrementLockDelayCount();
-
-        transferObject->CompensateNonFeedbackOutput(lastFeedbackSize);
-    }
-
-    transferObject->FreeUrb();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS StopIsoStream(
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    InterlockedExchange(&deviceContext->StartCounterIsoStream, 0);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", deviceContext->StartCounterAsio, deviceContext->StartCounterWdmAudio, deviceContext->StartCounterIsoStream);
-    // cancel irp
-    if (deviceContext->StreamObject != nullptr)
-    {
-        status = deviceContext->StreamObject->CancelRequestAll();
-
-        AbortPipes(IsoDirection::In, deviceContext->Device);
-        AbortPipes(IsoDirection::Feedback, deviceContext->Device);
-
-        deviceContext->StreamObject->TerminateMixingEngineThread();
-        deviceContext->StreamObject->Cleanup();
-        delete deviceContext->StreamObject;
-        deviceContext->StreamObject = nullptr;
-        if (deviceContext->OutputProperty.InterfaceNumber != 0)
-        {
-            SelectAlternateInterface(IsoDirection::Out, deviceContext, deviceContext->OutputProperty.InterfaceNumber, 0);
-        }
-        if (deviceContext->InputProperty.InterfaceNumber != 0)
-        {
-            SelectAlternateInterface(IsoDirection::In, deviceContext, deviceContext->InputProperty.InterfaceNumber, 0);
-        }
-        if (InterlockedCompareExchange(&deviceContext->IsIdleStopSucceeded, FALSE, TRUE) == TRUE)
-        {
-            WdfDeviceResumeIdle(deviceContext->Device);
-        }
-    }
-    if (deviceContext->ContiguousMemory != nullptr)
-    {
-        deviceContext->ContiguousMemory->Clear();
-    }
-
-    if (deviceContext->ErrorStatistics != nullptr)
-    {
-        deviceContext->ErrorStatistics->Report();
-    }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS NotifyDataFormatChange(
-    WDFDEVICE     device,
-    ACXCIRCUIT    circuit,
-    ACXPIN        pin,
-    ACXDATAFORMAT originalDataFormat
-)
-{
-    NTSTATUS      status = STATUS_SUCCESS;
-    ACXDATAFORMAT desiredDataFormat = nullptr;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    CODEC_PIN_CONTEXT * pinContext = GetCodecPinContext(pin);
-    ASSERT(pinContext != nullptr);
-
-    status = SplitAcxDataFormatByDeviceChannels(device, circuit, pinContext->NumOfChannelsPerDevice, desiredDataFormat, originalDataFormat);
-    RETURN_NTSTATUS_IF_FAILED(status);
-
-    ACXDATAFORMATLIST dataFormatList = AcxPinGetRawDataFormatList(pin);
-    status = AcxDataFormatListAssignDefaultDataFormat(dataFormatList, desiredDataFormat);
-    RETURN_NTSTATUS_IF_FAILED(status);
-
-    status = AcxPinNotifyDataFormatChange(pin);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
-}
-
-PAGED_CODE_SEG
-static _Use_decl_annotations_
-NTSTATUS NotifyAllPinsDataFormatChange(
-    bool            isInput,
-    PDEVICE_CONTEXT deviceContext,
-    ACXDATAFORMAT   dataFormatBeforeChange,
-    ACXDATAFORMAT   dataFormatAfterChange
-)
-{
-    NTSTATUS status = STATUS_SUCCESS;
-
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    if (isInput)
-    {
-        if ((deviceContext->Capture != nullptr) && (dataFormatBeforeChange != nullptr) && (dataFormatAfterChange != nullptr) && !AcxDataFormatIsEqual(dataFormatBeforeChange, dataFormatAfterChange))
-        {
-            for (ULONG captureDeviceIndex = 0; captureDeviceIndex < deviceContext->NumOfInputDevices; captureDeviceIndex++)
-            {
-                ACXPIN pin = AcxCircuitGetPinById(deviceContext->Capture, captureDeviceIndex * CodecCapturePinCount + CodecCaptureHostPin);
-                if (pin != nullptr)
-                {
-                    status = NotifyDataFormatChange(deviceContext->Device, deviceContext->Capture, pin, dataFormatAfterChange);
-                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - capture pin %u, AcxPinNotifyDataFormatChange %!STATUS!", captureDeviceIndex * 2, status);
-                    IF_FAILED_JUMP(status, Exit);
-                }
-            }
-        }
-    }
-    else
-    {
-        if ((deviceContext->Render != nullptr) && (dataFormatBeforeChange != nullptr) && (dataFormatAfterChange != nullptr) && !AcxDataFormatIsEqual(dataFormatBeforeChange, dataFormatAfterChange))
-        {
-            for (ULONG renderDeviceIndex = 0; renderDeviceIndex < deviceContext->NumOfOutputDevices; renderDeviceIndex++)
-            {
-                ACXPIN pin = AcxCircuitGetPinById(deviceContext->Render, renderDeviceIndex * CodecRenderPinCount + CodecRenderHostPin);
-                if (pin != nullptr)
-                {
-                    status = NotifyDataFormatChange(deviceContext->Device, deviceContext->Render, pin, dataFormatAfterChange);
-                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - render pin %u, PinNotifyDataFormatChange %!STATUS!", renderDeviceIndex * 2, status);
-                    IF_FAILED_JUMP(status, Exit);
-                }
-            }
-        }
-    }
-Exit:
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
-    return status;
 }
 
 PAGED_CODE_SEG
@@ -7070,24 +2833,10 @@ Return Value:
     {
         PDEVICE_CONTEXT deviceContext = fileContext->DeviceContext;
 
-        WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
-        if ((WDFFILEOBJECT)fileObject == deviceContext->AsioOwner)
+        if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
         {
-            StopIsoStream(deviceContext);
-
-            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-            if (deviceContext->AsioBufferObject != nullptr)
-            {
-                status = deviceContext->AsioBufferObject->UnsetBuffer();
-                delete deviceContext->AsioBufferObject;
-                deviceContext->AsioBufferObject = nullptr;
-            }
-            WdfWaitLockRelease(deviceContext->AsioWaitLock);
-
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "clear asio owner");
-            deviceContext->AsioOwner = nullptr;
+            status = deviceContext->AudioIsochronousEngines[0]->FileCleanup((WDFFILEOBJECT)fileObject);
         }
-        WdfWaitLockRelease(deviceContext->StreamWaitLock);
     }
 
     // WdfRequestComplete(request, status);
@@ -7103,51 +2852,7 @@ void ReportInternalParameters(
 {
     PAGED_CODE();
 
-    UAC_AUDIO_PROPERTY & audioProp = deviceContext->AudioProperty;
-
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Vendor ID:%04x, Product ID:%04x, DeviceRelease:%04x", audioProp.VendorId, audioProp.ProductId, audioProp.DeviceRelease);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - ProductName                  %ws", audioProp.ProductName);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - SampleRate                   %d", audioProp.SampleRate);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - SupportedSampleRate          0x%x", audioProp.SupportedSampleRate);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - SampleType                   %d", toInt(audioProp.SampleType));
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputInterfaceNumber         %d", deviceContext->InputProperty.InterfaceNumber);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputAlternateSetting        %d", deviceContext->InputProperty.AlternateSetting);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputEndpointNumber          0x%x", deviceContext->InputProperty.EndpointNumber);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputInterfaceNumber        %d", deviceContext->OutputProperty.InterfaceNumber);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputAlternateSetting       %d", deviceContext->OutputProperty.AlternateSetting);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputEndpointNumber         0x%x", deviceContext->OutputProperty.EndpointNumber);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputBytesPerBlock           %d", deviceContext->InputProperty.BytesPerBlock);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputMaxSamplesPerPacket     %d", deviceContext->InputProperty.MaxSamplesPerPacket);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputLatencyOffset           %d", deviceContext->AudioProperty.InputLatencyOffset);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputFormatType              %d", deviceContext->InputProperty.FormatType);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputFormat                  %d", deviceContext->InputProperty.Format);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputBytesPerSample          %d", deviceContext->InputProperty.BytesPerSample);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputValidBitsPerSample      %d", deviceContext->InputProperty.ValidBitsPerSample);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputPacketsPerSec           %d", deviceContext->InputProperty.PacketsPerSec);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputSamplesPerPacket        %d", deviceContext->InputProperty.SamplesPerPacket);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputBytesPerBlock          %d", deviceContext->OutputProperty.BytesPerBlock);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputMaxSamplesPerPacket    %d", deviceContext->OutputProperty.MaxSamplesPerPacket);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputLatencyOffset          %d", deviceContext->AudioProperty.OutputLatencyOffset);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputFormatType             %d", deviceContext->OutputProperty.FormatType);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputFormat                 %d", deviceContext->OutputProperty.Format);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputBytesPerSample         %d", deviceContext->OutputProperty.BytesPerSample);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputValidBitsPerSample     %d", deviceContext->OutputProperty.ValidBitsPerSample);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputPacketsPerSec          %d", deviceContext->OutputProperty.PacketsPerSec);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputSamplesPerPacket       %d", deviceContext->OutputProperty.SamplesPerPacket);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - AudioControlInterfaceNumber  %d", deviceContext->AudioControlInterfaceNumber);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputMeasuredSampleRate      %d", deviceContext->InputProperty.MeasuredSampleRate);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputMeasuredSampleRate     %d", deviceContext->OutputProperty.MeasuredSampleRate);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - ClockSources                 %d", audioProp.ClockSources);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputDriverBuffer            %d", deviceContext->AudioProperty.InputDriverBuffer);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputDriverBuffer           %d", deviceContext->AudioProperty.OutputDriverBuffer);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - SupportedSampleFormat        %u", audioProp.SupportedSampleFormats);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - CurrentSampleFormat          %u", toULong(audioProp.CurrentSampleFormat));
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputUsbChannels             %d", deviceContext->InputProperty.UsbChannels);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputUsbChannels            %d", deviceContext->OutputProperty.UsbChannels);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - FeedbackInterfaceNumber      %d", deviceContext->FeedbackProperty.FeedbackInterfaceNumber);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - FeedbackAlternateSetting     %d", deviceContext->FeedbackProperty.FeedbackAlternateSetting);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - FeedbackEndpointNumber       0x%x", deviceContext->FeedbackProperty.FeedbackEndpointNumber);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - FeedbackInterval             %d", deviceContext->FeedbackProperty.FeedbackInterval);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Interrupt IsValid            %!bool!", deviceContext->InterruptMessageProperty.IsValid);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Interrupt InterfaceNumber    %d", deviceContext->InterruptMessageProperty.InterfaceNumber);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Interrupt EndpointNumber     0x%d", deviceContext->InterruptMessageProperty.EndpointNumber);
@@ -7158,24 +2863,7 @@ void ReportInternalParameters(
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - DeviceName                   %ws", deviceContext->DeviceName);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - SerialNumber                 %ws", deviceContext->SerialNumber);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - FramesPerMs                  %d", deviceContext->FramesPerMs);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - ClassicFramesPerIrp          %d", deviceContext->ClassicFramesPerIrp);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - IsDeviceAdaptive             %!bool!", deviceContext->IsDeviceAdaptive);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - IsDeviceSynchronous          %!bool!", deviceContext->IsDeviceSynchronous);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - DeviceClass                  %d", deviceContext->DeviceClass);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - DeviceProtocol               %d", deviceContext->DeviceProtocol);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputUsbChannels             %d", deviceContext->InputProperty.UsbChannels);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputUsbChannels            %d", deviceContext->OutputProperty.UsbChannels);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputChannelNames            %d", deviceContext->InputProperty.ChannelNames);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputChannelNames           %d", deviceContext->OutputProperty.ChannelNames);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - StartCounterAsio             %d", deviceContext->StartCounterAsio);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - StartCounterWdmAudio         %d", deviceContext->StartCounterWdmAudio);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - StartCounterIsoStream        %d", deviceContext->StartCounterIsoStream);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - LastActivationStatus         %!STATUS!", deviceContext->LastActivationStatus);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputIsoPacketSize           %d", deviceContext->InputProperty.IsoPacketSize);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputIsoPacketSize          %d", deviceContext->OutputProperty.IsoPacketSize);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputLockDelay               %d", deviceContext->InputProperty.LockDelay);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputLockDelay              %d", deviceContext->OutputProperty.LockDelay);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - SuperSpeedCompatible         %d", deviceContext->SuperSpeedCompatible);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - DesiredSampleFormat          %u", toULong(deviceContext->DesiredSampleFormat));
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - ClockSelectorId              %d", deviceContext->ClockSelectorId);
 }

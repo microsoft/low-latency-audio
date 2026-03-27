@@ -36,6 +36,7 @@ Environment:
 #include "Common.h"
 #include "UAC_User.h"
 #include "USBAudioConfiguration.h"
+#include "AudioIsochronousEngine.h"
 
 #ifndef __INTELLISENSE__
 #include "RenderCircuit.tmh"
@@ -49,175 +50,166 @@ Environment:
 
 static ACX_PROPERTY_ITEM s_PropertyItems[] = {
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::GetAudioProperty),
-        ACX_PROPERTY_ITEM_FLAG_GET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverGetAudioProperty,             // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        sizeof(UAC_AUDIO_PROPERTY),                       // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_GET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverGetAudioProperty,     // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        sizeof(UAC_AUDIO_PROPERTY),               // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::GetChannelInfo),
-        ACX_PROPERTY_ITEM_FLAG_GET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverGetChannelInfo,               // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        0,                                                // ULONG ValueCb; (variable length)
+        ACX_PROPERTY_ITEM_FLAG_GET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverGetChannelInfo,       // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        0,                                        // ULONG ValueCb; (variable length)
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::GetClockInfo),
-        ACX_PROPERTY_ITEM_FLAG_GET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverGetClockInfo,                 // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        0,                                                // ULONG ValueCb; (variable length)
+        ACX_PROPERTY_ITEM_FLAG_GET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverGetClockInfo,         // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        0,                                        // ULONG ValueCb; (variable length)
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
-        toInt(KsPropertyUACLowLatencyAudio::GetLatencyOffsetOfSampleRate),
-        ACX_PROPERTY_ITEM_FLAG_GET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverGetLatencyOffsetOfSampleRate, // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        sizeof(UAC_SET_FLAGS_CONTEXT),                    // ULONG ControlCb;
-        0,                                                // ULONG ValueCb; (variable length)
-    },
-    {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::SetClockSource),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverSetClockSource,               // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        sizeof(UAC_SET_CLOCK_SOURCE_CONTEXT),             // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverSetClockSource,       // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        sizeof(UAC_SET_CLOCK_SOURCE_CONTEXT),     // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::SetSampleFormat),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverSetSampleFormat,              // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        sizeof(ULONG),                                    // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverSetSampleFormat,      // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        sizeof(ULONG),                            // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::ChangeSampleRate),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverChangeSampleRate,             // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        sizeof(ULONG),                                    // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverChangeSampleRate,     // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        sizeof(ULONG),                            // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::GetAsioOwnership),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverGetAsioOwnership,             // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        0,                                                // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverGetAsioOwnership,     // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        0,                                        // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::StartAsioStream),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverStartAsioStream,              // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        0,                                                // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverStartAsioStream,      // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        0,                                        // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::StopAsioStream),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverStopAsioStream,               // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        0,                                                // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverStopAsioStream,       // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        0,                                        // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::SetAsioBuffer),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverSetAsioBuffer,                // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;  (variable length)
-        0,                                                // ULONG ValueCb;  (variable length)
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverSetAsioBuffer,        // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;  (variable length)
+        0,                                        // ULONG ValueCb;  (variable length)
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::UnsetAsioBuffer),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverUnsetAsioBuffer,              // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        0,                                                // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverUnsetAsioBuffer,      // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        0,                                        // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::ReleaseAsioOwnership),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverReleaseAsioOwnership,         // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        0,                                                // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverReleaseAsioOwnership, // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        0,                                        // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::GetBufferPeriod),
-        ACX_PROPERTY_ITEM_FLAG_GET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverGetBufferPeriod,              // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        sizeof(ULONG),                                    // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_GET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverGetBufferPeriod,      // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        sizeof(ULONG),                            // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::SetBufferPeriod),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverSetBufferPeriod,              // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        sizeof(ULONG),                                    // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverSetBufferPeriod,      // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        sizeof(ULONG),                            // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::GetInputLatency),
-        ACX_PROPERTY_ITEM_FLAG_GET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverGetInputLatency,              // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        sizeof(LONG),                                     // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_GET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverGetInputLatency,      // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        sizeof(LONG),                             // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::GetOutputLatency),
-        ACX_PROPERTY_ITEM_FLAG_GET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverGetOutputLatency,             // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        sizeof(LONG),                                     // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_GET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverGetOutputLatency,     // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        sizeof(LONG),                             // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::SetAsioDevice),
-        ACX_PROPERTY_ITEM_FLAG_SET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverSetAsioDevice,                // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        0,                                                // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_SET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverSetAsioDevice,        // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        0,                                        // ULONG ValueCb;
     },
     {
-        &KSPROPSETID_LowLatencyAudio,                     // const GUID * Set;
+        &KSPROPSETID_LowLatencyAudio,             // const GUID * Set;
         toInt(KsPropertyUACLowLatencyAudio::GetAsioDevice),
-        ACX_PROPERTY_ITEM_FLAG_GET,                       // ULONG Flags;
-        EvtUSBAudioAcxDriverGetAsioDevice,                // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
-        0,                                                // PVOID Reserved;
-        0,                                                // ULONG ControlCb;
-        0,                                                // ULONG ValueCb;
+        ACX_PROPERTY_ITEM_FLAG_GET,               // ULONG Flags;
+        EvtUSBAudioAcxDriverGetAsioDevice,        // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                        // PVOID Reserved;
+        0,                                        // ULONG ControlCb;
+        0,                                        // ULONG ValueCb;
     }
 };
 
@@ -496,17 +488,15 @@ Return Value:
 
     CODEC_PIN_CONTEXT * pinContext = GetCodecPinContext(Pin);
     ASSERT(pinContext != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(pinContext->Device);
-    ASSERT(deviceContext != nullptr);
+    ASSERT(pinContext->AudioIsochronousEngine != nullptr);
 
     if (pinContext->NumOfChannelsPerDevice == 1)
     {
-        RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetChannelName(false, pinContext->Channel, memory, channelName));
+        RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetChannelName(false, pinContext->Channel, memory, channelName));
     }
     else
     {
-        RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStereoChannelName(false, pinContext->Channel, memory, channelName));
+        RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetStereoChannelName(false, pinContext->Channel, memory, channelName));
     }
     RtlInitUnicodeString(&retrievedName, channelName);
 
@@ -578,9 +568,11 @@ VOID CodecR_EvtCircuitCleanup(
 PAGED_CODE_SEG
 NTSTATUS
 CodecR_AddStaticRender(
-    _In_ WDFDEVICE              Device,
-    _In_ const GUID *           ComponentGuid,
-    _In_ const UNICODE_STRING * CircuitName
+    _In_ WDFDEVICE                Device,
+    _In_ const GUID *             ComponentGuid,
+    _In_ const UNICODE_STRING *   CircuitName,
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine
+
 )
 /*++
 
@@ -613,31 +605,18 @@ Return Value:
 
 --*/
 {
-    NTSTATUS               status = STATUS_SUCCESS;
-    PDEVICE_CONTEXT        deviceContext;
-    PRENDER_DEVICE_CONTEXT renderDevContext;
-    ACXCIRCUIT             renderCircuit = nullptr;
-    WDF_OBJECT_ATTRIBUTES  attributes;
+    NTSTATUS   status = STATUS_SUCCESS;
+    ACXCIRCUIT renderCircuit = nullptr;
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
 
-    deviceContext = GetDeviceContext(Device);
-    ASSERT(deviceContext != nullptr);
-
-    //
-    // Alloc audio context to current device.
-    //
-    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, RENDER_DEVICE_CONTEXT);
-    RETURN_NTSTATUS_IF_FAILED(WdfObjectAllocateContext(Device, &attributes, (PVOID *)&renderDevContext));
-    ASSERT(renderDevContext);
-
     //
     // Create a render circuit associated with this child device.
     //
-    RETURN_NTSTATUS_IF_FAILED(CodecR_CreateRenderCircuit(Device, ComponentGuid, CircuitName, deviceContext->AudioProperty.SupportedSampleRate /* & GetSampleRateMask(deviceContext->AudioProperty.SampleRate) */, &renderCircuit));
+    RETURN_NTSTATUS_IF_FAILED(CodecR_CreateRenderCircuit(Device, ComponentGuid, CircuitName, AudioIsochronousEngine, AudioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SupportedSampleRate /* & GetSampleRateMask(AudioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate) */, &renderCircuit));
 
-    deviceContext->Render = renderCircuit;
+    AudioIsochronousEngine->SetRenderCircuit(renderCircuit);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 
@@ -747,11 +726,12 @@ PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
 CodecR_CreateRenderCircuit(
-    WDFDEVICE              Device,
-    const GUID *           ComponentGuid,
-    const UNICODE_STRING * CircuitName,
-    const ULONG            SupportedSampleRate,
-    ACXCIRCUIT *           Circuit
+    WDFDEVICE                Device,
+    const GUID *             ComponentGuid,
+    const UNICODE_STRING *   CircuitName,
+    AudioIsochronousEngine * AudioIsochronousEngine,
+    const ULONG              SupportedSampleRate,
+    ACXCIRCUIT *             Circuit
 )
 /*++
 
@@ -811,8 +791,8 @@ Return Value:
     deviceContext = GetDeviceContext(Device);
     ASSERT(deviceContext != nullptr);
 
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannelInfoAdjusted(false, numOfChannels, terminalType, volumeUnitID, muteUnitID));
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamDevicesAdjusted(false, numOfDevices));
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetStreamChannelInfoAdjusted(false, numOfChannels, terminalType, volumeUnitID, muteUnitID));
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetStreamDevicesAdjusted(false, numOfDevices));
     numOfRemainingChannels = numOfChannels;
 
     if (!deviceContext->UsbAudioConfiguration->IsEnableFeatureUnit(false))
@@ -820,7 +800,7 @@ Return Value:
         volumeUnitID = muteUnitID = USBAudioConfiguration::InvalidID;
     }
 
-    USBAudioDataFormatManager * usbAudioDataFormatManager = deviceContext->UsbAudioConfiguration->GetUSBAudioDataFormatManager(false);
+    USBAudioDataFormatManager * usbAudioDataFormatManager = AudioIsochronousEngine->GetUSBAudioDataFormatManager(false);
     RETURN_NTSTATUS_IF_TRUE_ACTION(usbAudioDataFormatManager == nullptr, status = STATUS_INVALID_PARAMETER, status);
 
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
@@ -924,6 +904,7 @@ Return Value:
         ASSERT(circuitContext);
 
         circuitContext->NumOfDevices = numOfDevices;
+        circuitContext->AudioIsochronousEngine = AudioIsochronousEngine;
 
         WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
         attributes.ParentObject = circuit;
@@ -946,7 +927,7 @@ Return Value:
     {
         ULONG numOfChannelsPerDevice;
 
-        if ((numOfRemainingChannels > 2) && deviceContext->UsbAudioConfiguration->IsDeviceSplittable(false))
+        if ((numOfRemainingChannels > 2) && deviceContext->UsbAudioConfiguration->IsDeviceSplittable())
         {
             numOfChannelsPerDevice = 2;
         }
@@ -1078,13 +1059,14 @@ Return Value:
             pinContext->DeviceIndex = index;
             pinContext->Channel = index * 2;
             pinContext->NumOfChannelsPerDevice = numOfChannelsPerDevice;
+            pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
 
             ///////////////////////////////////////////////////////////
             //
             // Create Device Bridge Pin.
             //
             ACX_PIN_CALLBACKS_INIT(&pinCallbacks);
-            if (deviceContext->OutputProperty.ChannelNames != USBAudioConfiguration::InvalidString)
+            if (AudioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ChannelNames != USBAudioConfiguration::InvalidString)
             {
                 pinCallbacks.EvtAcxPinRetrieveName = CodecR_EvtAcxPinRetrieveName;
             }
@@ -1101,7 +1083,7 @@ Return Value:
             // the name of EvtAcxPinRetrieveName is valid, change it to
             // KSNODETYPE_LINE_CONNECTOR.
             //
-            if (IsEqualGUID(*ConvertTerminalType(terminalType), KSNODETYPE_SPEAKER) && (deviceContext->OutputProperty.ChannelNames != USBAudioConfiguration::InvalidString))
+            if (IsEqualGUID(*ConvertTerminalType(terminalType), KSNODETYPE_SPEAKER) && (AudioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ChannelNames != USBAudioConfiguration::InvalidString))
             {
                 pinCfg.Category = &KSNODETYPE_LINE_CONNECTOR;
             }
@@ -1170,7 +1152,7 @@ Return Value:
             RETURN_NTSTATUS_IF_FAILED(AcxPinAddJacks(pins[index * CodecRenderPinCount + CodecRenderBridgePin], &jack, 1));
         }
 
-        if (deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface())
+        if (AudioIsochronousEngine->HasOutputIsochronousInterface())
         {
             RETURN_NTSTATUS_IF_FAILED(Render_AllocateSupportedFormats(Device, pins[index * CodecRenderPinCount + CodecRenderHostPin], circuit, SupportedSampleRate, numOfChannelsPerDevice, usbAudioDataFormatManager));
         }
@@ -1366,6 +1348,7 @@ Return Value:
     ASSERT(Circuit != nullptr);
     circuitContext = GetRenderCircuitContext(Circuit);
     ASSERT(circuitContext);
+    ASSERT(circuitContext->AudioIsochronousEngine);
 
     deviceContext = GetDeviceContext(Device);
     ASSERT(deviceContext != nullptr);
@@ -1379,10 +1362,10 @@ Return Value:
 
     pinType = AcxPinGetType(Pin);
 
-    if (USBAudioAcxDriverHasAsioOwnership(deviceContext))
+    if (circuitContext->AudioIsochronousEngine->HasAsioOwnership())
     {
         ACXDATAFORMAT dataFormat = nullptr;
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, false, dataFormat);
+        status = circuitContext->AudioIsochronousEngine->GetCurrentDataFormat(false, dataFormat);
         RETURN_NTSTATUS_IF_FAILED(status);
 
         ACXDATAFORMAT stereoDataFormat;
@@ -1436,7 +1419,7 @@ Return Value:
     // Create the virtual streaming engine which will control
     // streaming logic for the render circuit.
     //
-    renderStreamEngine = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) CRenderStreamEngine(deviceContext, stream, StreamFormat, pinContext->DeviceIndex, pinContext->Channel, pinContext->NumOfChannelsPerDevice, FALSE /* , nullptr */);
+    renderStreamEngine = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) CRenderStreamEngine(deviceContext, circuitContext->AudioIsochronousEngine, stream, StreamFormat, pinContext->DeviceIndex, pinContext->Channel, pinContext->NumOfChannelsPerDevice, FALSE /* , nullptr */);
     RETURN_NTSTATUS_IF_TRUE(renderStreamEngine == nullptr, STATUS_INSUFFICIENT_RESOURCES);
 
     streamContext = GetStreamEngineContext(stream);

@@ -35,6 +35,7 @@ Environment:
 #include "TransferObject.h"
 #include "RtPacketObject.h"
 #include "AsioBufferObject.h"
+#include "AudioIsochronousEngine.h"
 
 #ifndef __INTELLISENSE__
 #include "StreamObject.tmh"
@@ -43,26 +44,28 @@ Environment:
 _Use_decl_annotations_
 PAGED_CODE_SEG
 StreamObject * StreamObject::Create(
-    PDEVICE_CONTEXT      deviceContext,
-    const StreamStatuses ioStable,
-    const StreamStatuses ioStreaming,
-    const StreamStatuses ioSteady
+    PDEVICE_CONTEXT          deviceContext,
+    AudioIsochronousEngine * audioIsochronousEngine,
+    const StreamStatuses     ioStable,
+    const StreamStatuses     ioStreaming,
+    const StreamStatuses     ioSteady
 )
 {
     PAGED_CODE();
 
-    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) StreamObject(deviceContext, ioStable, ioStreaming, ioSteady);
+    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) StreamObject(deviceContext, audioIsochronousEngine, ioStable, ioStreaming, ioSteady);
 }
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
 StreamObject::StreamObject(
-    PDEVICE_CONTEXT      deviceContext,
-    const StreamStatuses ioStable,
-    const StreamStatuses ioStreaming,
-    const StreamStatuses ioSteady
+    PDEVICE_CONTEXT          deviceContext,
+    AudioIsochronousEngine * audioIsochronousEngine,
+    const StreamStatuses     ioStable,
+    const StreamStatuses     ioStreaming,
+    const StreamStatuses     ioSteady
 )
-    : m_deviceContext(deviceContext), c_ioStable(ioStable), c_ioStreaming(ioStreaming), c_ioSteady(ioSteady)
+    : m_deviceContext(deviceContext), m_audioIsochronousEngine(audioIsochronousEngine), c_ioStable(ioStable), c_ioStreaming(ioStreaming), c_ioSteady(ioSteady)
 {
     WDF_OBJECT_ATTRIBUTES attributes;
 
@@ -261,22 +264,22 @@ StreamObject::GetStartFrame(
     {
     case IsoDirection::In: {
         startFrame = m_inputNextIsoFrame + m_inputIsoFrameDelay;
-        // m_inputNextIsoFrame = startFrame + m_deviceContext->ClassicFramesPerIrp;
-        m_inputNextIsoFrame = startFrame + ((numPackets << (m_deviceContext->InputInterfaceAndPipe.PipeInfo.Interval - 1)) / m_deviceContext->FramesPerMs);
+        // m_inputNextIsoFrame = startFrame + m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp;
+        m_inputNextIsoFrame = startFrame + ((numPackets << (m_audioIsochronousEngine->GetInputInterfaceAndPipe().PipeInfo.Interval - 1)) / m_deviceContext->FramesPerMs);
         m_inputIsoFrameDelay = 0;
     }
     break;
     case IsoDirection::Out: {
         startFrame = m_outputNextIsoFrame + m_outputIsoFrameDelay;
-        // m_outputNextIsoFrame = startFrame + m_deviceContext->ClassicFramesPerIrp;
-        m_outputNextIsoFrame = startFrame + ((numPackets << (m_deviceContext->OutputInterfaceAndPipe.PipeInfo.Interval - 1)) / m_deviceContext->FramesPerMs);
+        // m_outputNextIsoFrame = startFrame + m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp;
+        m_outputNextIsoFrame = startFrame + ((numPackets << (m_audioIsochronousEngine->GetOutputInterfaceAndPipe().PipeInfo.Interval - 1)) / m_deviceContext->FramesPerMs);
         m_outputIsoFrameDelay = 0;
     }
     break;
     case IsoDirection::Feedback: {
         startFrame = m_feedbackNextIsoFrame + m_feedbackIsoFrameDelay;
-        // m_feedbackNextIsoFrame = startFrame + m_deviceContext->ClassicFramesPerIrp;
-        m_feedbackNextIsoFrame = startFrame + ((numPackets << (m_deviceContext->FeedbackProperty.FeedbackInterval - 1)) / m_deviceContext->FramesPerMs);
+        // m_feedbackNextIsoFrame = startFrame + m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp;
+        m_feedbackNextIsoFrame = startFrame + ((numPackets << (m_audioIsochronousEngine->GetAudioStreamPropertySet().FeedbackProperty.FeedbackInterval - 1)) / m_deviceContext->FramesPerMs);
         m_feedbackIsoFrameDelay = 0;
     }
     break;
@@ -398,9 +401,9 @@ void StreamObject::CompleteRequest(
 
     if ((lastTimeUs != 0) && (timeDiffUs > thresholdUs))
     {
-        if ((m_deviceContext->AsioBufferObject != nullptr) && m_deviceContext->AsioBufferObject->IsRecHeaderRegistered())
+        if ((m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && m_audioIsochronousEngine->GetAsioBufferObject()->IsRecHeaderRegistered())
         {
-            m_deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::OverloadDetected);
+            m_audioIsochronousEngine->GetAsioBufferObject()->SetRecDeviceStatus(DeviceStatuses::OverloadDetected);
         }
         TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "process transfer %s: dropout detected. Elapsed time after previous DPC: %llu us, threshold %uus.", GetDirectionString(direction), timeDiffUs, thresholdUs);
         m_deviceContext->ErrorStatistics->LogErrorOccurrence(ErrorStatus::DropoutDetectedElapsedTime, (ULONG)(timeDiffUs - thresholdUs));
@@ -497,7 +500,7 @@ StreamObject::CalculateTransferSizeAndSetURB(
     LONGLONG requiredSamples = 0;
 
     // Use only the contents of the previous IRP
-    ULONG irpIndex = (index == 0) ? m_deviceContext->Params.MaxIrpNumber - 1 : index - 1;
+    ULONG irpIndex = (index == 0) ? m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 1 : index - 1;
 
     requiredSamples = 0;
 
@@ -519,26 +522,26 @@ StreamObject::CalculateTransferSizeAndSetURB(
     }
     m_inputPrevWritePosition = inPosition;
 
-    if ((m_deviceContext->IsDeviceSynchronous) || ((m_streamStatus & toInt(c_ioStable)) != (ULONG)toInt(c_ioStable) && !m_feedbackStable) || (lockDelayCount != 0) || (requiredSamples < numPackets))
+    if ((m_audioIsochronousEngine->GetAudioStreamPropertySet().IsDeviceSynchronous) || ((m_streamStatus & toInt(c_ioStable)) != (ULONG)toInt(c_ioStable) && !m_feedbackStable) || (lockDelayCount != 0) || (requiredSamples < numPackets))
     {
         TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "preparing output packets by calculation (independent to input)...");
         transferSamples = 0;
 
-        LONG  remainder = m_deviceContext->AudioProperty.SampleRate % m_deviceContext->OutputProperty.PacketsPerSec;
-        ULONG rounded = m_deviceContext->OutputProperty.SamplesPerPacket * m_deviceContext->OutputProperty.PacketsPerSec;
-        if (((m_streamStatus & toInt(c_ioStable)) == (ULONG)toInt(c_ioStable)) && (m_deviceContext->InputProperty.MeasuredSampleRate != 0) && (m_deviceContext->UsbAudioConfiguration->GetClockEntityCountForTerminal() == 1))
+        LONG  remainder = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate % m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.PacketsPerSec;
+        ULONG rounded = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.SamplesPerPacket * m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.PacketsPerSec;
+        if (((m_streamStatus & toInt(c_ioStable)) == (ULONG)toInt(c_ioStable)) && (m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.MeasuredSampleRate != 0) && (m_deviceContext->UsbAudioConfiguration->GetClockEntityCountForTerminal() == 1))
         {
-            remainder = ((LONG)m_deviceContext->InputProperty.MeasuredSampleRate - (LONG)rounded) % (LONG)m_deviceContext->OutputProperty.PacketsPerSec;
+            remainder = ((LONG)m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.MeasuredSampleRate - (LONG)rounded) % (LONG)m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.PacketsPerSec;
         }
         for (ULONG i = 0; i < numPackets; ++i)
         {
-            ULONG samples = m_deviceContext->OutputProperty.SamplesPerPacket;
+            ULONG samples = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.SamplesPerPacket;
             m_outputRemainder += remainder;
-            if (m_outputRemainder - (LONG)m_deviceContext->OutputProperty.PacketsPerSec >= 0)
+            if (m_outputRemainder - (LONG)m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.PacketsPerSec >= 0)
             {
                 ++samples;
-                m_outputRemainder -= m_deviceContext->OutputProperty.PacketsPerSec;
-                // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Frame %u Packet %u: adjusting sample +1, %u samples, measured %u Hz, remainder %d, sum %d.",startFrame,i,samples,m_deviceContext->AudioProperty.InMeasuredSampleRate,remainder,m_outputRemainder);
+                m_outputRemainder -= m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.PacketsPerSec;
+                // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Frame %u Packet %u: adjusting sample +1, %u samples, measured %u Hz, remainder %d, sum %d.",startFrame,i,samples,m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.InMeasuredSampleRate,remainder,m_outputRemainder);
                 if (m_compensateSamples < 0)
                 {
                     ++m_compensateSamples;
@@ -546,11 +549,11 @@ StreamObject::CalculateTransferSizeAndSetURB(
                     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Frame %u Packet %u: compensating sample -1, %u samples.", startFrame, i, samples);
                 }
             }
-            else if (m_outputRemainder + (LONG)m_deviceContext->OutputProperty.PacketsPerSec <= 0)
+            else if (m_outputRemainder + (LONG)m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.PacketsPerSec <= 0)
             {
                 --samples;
-                m_outputRemainder += m_deviceContext->OutputProperty.PacketsPerSec;
-                // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Frame %u Packet %u: adjusting sample -1, %u samples, measured %u Hz, remainder %d, sum %d.",startFrame,i,samples,m_deviceContext->AudioProperty.InMeasuredSampleRate,remainder,m_outputRemainder);
+                m_outputRemainder += m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.PacketsPerSec;
+                // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Frame %u Packet %u: adjusting sample -1, %u samples, measured %u Hz, remainder %d, sum %d.",startFrame,i,samples,m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.InMeasuredSampleRate,remainder,m_outputRemainder);
             }
             else
             {
@@ -562,8 +565,8 @@ StreamObject::CalculateTransferSizeAndSetURB(
                 }
             }
 
-            ULONG packetSize = samples * m_deviceContext->OutputProperty.BytesPerBlock;
-            if (transferSize + packetSize > m_deviceContext->OutputInterfaceAndPipe.MaximumTransferSize)
+            ULONG packetSize = samples * m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
+            if (transferSize + packetSize > m_audioIsochronousEngine->GetOutputInterfaceAndPipe().MaximumTransferSize)
             {
                 packetSize = 0;
             }
@@ -572,16 +575,16 @@ StreamObject::CalculateTransferSizeAndSetURB(
             transferSize += packetSize;
             InterlockedIncrement(asyncPacketsCount);
         }
-        if (m_deviceContext->IsDeviceSynchronous && (m_streamStatus & toInt(c_ioStable)) == (ULONG)toInt(c_ioStable))
+        if (m_audioIsochronousEngine->GetAudioStreamPropertySet().IsDeviceSynchronous && (m_streamStatus & toInt(c_ioStable)) == (ULONG)toInt(c_ioStable))
         {
-            transferSamples = transferSize / m_deviceContext->OutputProperty.BytesPerBlock;
+            transferSamples = transferSize / m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
             m_outputSyncPosition += transferSize;
         }
-        if (!m_deviceContext->IsDeviceSynchronous && ((m_streamStatus & toInt(c_ioStable)) == (ULONG)toInt(c_ioStable) || m_feedbackStable))
+        if (!m_audioIsochronousEngine->GetAudioStreamPropertySet().IsDeviceSynchronous && ((m_streamStatus & toInt(c_ioStable)) == (ULONG)toInt(c_ioStable) || m_feedbackStable))
         {
             // In cases where the OUT DPC comes back before the IN DPC,
             // the number of samples is calculated based on the theoretical value and sent.
-            transferSamples = transferSize / m_deviceContext->OutputProperty.BytesPerBlock;
+            transferSamples = transferSize / m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
 
             if (m_feedbackStable && (m_transferObjectFeedback[index] != nullptr))
             {
@@ -607,7 +610,7 @@ StreamObject::CalculateTransferSizeAndSetURB(
             m_compensateSamples = 0;
         }
 
-        ULONG limitSamplesPerPacket = min((m_deviceContext->OutputProperty.MaxSamplesPerPacket), (m_deviceContext->OutputProperty.SamplesPerPacket + 1));
+        ULONG limitSamplesPerPacket = min((m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.MaxSamplesPerPacket), (m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.SamplesPerPacket + 1));
         if (remainSamples > limitSamplesPerPacket * numPackets)
         {
             m_compensateSamples = remainSamples - (limitSamplesPerPacket * numPackets);
@@ -629,14 +632,14 @@ StreamObject::CalculateTransferSizeAndSetURB(
                 remainderSum -= numPackets;
             }
 
-            ULONG packetSize = samples * m_deviceContext->OutputProperty.BytesPerBlock;
-            if ((samples < m_deviceContext->OutputProperty.SamplesPerPacket - 1) || (samples > m_deviceContext->OutputProperty.SamplesPerPacket + 1))
+            ULONG packetSize = samples * m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
+            if ((samples < m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.SamplesPerPacket - 1) || (samples > m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.SamplesPerPacket + 1))
             {
                 TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Abnormal output packet size, %d samples, frame %u, iso packet %u.", samples, startFrame, i);
             }
-            if (transferSize + packetSize > m_deviceContext->OutputInterfaceAndPipe.MaximumTransferSize)
+            if (transferSize + packetSize > m_audioIsochronousEngine->GetOutputInterfaceAndPipe().MaximumTransferSize)
             {
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Transfer size exceeds limit, size %u bytes, limit %u bytes, frame %u, iso packet %u.", transferSize + packetSize, m_deviceContext->OutputInterfaceAndPipe.MaximumTransferSize, startFrame, i);
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Transfer size exceeds limit, size %u bytes, limit %u bytes, frame %u, iso packet %u.", transferSize + packetSize, m_audioIsochronousEngine->GetOutputInterfaceAndPipe().MaximumTransferSize, startFrame, i);
                 packetSize = 0;
             }
             urb->UrbIsochronousTransfer.IsoPacket[i].Offset = transferSize;
@@ -650,13 +653,13 @@ StreamObject::CalculateTransferSizeAndSetURB(
         }
         m_outputSyncPosition += transferSize;
     }
-    if (m_deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
+    if (m_audioIsochronousEngine->HasInputIsochronousInterface())
     {
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "initialized OUT URB. in sample %I64d, out sample %I64d, startFrame %d, %u bytes", inPosition / m_deviceContext->InputProperty.BytesPerBlock, readPosition / m_deviceContext->OutputProperty.BytesPerBlock, startFrame, transferSize);
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "initialized OUT URB. in sample %I64d, out sample %I64d, startFrame %d, %u bytes", inPosition / m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock, readPosition / m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock, startFrame, transferSize);
     }
     else
     {
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "initialized OUT URB. out sample %I64d, startFrame %d, %u bytes", readPosition / m_deviceContext->OutputProperty.BytesPerBlock, startFrame, transferSize);
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "initialized OUT URB. out sample %I64d, startFrame %d, %u bytes", readPosition / m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock, startFrame, transferSize);
     }
     m_outputReadPosition += transferSize;
 
@@ -679,10 +682,10 @@ StreamObject::CreateMixingEngineThread(
     ASSERT(m_deviceContext != nullptr);
     if (m_mixingEngineThread == nullptr)
     {
-        m_mixingEngineThread = MixingEngineThread::CreateMixingEngineThread(m_deviceContext, 1000);
+        m_mixingEngineThread = MixingEngineThread::CreateMixingEngineThread(m_deviceContext, this, 1000);
         IF_TRUE_ACTION_JUMP(m_mixingEngineThread == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, CreateMixingEngineThread_Exit);
 
-        status = m_mixingEngineThread->CreateThread(MixingEngineThreadFunction, priority, wakeUpIntervalUs);
+        status = m_mixingEngineThread->CreateThread(MixingEngineThreadFunction, priority, wakeUpIntervalUs, m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp);
     }
 
 CreateMixingEngineThread_Exit:
@@ -746,7 +749,7 @@ StreamStatuses StreamObject::GetStreamStatuses(bool & isProcessIo)
     WdfSpinLockAcquire(m_positionSpinLock);
 
     status = static_cast<StreamStatuses>(m_streamStatus);
-    if (m_deviceContext->UsbAudioConfiguration->HasInputAndOutputIsochronousInterfaces())
+    if (m_audioIsochronousEngine->HasInputAndOutputIsochronousInterfaces())
     {
         isProcessIo = m_inputLastProcessedIrpIndex == m_outputLastProcessedIrpIndex;
     }
@@ -862,7 +865,7 @@ StreamObject::EstimateUSBBusTime(
     else if (m_usbBusTimeEstimated != 0)
     {
         // If an estimated value was used last time, measure the difference between the estimated value and the current value.
-        if ((usbBusTimeCurrent < m_usbBusTimeEstimated) || ((usbBusTimeCurrent - m_usbBusTimeEstimated) > m_deviceContext->ClassicFramesPerIrp))
+        if ((usbBusTimeCurrent < m_usbBusTimeEstimated) || ((usbBusTimeCurrent - m_usbBusTimeEstimated) > m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp))
         {
             // If the guessed value is wrong, erase it as a fixed value.
             usbBusTimeDiff = 0;
@@ -875,7 +878,7 @@ StreamObject::EstimateUSBBusTime(
         m_usbBusTimePrev = usbBusTimeCurrent;
         m_usbBusTimeEstimated = 0;
     }
-    else if ((usbBusTimeCurrent < m_usbBusTimePrev) || ((usbBusTimeCurrent - m_usbBusTimePrev) > m_deviceContext->ClassicFramesPerIrp))
+    else if ((usbBusTimeCurrent < m_usbBusTimePrev) || ((usbBusTimeCurrent - m_usbBusTimePrev) > m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp))
     {
         // When an abnormal value is detected in BusTime,the elapsed time is estimated from Performance Counter.
         usbBusTimeDiff = (wakeupDiffPCUs + 500) / 1000;
@@ -913,7 +916,7 @@ bool StreamObject::IsOverrideIgnoreEstimation()
 
     ASSERT(m_mixingEngineThread != nullptr);
 
-    // if(m_deviceContext->AsioBufferObject != nullptr && (m_mixingEngineThread->GetCurrentTimerResolution * 2) > (m_deviceContext->AsioBufferObject.BufferPeriod * 10000000 / m_deviceContext->AudioProperty.SampleRate)){
+    // if(m_audioIsochronousEngine->GetAsioBufferObject() != nullptr && (m_mixingEngineThread->GetCurrentTimerResolution * 2) > (m_audioIsochronousEngine->GetAsioBufferObject().BufferPeriod * 10000000 / m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate)){
     // 	overrideIgnoreEstimation = true;
     // }
 
@@ -935,6 +938,25 @@ void StreamObject::GetCompletedPacket(
 
 _Use_decl_annotations_
 NONPAGED_CODE_SEG
+void StreamObject::GetCompletedPacket(
+    bool       isInput,
+    LONGLONG & completedPacket
+)
+{
+    WdfSpinLockAcquire(m_packetSpinLock);
+    if (isInput)
+    {
+        completedPacket = m_inputCompletedPacket;
+    }
+    else
+    {
+        completedPacket = m_outputCompletedPacket;
+    }
+    WdfSpinLockRelease(m_packetSpinLock);
+}
+
+_Use_decl_annotations_
+NONPAGED_CODE_SEG
 void StreamObject::UpdateCompletedPacket(
     bool  isInput,
     ULONG index,
@@ -948,14 +970,14 @@ void StreamObject::UpdateCompletedPacket(
     WdfSpinLockAcquire(m_packetSpinLock);
     if (isInput)
     {
-        currentPacketNumber = (ULONG)((m_inputCompletedPacket / numberOfPackets) % m_deviceContext->Params.MaxIrpNumber);
+        currentPacketNumber = (ULONG)((m_inputCompletedPacket / numberOfPackets) % m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber);
         m_inputCompletedPacket += numberOfPackets;
     }
     else
     {
-        currentPacketNumber = (ULONG)((m_outputCompletedPacket / numberOfPackets) % m_deviceContext->Params.MaxIrpNumber);
+        currentPacketNumber = (ULONG)((m_outputCompletedPacket / numberOfPackets) % m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber);
         m_outputCompletedPacket += numberOfPackets;
-        if (!m_deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface())
+        if (!m_audioIsochronousEngine->HasInputIsochronousInterface())
         {
             m_inputCompletedPacket = m_outputCompletedPacket;
         }
@@ -1232,7 +1254,7 @@ bool StreamObject::CheckInputStability(
     ULONG invalidPacket
 )
 {
-    ULONG transferredSamplesInThisIrp = transferredBytesInThisIrp / m_deviceContext->InputProperty.BytesPerBlock;
+    ULONG transferredSamplesInThisIrp = transferredBytesInThisIrp / m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock;
 
     WdfSpinLockAcquire(m_positionSpinLock);
     m_inputLastProcessedIrpIndex = index;
@@ -1292,7 +1314,7 @@ ULONG StreamObject::UpdatePositionsFeedback(
     ULONG            validFeedback
 )
 {
-    feedbackSum <<= (m_deviceContext->FeedbackProperty.FeedbackInterval - 1);
+    feedbackSum <<= (m_audioIsochronousEngine->GetAudioStreamPropertySet().FeedbackProperty.FeedbackInterval - 1);
     feedbackSum += m_feedbackRemainder;
     m_feedbackRemainder = 0;
 
@@ -1433,7 +1455,7 @@ NONPAGED_CODE_SEG
 ULONG StreamObject::CalculateDropoutThresholdTime()
 {
     // 2 * 1000 microseconds, margin of 500 microseconds.
-    return (ULONG)((m_deviceContext->ClassicFramesPerIrp * 2 * 1000) - 500);
+    return (ULONG)((m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * 2 * 1000) - 500);
 }
 
 _Use_decl_annotations_
@@ -1508,19 +1530,23 @@ void StreamObject::ClearOutputBuffer(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 void StreamObject::MixingEngineThreadFunction(
-    _In_ PDEVICE_CONTEXT deviceContext
+    PDEVICE_CONTEXT deviceContext,
+    WorkerThread *  thisThread
 )
 {
-    StreamObject * streamObject = deviceContext->StreamObject;
-
     PAGED_CODE();
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
+    MixingEngineThread * mixingEngineThread = (MixingEngineThread *)thisThread;
+    StreamObject *       streamObject = mixingEngineThread->GetStreamObject();
 
     ASSERT(streamObject != nullptr);
     ASSERT(streamObject->m_deviceContext != nullptr);
     ASSERT(streamObject->m_deviceContext == deviceContext);
 
     streamObject->MixingEngineThreadMain(deviceContext);
+    // streamObject->MixingEngineThreadMainWithoutASIO(deviceContext);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
@@ -1528,37 +1554,35 @@ void StreamObject::MixingEngineThreadFunction(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 void StreamObject::MixingEngineThreadMain(
-    _In_ PDEVICE_CONTEXT deviceContext
+    PDEVICE_CONTEXT deviceContext
 )
 {
-    ULONGLONG   currentTimePCUs = 0ULL;
-    ULONGLONG   currentTimePC = 0ULL;
-    const ULONG inputInterval = m_deviceContext->InputInterfaceAndPipe.PipeInfo.Interval;
-    const ULONG outputInterval = m_deviceContext->OutputInterfaceAndPipe.PipeInfo.Interval;
-    const ULONG inputPacketsPerMs = m_deviceContext->FramesPerMs >> (inputInterval - 1);
-    const ULONG outputPacketsPerMs = m_deviceContext->FramesPerMs >> (outputInterval - 1);
-    ;
-    const ULONG     inputPacketsPerIrp = m_deviceContext->ClassicFramesPerIrp * inputPacketsPerMs;
-    const ULONG     outputPacketsPerIrp = m_deviceContext->ClassicFramesPerIrp * outputPacketsPerMs;
-    const ULONG     numIrp = m_deviceContext->Params.MaxIrpNumber;
+    ULONGLONG       currentTimePCUs = 0ULL;
+    ULONGLONG       currentTimePC = 0ULL;
+    const ULONG     inputInterval = m_audioIsochronousEngine->GetInputInterfaceAndPipe().PipeInfo.Interval;
+    const ULONG     outputInterval = m_audioIsochronousEngine->GetOutputInterfaceAndPipe().PipeInfo.Interval;
+    const ULONG     inputPacketsPerMs = m_deviceContext->FramesPerMs >> (inputInterval - 1);
+    const ULONG     outputPacketsPerMs = m_deviceContext->FramesPerMs >> (outputInterval - 1);
+    const ULONG     inputPacketsPerIrp = m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * inputPacketsPerMs;
+    const ULONG     outputPacketsPerIrp = m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * outputPacketsPerMs;
+    const ULONG     numIrp = m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber;
     bool            safetyOffsetApplied = false;
     BUFFER_PROPERTY inRemainder{};
     BUFFER_PROPERTY outRemainder{};
-    // LARGE_INTEGER lastWakePC        = 0LL;
-    ULONGLONG     lastAsioNotifyPCUs = 0ULL;
-    ULONGLONG     lastInProcessedPCUs = 0ULL;
-    LONG          curAsioMeasuredPeriodUs = 0;
-    LONG          prevAsioMeasuredPeriodUs = 0;
-    bool          outputReadyInThisPeriod = false;
-    bool          outputReadyInPrevPeriod = true;
-    LONG          curClientProcessingTimeUs = 0;
-    LONG          prevClientProcessingTimeUs = 0;
-    LARGE_INTEGER timerExpired = {0};
-    LONGLONG      inBuffersTotalCount = 0ULL;
-    LONGLONG      outBuffersTotalCount = 0ULL;
-    LONGLONG      asioNotifyCount = 0LL;
-    const bool    hasInputIsochronousInterface = m_deviceContext->UsbAudioConfiguration->HasInputIsochronousInterface();
-    const bool    hasOutputIsochronousInterface = m_deviceContext->UsbAudioConfiguration->HasOutputIsochronousInterface();
+    ULONGLONG       lastAsioNotifyPCUs = 0ULL;
+    ULONGLONG       lastInProcessedPCUs = 0ULL;
+    LONG            curAsioMeasuredPeriodUs = 0;
+    LONG            prevAsioMeasuredPeriodUs = 0;
+    bool            outputReadyInThisPeriod = false;
+    bool            outputReadyInPrevPeriod = true;
+    LONG            curClientProcessingTimeUs = 0;
+    LONG            prevClientProcessingTimeUs = 0;
+    LARGE_INTEGER   timerExpired = {0};
+    LONGLONG        inBuffersTotalCount = 0ULL;
+    LONGLONG        outBuffersTotalCount = 0ULL;
+    LONGLONG        asioNotifyCount = 0LL;
+    const bool      hasInputIsochronousInterface = m_audioIsochronousEngine->HasInputIsochronousInterface();
+    const bool      hasOutputIsochronousInterface = m_audioIsochronousEngine->HasOutputIsochronousInterface();
 
     PAGED_CODE();
 
@@ -1603,8 +1627,8 @@ void StreamObject::MixingEngineThreadMain(
             inElapsedTimeAfterDpc = (LONG)((LONGLONG)currentTimePCUs - m_outputIsoRequestCompletionTime.LastTimeUs);
         }
 
-        WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-        if ((m_deviceContext->AsioBufferObject != nullptr) && m_deviceContext->AsioBufferObject->IsRecBufferReady() && m_deviceContext->AsioBufferObject->IsRecHeaderRegistered() && (asioNotifyCount > 1))
+        m_audioIsochronousEngine->AcquireAsioWaitLock();
+        if ((m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && m_audioIsochronousEngine->GetAsioBufferObject()->IsRecBufferReady() && m_audioIsochronousEngine->GetAsioBufferObject()->IsRecHeaderRegistered() && (asioNotifyCount > 1))
         {
             ULONG thresholdUs = CalculateDropoutThresholdTime();
             if (inElapsedTimeAfterDpc > (LONG)thresholdUs)
@@ -1614,11 +1638,11 @@ void StreamObject::MixingEngineThreadMain(
 #else
                 TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "%03u.%02u: mixing engine thread: dropout detected. Long elapsed time after IN DPC, cur %dus, threshold %uus.", (LONG)(m_elapsedPCUs / 60000000), (LONG)(m_elapsedPCUs / 1000000 % 60), inElapsedTimeAfterDpc, thresholdUs);
 #endif
-                m_deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::OverloadDetected);
+                m_audioIsochronousEngine->GetAsioBufferObject()->SetRecDeviceStatus(DeviceStatuses::OverloadDetected);
                 m_deviceContext->ErrorStatistics->LogErrorOccurrence(ErrorStatus::DropoutDetectedInDPC, (ULONG)(inElapsedTimeAfterDpc - thresholdUs));
             }
         }
-        WdfWaitLockRelease(deviceContext->AsioWaitLock);
+        m_audioIsochronousEngine->ReleaseAsioWaitLock();
         // Use WdfUsbTargetDeviceRetrieveCurrentFrameNumber() instead of USB_BUS_INTERFACE_USBDI_V1::QueryBusTime().
         // Use USB bus time for control
         ULONG usbBusTimeCurrent = GetCurrentFrame(deviceContext);
@@ -1632,35 +1656,35 @@ void StreamObject::MixingEngineThreadMain(
         LONGLONG outCompletedPacket = 0LL; // OUT Number of packets that have been transferred isochronous
         GetCompletedPacket(inCompletedPacket, outCompletedPacket);
         // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - in completed packet, out completed packet %llu, %lld", inCompletedPacket, outCompletedPacket);
-        WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
-        bool handleAsioBuffer = ((streamStatus == c_ioSteady) && (deviceContext->AsioBufferObject != nullptr) && deviceContext->AsioBufferObject->IsRecBufferReady() && (m_recoverActive == 0) && (m_outputRequireZeroFill == 0) && !IsFirstWakeUp());
+        m_audioIsochronousEngine->AcquireAsioWaitLock();
+        bool handleAsioBuffer = ((streamStatus == c_ioSteady) && (m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && m_audioIsochronousEngine->GetAsioBufferObject()->IsRecBufferReady() && (m_recoverActive == 0) && (m_outputRequireZeroFill == 0) && !IsFirstWakeUp());
 
         LONGLONG playReadyPosition = {0};
-        if ((deviceContext->AsioBufferObject != nullptr) && deviceContext->AsioBufferObject->IsRecBufferReady())
+        if ((m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && m_audioIsochronousEngine->GetAsioBufferObject()->IsRecBufferReady())
         {
-            m_asioReadyPosition += deviceContext->AsioBufferObject->UpdateReadyPosition();
+            m_asioReadyPosition += m_audioIsochronousEngine->GetAsioBufferObject()->UpdateReadyPosition();
 
-            if (deviceContext->AsioBufferObject->IsUserSpaceThreadOutputReady())
+            if (m_audioIsochronousEngine->GetAsioBufferObject()->IsUserSpaceThreadOutputReady())
             {
 
-                playReadyPosition = m_asioReadyPosition + (deviceContext->AsioBufferObject->GetBufferPeriod() * 2);
+                playReadyPosition = m_asioReadyPosition + (m_audioIsochronousEngine->GetAsioBufferObject()->GetBufferPeriod() * 2);
                 if (!outputReadyInThisPeriod)
                 {
                     outputReadyInThisPeriod = true;
                     prevClientProcessingTimeUs = curClientProcessingTimeUs;
                     curClientProcessingTimeUs = m_asioElapsedTimeUs;
-                    LONG thresholdUs = (LONG)((deviceContext->AsioBufferObject->GetBufferPeriod()) * 1000000 / deviceContext->AudioProperty.SampleRate) + 1500;
+                    LONG thresholdUs = (LONG)((m_audioIsochronousEngine->GetAsioBufferObject()->GetBufferPeriod()) * 1000000 / m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate) + 1500;
                     if (curClientProcessingTimeUs > thresholdUs)
                     {
                         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "dropout detected. long client processing time %d us, threshold %d us", curClientProcessingTimeUs, thresholdUs);
-                        deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::OverloadDetected);
+                        m_audioIsochronousEngine->GetAsioBufferObject()->SetRecDeviceStatus(DeviceStatuses::OverloadDetected);
                         deviceContext->ErrorStatistics->LogErrorOccurrence(ErrorStatus::DropoutDetectedLongClientProcessingTime, curClientProcessingTimeUs - thresholdUs);
                     }
                 }
             }
             else
             {
-                playReadyPosition = m_asioReadyPosition + deviceContext->AsioBufferObject->GetBufferPeriod();
+                playReadyPosition = m_asioReadyPosition + m_audioIsochronousEngine->GetAsioBufferObject()->GetBufferPeriod();
             }
         }
 
@@ -1682,7 +1706,7 @@ void StreamObject::MixingEngineThreadMain(
             // If the ASIO Buffer boundary is found in the middle of the packet, the packet to be processed the next time the thread wakes up is recorded in inputRemainder, and this search process exits.
             while (inBuffersCount < (inputPacketsPerIrp * numIrp))
             {
-                ULONG inOffsetFrame = deviceContext->UsbLatency.InputOffsetFrame;
+                ULONG inOffsetFrame = m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame;
 
                 if (IsInputPacketAtEstimatedPosition(inOffsetFrame))
                 {
@@ -1693,10 +1717,10 @@ void StreamObject::MixingEngineThreadMain(
 
                 if (handleAsioBuffer && hasInputIsochronousInterface)
                 {
-                    LONG asioRemainSamples = (LONG)((m_asioReadyPosition + deviceContext->AsioBufferObject->GetBufferPeriod()) - m_inputAsioBufferedPosition);
-                    LONG asioRemainBytes = asioRemainSamples * deviceContext->InputProperty.BytesPerBlock;
+                    LONG asioRemainSamples = (LONG)((m_asioReadyPosition + m_audioIsochronousEngine->GetAsioBufferObject()->GetBufferPeriod()) - m_inputAsioBufferedPosition);
+                    LONG asioRemainBytes = asioRemainSamples * m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock;
 
-                    // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - asio remain samples %d, asio ready position %lld, asio buffer period %u, asio buffered position out %lld, in %lld", asioRemainSamples, m_asioReadyPosition, deviceContext->AsioBufferObject->GetBufferPeriod(), m_outputAsioBufferedPosition, m_inputAsioBufferedPosition);
+                    // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - asio remain samples %d, asio ready position %lld, asio buffer period %u, asio buffered position out %lld, in %lld", asioRemainSamples, m_asioReadyPosition, m_audioIsochronousEngine->GetAsioBufferObject()->GetBufferPeriod(), m_outputAsioBufferedPosition, m_inputAsioBufferedPosition);
                     if (asioRemainSamples <= 0)
                     {
                         // No more ASIO buffers to process
@@ -1719,7 +1743,7 @@ void StreamObject::MixingEngineThreadMain(
                     {
                         inRemainder.Buffer = nullptr;
                     }
-                    m_inputAsioBufferedPosition += m_inputBuffers[inBuffersCount].Length / deviceContext->InputProperty.BytesPerBlock;
+                    m_inputAsioBufferedPosition += m_inputBuffers[inBuffersCount].Length / m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock;
                 }
 
                 if (inBuffersCount != 0 || !inProcessRemainder)
@@ -1727,7 +1751,7 @@ void StreamObject::MixingEngineThreadMain(
                     IncrementInputProcessedPacket();
                 }
 
-                if (m_inputBuffers[inBuffersCount].Length > (deviceContext->InputProperty.MaxSamplesPerPacket * deviceContext->InputProperty.BytesPerBlock))
+                if (m_inputBuffers[inBuffersCount].Length > (m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.MaxSamplesPerPacket * m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock))
                 {
                     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "IN buffer %u packet size %u exceeded max", inBuffersCount, m_inputBuffers[inBuffersCount].Length);
                 }
@@ -1745,19 +1769,19 @@ void StreamObject::MixingEngineThreadMain(
 
             ULONG outProcessRemainder = 0;
 
-            while (outBuffersCount < (deviceContext->Params.MaxIrpNumber - 1) * outputPacketsPerIrp)
+            while (outBuffersCount < (m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 1) * outputPacketsPerIrp)
             {
                 if (!safetyOffsetApplied)
                 {
                     ULONGLONG outAdjustedBuffersCount = (outBuffersTotalCount << (outputInterval - 1));
 
-                    ULONG safetyOffsetFrame = deviceContext->AsioBufferObject != nullptr ? (deviceContext->UsbLatency.OutputOffsetFrame) : (outputPacketsPerIrp + deviceContext->UsbLatency.OutputOffsetFrame);
+                    ULONG safetyOffsetFrame = m_audioIsochronousEngine->GetAsioBufferObject() != nullptr ? (m_audioIsochronousEngine->GetUsbLatency().OutputOffsetFrame) : (outputPacketsPerIrp + m_audioIsochronousEngine->GetUsbLatency().OutputOffsetFrame);
                     // The buffer has not yet been processed by this thread.
                     ULONG dpcOffset = outputPacketsPerIrp;
 
-                    // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - outAdjustedBuffersCount %llu, dpcOffset %lu, InputOffsetFrame %lu, safetyOffsetFrame %lu, %!bool!", outAdjustedBuffersCount, dpcOffset, deviceContext->UsbLatency.InputOffsetFrame, safetyOffsetFrame, (outAdjustedBuffersCount >= (dpcOffset + deviceContext->UsbLatency.InputOffsetFrame + safetyOffsetFrame)));
+                    // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - outAdjustedBuffersCount %llu, dpcOffset %lu, InputOffsetFrame %lu, safetyOffsetFrame %lu, %!bool!", outAdjustedBuffersCount, dpcOffset, m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame, safetyOffsetFrame, (outAdjustedBuffersCount >= (dpcOffset + m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame + safetyOffsetFrame)));
 
-                    if (outAdjustedBuffersCount >= (dpcOffset + deviceContext->UsbLatency.InputOffsetFrame + safetyOffsetFrame))
+                    if (outAdjustedBuffersCount >= (dpcOffset + m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame + safetyOffsetFrame))
                     {
                         // Exit the loop after processing a safety offset
                         outLoopExitReason = PacketLoopReason::ExitLoopAfterSafetyOffset;
@@ -1800,7 +1824,7 @@ void StreamObject::MixingEngineThreadMain(
                 if (hasInputIsochronousInterface)
                 {
                     // input enable
-                    ULONG outLimit = (deviceContext->Params.MaxIrpNumber - 1) * outputPacketsPerIrp;
+                    ULONG outLimit = (m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 1) * outputPacketsPerIrp;
                     if (IsOutputPacketOverlapWithEstimatePosition(outLimit, inputInterval, outputInterval))
                     {
                         // Prevents OUT processing from going around once the buffer and reaching the currently processed position
@@ -1822,7 +1846,7 @@ void StreamObject::MixingEngineThreadMain(
 
                 if (handleAsioBuffer && hasOutputIsochronousInterface)
                 {
-                    LONG asioRemain = (LONG)((playReadyPosition - m_outputAsioBufferedPosition) * deviceContext->OutputProperty.BytesPerBlock);
+                    LONG asioRemain = (LONG)((playReadyPosition - m_outputAsioBufferedPosition) * m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock);
                     {
                         if (asioRemain <= 0)
                         {
@@ -1847,7 +1871,7 @@ void StreamObject::MixingEngineThreadMain(
                             outRemainder.Buffer = nullptr;
                         }
                     }
-                    m_outputAsioBufferedPosition += m_outputBuffers[outBuffersCount].Length / deviceContext->OutputProperty.BytesPerBlock;
+                    m_outputAsioBufferedPosition += m_outputBuffers[outBuffersCount].Length / m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
                 }
 
                 if (outBuffersCount != 0 || !outProcessRemainder)
@@ -1867,15 +1891,15 @@ void StreamObject::MixingEngineThreadMain(
             }
             ReportPacketLoopReason("OUT loop", outLoopExitReason);
         }
-        WdfWaitLockRelease(deviceContext->AsioWaitLock);
+        m_audioIsochronousEngine->ReleaseAsioWaitLock();
 
         if (inBuffersCount == 0)
         {
             LONG inProcessPeriodUs = (LONG)(currentTimePCUs - lastInProcessedPCUs);
-            if ((lastInProcessedPCUs != 0) && (inProcessPeriodUs > (LONG)(deviceContext->ClassicFramesPerIrp * numIrp + deviceContext->Params.FirstPacketLatency) * 1000))
+            if ((lastInProcessedPCUs != 0) && (inProcessPeriodUs > (LONG)(m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * numIrp + m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.FirstPacketLatency) * 1000))
             {
                 // If the IN has not been processed for a long period of time, perform a bus reset.
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Thread interval (%uus) exceeded IRP cycle time (%uus) on first buffer, last loop exit reason in %u, out %u.", inProcessPeriodUs, (deviceContext->ClassicFramesPerIrp * numIrp) * 1000, static_cast<ULONG>(inLoopExitReason), static_cast<ULONG>(outLoopExitReason));
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Thread interval (%uus) exceeded IRP cycle time (%uus) on first buffer, last loop exit reason in %u, out %u.", inProcessPeriodUs, (m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * numIrp) * 1000, static_cast<ULONG>(inLoopExitReason), static_cast<ULONG>(outLoopExitReason));
                 // RecoverTransferError(StreamObject->DeviceObject, StreamObject);
                 break;
             }
@@ -1892,21 +1916,21 @@ void StreamObject::MixingEngineThreadMain(
         }
 
         // Dropout Detection
-        ULONG outMinOffsetFrame = deviceContext->UsbLatency.OutputOffsetFrame;
-        if (outMinOffsetFrame >= (deviceContext->Params.MaxIrpNumber - 2) * outputPacketsPerIrp)
+        ULONG outMinOffsetFrame = m_audioIsochronousEngine->GetUsbLatency().OutputOffsetFrame;
+        if (outMinOffsetFrame >= (m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 2) * outputPacketsPerIrp)
         {
-            outMinOffsetFrame = ((deviceContext->Params.MaxIrpNumber - 2) * outputPacketsPerIrp) - 1;
+            outMinOffsetFrame = ((m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 2) * outputPacketsPerIrp) - 1;
         }
 
         ULONG dpcOffset = outputPacketsPerIrp;
-        LONG  safetyOffset = (LONG)(m_outputProcessedPacket - m_inputProcessedPacket) - (LONG)deviceContext->UsbLatency.InputOffsetFrame - (LONG)(dpcOffset);
-        WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
+        LONG  safetyOffset = (LONG)(m_outputProcessedPacket - m_inputProcessedPacket) - (LONG)m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame - (LONG)(dpcOffset);
+        m_audioIsochronousEngine->AcquireAsioWaitLock();
         if (safetyOffset < (LONG)(outMinOffsetFrame) &&
-            (deviceContext->AsioBufferObject != nullptr) && deviceContext->AsioBufferObject->IsRecHeaderRegistered() &&
+            (m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && m_audioIsochronousEngine->GetAsioBufferObject()->IsRecHeaderRegistered() &&
             (hasOutputIsochronousInterface && hasInputIsochronousInterface))
         {
             TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "dropout detected. Safety offset %d, minimum offset frame %d", safetyOffset, outMinOffsetFrame);
-            deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::OverloadDetected);
+            m_audioIsochronousEngine->GetAsioBufferObject()->SetRecDeviceStatus(DeviceStatuses::OverloadDetected);
             deviceContext->ErrorStatistics->LogErrorOccurrence(ErrorStatus::DropoutDetectedSafetyOffset, 0);
         }
 
@@ -1916,41 +1940,41 @@ void StreamObject::MixingEngineThreadMain(
             for (ULONG bufIndex = 0; bufIndex < inBuffersCount; ++bufIndex)
             {
                 // ULONG length = m_inputBuffers[bufIndex].length;
-                if ((deviceContext->AsioBufferObject != nullptr) && handleAsioBuffer)
+                if ((m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && handleAsioBuffer)
                 {
-                    deviceContext->AsioBufferObject->CopyToAsioFromInputData(
+                    m_audioIsochronousEngine->GetAsioBufferObject()->CopyToAsioFromInputData(
                         m_inputBuffers[bufIndex].Buffer + m_inputBuffers[bufIndex].Offset,
                         m_inputBuffers[bufIndex].Length,
-                        deviceContext->InputProperty.BytesPerBlock,
-                        deviceContext->InputProperty.BytesPerSample
+                        m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock,
+                        m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerSample
                     );
                 }
 
-                if (deviceContext->RtPacketObject != nullptr)
+                if (m_audioIsochronousEngine->GetRtPacketObject() != nullptr)
                 {
-                    WdfWaitLockAcquire(deviceContext->StreamEngineWaitLock, nullptr);
-                    for (ULONG deviceIndex = 0; deviceIndex < deviceContext->NumOfInputDevices; deviceIndex++)
+                    m_audioIsochronousEngine->AcquireStreamEngineWaitLock();
+                    for (ULONG deviceIndex = 0; deviceIndex < m_audioIsochronousEngine->GetNumOfInputDevices(); deviceIndex++)
                     {
-                        if ((deviceContext->CaptureStreamEngine[deviceIndex] != nullptr) && (deviceContext->CaptureStreamEngine[deviceIndex]->GetCurrentState() == AcxStreamStateRun))
+                        if ((m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex) != nullptr) && (m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex)->GetCurrentState() == AcxStreamStateRun))
                         {
                             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - buffer index %u, transfer object %p", bufIndex, m_inputBuffers[bufIndex].TransferObject);
-                            deviceContext->RtPacketObject->CopyToRtPacketFromInputData(
+                            m_audioIsochronousEngine->GetRtPacketObject()->CopyToRtPacketFromInputData(
                                 deviceIndex,
                                 m_inputBuffers[bufIndex].Buffer + m_inputBuffers[bufIndex].Offset,
                                 m_inputBuffers[bufIndex].Length,
                                 m_inputBuffers[bufIndex].TotalProcessedBytesSoFar,
                                 m_inputBuffers[bufIndex].TransferObject,
-                                deviceContext->InputProperty.BytesPerSample /* ex: 3 */,
-                                deviceContext->InputProperty.ValidBitsPerSample /* ex: 24*/,
-                                deviceContext->InputProperty.UsbChannels
+                                m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerSample /* ex: 3 */,
+                                m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.ValidBitsPerSample /* ex: 24*/,
+                                m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.UsbChannels
                             );
                         }
                     }
-                    WdfWaitLockRelease(deviceContext->StreamEngineWaitLock);
+                    m_audioIsochronousEngine->ReleaseStreamEngineWaitLock();
                 }
             }
         }
-        ULONG bytesPerBlock = deviceContext->OutputProperty.BytesPerBlock;
+        ULONG bytesPerBlock = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
 
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Out buffers count %u, ioStable 0x%x, outLoopExitReason %u", outBuffersCount, static_cast<int>(streamStatus), static_cast<ULONG>(outLoopExitReason));
 
@@ -1960,55 +1984,55 @@ void StreamObject::MixingEngineThreadMain(
             {
                 ULONG  transferSize = m_outputBuffers[bufIndex].Length;
                 PUCHAR outBufferStart = m_outputBuffers[bufIndex].Buffer + m_outputBuffers[bufIndex].Offset;
-                ULONG  outChannels = deviceContext->OutputProperty.UsbChannels;
+                ULONG  outChannels = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels;
                 ULONG  samples = transferSize / bytesPerBlock;
 
                 TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - outputBuffers[%u] Irp, Packet, PacketID, TransferObject, Index, %u, %u, %u, %p, %u, %llu, %lld", bufIndex, m_outputBuffers[bufIndex].Irp, m_outputBuffers[bufIndex].Packet, m_outputBuffers[bufIndex].PacketId, m_outputBuffers[bufIndex].TransferObject, m_outputBuffers[bufIndex].TransferObject->GetIndex(), m_outputBuffers[bufIndex].TransferObject->GetQPCPosition(), (bufIndex == 0) ? 0LL : (LONGLONG)(m_outputBuffers[bufIndex].TransferObject->GetQPCPosition()) - (LONGLONG)(m_outputBuffers[bufIndex - 1].TransferObject->GetQPCPosition()));
 
-                StreamObject::ClearOutputBuffer(deviceContext->AudioProperty.CurrentSampleFormat, outBufferStart, outChannels, bytesPerBlock, samples);
+                StreamObject::ClearOutputBuffer(m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat, outBufferStart, outChannels, bytesPerBlock, samples);
                 if (streamStatus == c_ioSteady)
                 {
-                    if ((deviceContext->AsioBufferObject != nullptr) && handleAsioBuffer)
+                    if ((m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && handleAsioBuffer)
                     {
-                        if (!NT_SUCCESS(deviceContext->AsioBufferObject->CopyFromAsioToOutputData(
+                        if (!NT_SUCCESS(m_audioIsochronousEngine->GetAsioBufferObject()->CopyFromAsioToOutputData(
                                 outBufferStart,
                                 transferSize,
                                 bytesPerBlock,
-                                deviceContext->OutputProperty.BytesPerSample
+                                m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerSample
                             )))
                         {
-                            StreamObject::ClearOutputBuffer(deviceContext->AudioProperty.CurrentSampleFormat, outBufferStart, outChannels, bytesPerBlock, samples);
+                            StreamObject::ClearOutputBuffer(m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat, outBufferStart, outChannels, bytesPerBlock, samples);
                         }
                     }
 
-                    if (deviceContext->RtPacketObject != nullptr)
+                    if (m_audioIsochronousEngine->GetRtPacketObject() != nullptr)
                     {
-                        WdfWaitLockAcquire(deviceContext->StreamEngineWaitLock, nullptr);
-                        for (ULONG deviceIndex = 0; deviceIndex < deviceContext->NumOfOutputDevices; deviceIndex++)
+                        m_audioIsochronousEngine->AcquireStreamEngineWaitLock();
+                        for (ULONG deviceIndex = 0; deviceIndex < m_audioIsochronousEngine->GetNumOfOutputDevices(); deviceIndex++)
                         {
-                            if ((deviceContext->RenderStreamEngine[deviceIndex] != nullptr) && (deviceContext->RenderStreamEngine[deviceIndex]->GetCurrentState() == AcxStreamStateRun))
+                            if ((m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex) != nullptr) && (m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex)->GetCurrentState() == AcxStreamStateRun))
                             {
                                 TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - buffer index %u, transfer object %p", bufIndex, m_outputBuffers[bufIndex].TransferObject);
-                                deviceContext->RtPacketObject->CopyFromRtPacketToOutputData(
+                                m_audioIsochronousEngine->GetRtPacketObject()->CopyFromRtPacketToOutputData(
                                     deviceIndex,
                                     outBufferStart,
                                     transferSize,
                                     m_outputBuffers[bufIndex].TotalProcessedBytesSoFar,
                                     m_outputBuffers[bufIndex].TransferObject,
-                                    deviceContext->OutputProperty.BytesPerSample /* ex: 3 */,
-                                    deviceContext->OutputProperty.ValidBitsPerSample /* ex: 24*/,
-                                    deviceContext->OutputProperty.UsbChannels
+                                    m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerSample /* ex: 3 */,
+                                    m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ValidBitsPerSample /* ex: 24*/,
+                                    m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels
                                 );
                             }
                         }
-                        WdfWaitLockRelease(deviceContext->StreamEngineWaitLock);
+                        m_audioIsochronousEngine->ReleaseStreamEngineWaitLock();
                     }
                 }
             }
         }
-        if ((deviceContext->AsioBufferObject != nullptr) && deviceContext->AsioBufferObject->IsRecBufferReady())
+        if ((m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && m_audioIsochronousEngine->GetAsioBufferObject()->IsRecBufferReady())
         {
-            if (deviceContext->AsioBufferObject->EvaluatePositionAndNotifyIfNeeded(currentTimePCUs, lastAsioNotifyPCUs, asioNotifyCount, prevAsioMeasuredPeriodUs, curClientProcessingTimeUs, curAsioMeasuredPeriodUs, hasInputIsochronousInterface, hasOutputIsochronousInterface))
+            if (m_audioIsochronousEngine->GetAsioBufferObject()->EvaluatePositionAndNotifyIfNeeded(currentTimePCUs, lastAsioNotifyPCUs, asioNotifyCount, prevAsioMeasuredPeriodUs, curClientProcessingTimeUs, curAsioMeasuredPeriodUs, hasInputIsochronousInterface, hasOutputIsochronousInterface))
             {
                 m_asioElapsedTimeUs = 0;
                 prevAsioMeasuredPeriodUs = curAsioMeasuredPeriodUs;
@@ -2018,8 +2042,719 @@ void StreamObject::MixingEngineThreadMain(
                 ++asioNotifyCount;
             }
         }
-        WdfWaitLockRelease(deviceContext->AsioWaitLock);
+        m_audioIsochronousEngine->ReleaseAsioWaitLock();
         if (inBuffersCount != 0 || outBuffersCount != 0)
+        {
+            if (m_bufferProcessed < 2)
+            {
+                ++(m_bufferProcessed);
+            }
+        }
+        // LastBusTime = usbBusTimeCurrent;
+    }
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+    return;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+void StreamObject::MixingEngineThreadMainWithoutASIO(
+    PDEVICE_CONTEXT deviceContext
+)
+{
+    ULONGLONG       currentTimePCUs = 0ULL;
+    ULONGLONG       currentTimePC = 0ULL;
+    const ULONG     inputInterval = m_audioIsochronousEngine->GetInputInterfaceAndPipe().PipeInfo.Interval;
+    const ULONG     outputInterval = m_audioIsochronousEngine->GetOutputInterfaceAndPipe().PipeInfo.Interval;
+    const ULONG     inputPacketsPerMs = m_deviceContext->FramesPerMs >> (inputInterval - 1);
+    const ULONG     outputPacketsPerMs = m_deviceContext->FramesPerMs >> (outputInterval - 1);
+    const ULONG     inputPacketsPerIrp = m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * inputPacketsPerMs;
+    const ULONG     outputPacketsPerIrp = m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * outputPacketsPerMs;
+    const ULONG     numIrp = m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber;
+    bool            safetyOffsetApplied = false;
+    BUFFER_PROPERTY inRemainder{};
+    BUFFER_PROPERTY outRemainder{};
+    ULONGLONG       lastInProcessedPCUs = 0ULL;
+    LARGE_INTEGER   timerExpired = {0};
+    LONGLONG        inBuffersTotalCount = 0ULL;
+    LONGLONG        outBuffersTotalCount = 0ULL;
+    const bool      hasInputIsochronousInterface = m_audioIsochronousEngine->HasInputIsochronousInterface();
+    const bool      hasOutputIsochronousInterface = m_audioIsochronousEngine->HasOutputIsochronousInterface();
+
+    PAGED_CODE();
+
+    for (;;)
+    {
+        NTSTATUS wakeupReason = STATUS_SUCCESS;
+        bool     isProcessIo = false;
+        wakeupReason = Wait();
+
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "MaxingEngineThreadMain() WakeUp reason = %d", static_cast<int>(wakeupReason));
+
+        // If the wakeup result is an error, exit.
+        if (!NT_SUCCESS(wakeupReason) || (wakeupReason == STATUS_WAIT_0) || IsTerminateStream())
+        {
+            break;
+        }
+
+        // Get the current status of stream.
+        StreamStatuses streamStatus = GetStreamStatuses(isProcessIo);
+
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "GetStreamStatuses() %s, %d", isProcessIo ? "true" : "false", static_cast<int>(streamStatus));
+
+        // Updated valid wake-up count.
+        // Since timerExpired and ThreadWakeup are initialized and updated at the same time, they will be made common.
+        IncrementWakeUpCount();
+
+        // Gets highly accurate current time based on KeQueryPerformanceCounter.
+        currentTimePCUs = USBAudioAcxDriverStreamGetCurrentTimeUs(deviceContext, &currentTimePC);
+
+        SaveWakeUpTimePCUs(currentTimePCUs);
+
+        ULONG pcDiffUs = static_cast<ULONG>(GetWakeUpDiffPCUs());
+
+        LONG inElapsedTimeAfterDpc = 0;
+
+        if (hasInputIsochronousInterface)
+        {
+            inElapsedTimeAfterDpc = (LONG)((LONGLONG)currentTimePCUs - m_inputIsoRequestCompletionTime.LastTimeUs);
+        }
+        else
+        {
+            inElapsedTimeAfterDpc = (LONG)((LONGLONG)currentTimePCUs - m_outputIsoRequestCompletionTime.LastTimeUs);
+        }
+
+        // Use WdfUsbTargetDeviceRetrieveCurrentFrameNumber() instead of USB_BUS_INTERFACE_USBDI_V1::QueryBusTime().
+        // Use USB bus time for control
+        ULONG usbBusTimeCurrent = GetCurrentFrame(deviceContext);
+
+        // Guess USB bus time so that you can respond even if the obtained USB bus time is an abnormal value.
+        ULONG usbBusTimeDiff = EstimateUSBBusTime(usbBusTimeCurrent, pcDiffUs);
+
+        UpdateElapsedTimeUs(pcDiffUs);
+
+        LONGLONG inCompletedPacket = 0LL;  // IN Number of packets that have been transferred isochronous
+        LONGLONG outCompletedPacket = 0LL; // OUT Number of packets that have been transferred isochronous
+        GetCompletedPacket(inCompletedPacket, outCompletedPacket);
+        // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - in completed packet, out completed packet %llu, %lld", inCompletedPacket, outCompletedPacket);
+
+        // Analyze and decide which packets to use.
+        // The determined packet will be recorded in StreamObject::m_inputEstimatedPacket.
+        DeterminePacket(inCompletedPacket, usbBusTimeDiff, inputPacketsPerIrp, inputPacketsPerMs);
+
+        // Counts packets for which isochronous IN processing has been completed and creates a list.
+        // The created list is stored in inBuffer, and if there is a remainder (inputRemainder) from the previous thread wakeup, it is allocated to the beginning of that list.
+        bool             inProcessRemainder = CreateCompletedInputPacketList(m_inputBuffers, &inRemainder, inputPacketsPerIrp, numIrp);
+        ULONG            inBuffersCount = 0;
+        ULONG            outBuffersCount = 0;
+        PacketLoopReason inLoopExitReason = PacketLoopReason::ContinueLoop;
+        PacketLoopReason outLoopExitReason = PacketLoopReason::ContinueLoop;
+
+        if (isProcessIo)
+        {
+            while (inBuffersCount < (inputPacketsPerIrp * numIrp))
+            {
+                ULONG inOffsetFrame = m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame;
+
+                if (IsInputPacketAtEstimatedPosition(inOffsetFrame))
+                {
+                    // Processing position reaches current position prediction
+                    inLoopExitReason = PacketLoopReason::ExitLoopPacketEstimateReached;
+                    break;
+                }
+
+                if (inBuffersCount != 0 || !inProcessRemainder)
+                {
+                    IncrementInputProcessedPacket();
+                }
+
+                if (m_inputBuffers[inBuffersCount].Length > (m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.MaxSamplesPerPacket * m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock))
+                {
+                    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "IN buffer %u packet size %u exceeded max", inBuffersCount, m_inputBuffers[inBuffersCount].Length);
+                }
+                ++inBuffersCount;
+                ++inBuffersTotalCount;
+
+                if (inRemainder.Buffer != nullptr)
+                {
+                    // Exit loop if ASIO buffer boundary is reached
+                    inLoopExitReason = PacketLoopReason::ExitLoopAtAsioBoundary;
+                    break;
+                }
+            }
+            ReportPacketLoopReason("IN loop", inLoopExitReason);
+
+            ULONG outProcessRemainder = 0;
+
+            while (outBuffersCount < (m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 1) * outputPacketsPerIrp)
+            {
+                if (!safetyOffsetApplied)
+                {
+                    ULONGLONG outAdjustedBuffersCount = (outBuffersTotalCount << (outputInterval - 1));
+
+                    ULONG safetyOffsetFrame = outputPacketsPerIrp + m_audioIsochronousEngine->GetUsbLatency().OutputOffsetFrame;
+                    // The buffer has not yet been processed by this thread.
+                    ULONG dpcOffset = outputPacketsPerIrp;
+
+                    // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - outAdjustedBuffersCount %llu, dpcOffset %lu, InputOffsetFrame %lu, safetyOffsetFrame %lu, %!bool!", outAdjustedBuffersCount, dpcOffset, m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame, safetyOffsetFrame, (outAdjustedBuffersCount >= (dpcOffset + m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame + safetyOffsetFrame)));
+
+                    if (outAdjustedBuffersCount >= (dpcOffset + m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame + safetyOffsetFrame))
+                    {
+                        // Exit the loop after processing a safety offset
+                        outLoopExitReason = PacketLoopReason::ExitLoopAfterSafetyOffset;
+                        safetyOffsetApplied = true;
+                        break;
+                    }
+                }
+                else if (hasInputIsochronousInterface && hasOutputIsochronousInterface)
+                {
+                    // Perform the sync evaluation only when both input and output isochronous transfer interfaces are present.
+                    ASSERT(inputInterval != 0);
+                    ASSERT(outputInterval != 0);
+
+                    ULONGLONG inAdjustedBuffersCount = inBuffersTotalCount;
+                    ULONGLONG outAdjustedBuffersCount = outBuffersTotalCount;
+
+                    if (inputInterval > outputInterval)
+                    {
+                        inAdjustedBuffersCount <<= (inputInterval - outputInterval);
+                    }
+                    else if (outputInterval > inputInterval)
+                    {
+                        outAdjustedBuffersCount <<= (outputInterval - inputInterval);
+                    }
+
+                    // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - outputInterval %llu, inputInterval %llu, inAdjustedBuffersCount %llu, outAdjustedBuffersCount %llu", outputInterval, inputInterval, inAdjustedBuffersCount, outAdjustedBuffersCount);
+
+                    if ((streamStatus != StreamStatuses::IoSteady) && (outAdjustedBuffersCount >= inAdjustedBuffersCount))
+                    {
+                        // If do not preceding processing of OUT, exit the loop when synchronized with IN.
+                        outLoopExitReason = PacketLoopReason::ExitLoopAtInSync;
+                        break;
+                    }
+                    else
+                    {
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - out buffers total count %llu, in buffers total count %llu, ioStable 0x%x", outBuffersTotalCount, inBuffersTotalCount, toInt(streamStatus));
+                    }
+                }
+
+                if (hasInputIsochronousInterface)
+                {
+                    // input enable
+                    ULONG outLimit = (m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 1) * outputPacketsPerIrp;
+                    if (IsOutputPacketOverlapWithEstimatePosition(outLimit, inputInterval, outputInterval))
+                    {
+                        // Prevents OUT processing from going around once the buffer and reaching the currently processed position
+                        outLoopExitReason = PacketLoopReason::ExitLoopToPreventOutOverlap;
+                        break;
+                    }
+                }
+                else
+                {
+                    // input disable
+                    if (IsOutputPacketAtEstimatedPosition(inputInterval, outputInterval))
+                    {
+                        // Processing position reaches current position prediction
+                        outLoopExitReason = PacketLoopReason::ExitLoopPacketEstimateReached;
+                        break;
+                    }
+                }
+                outProcessRemainder = CreateCompletedOutputPacketList(m_outputBuffers, &outRemainder, outBuffersCount, outputPacketsPerIrp, numIrp);
+
+                if (outBuffersCount != 0 || !outProcessRemainder)
+                {
+                    IncrementOutputProcessedPacket();
+                }
+
+                ++outBuffersCount;
+                ++outBuffersTotalCount;
+
+                if (outRemainder.Buffer != nullptr)
+                {
+                    // Exit loop if ASIO buffer boundary is reached
+                    outLoopExitReason = PacketLoopReason::ExitLoopAtAsioBoundary;
+                    break;
+                }
+            }
+            ReportPacketLoopReason("OUT loop", outLoopExitReason);
+        }
+
+        if (inBuffersCount == 0)
+        {
+            LONG inProcessPeriodUs = (LONG)(currentTimePCUs - lastInProcessedPCUs);
+            if ((lastInProcessedPCUs != 0) && (inProcessPeriodUs > (LONG)(m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * numIrp + m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.FirstPacketLatency) * 1000))
+            {
+                // If the IN has not been processed for a long period of time, perform a bus reset.
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Thread interval (%uus) exceeded IRP cycle time (%uus) on first buffer, last loop exit reason in %u, out %u.", inProcessPeriodUs, (m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * numIrp) * 1000, static_cast<ULONG>(inLoopExitReason), static_cast<ULONG>(outLoopExitReason));
+                // RecoverTransferError(StreamObject->DeviceObject, StreamObject);
+                break;
+            }
+            if ((GetStreamStatuses() != c_ioStreaming) ||
+                (m_inputTransferObject[0]->GetLockDelayCount() != 0) ||
+                (m_outputTransferObject[0]->GetLockDelayCount() != 0))
+            {
+                lastInProcessedPCUs = currentTimePCUs;
+            }
+        }
+        else
+        {
+            lastInProcessedPCUs = currentTimePCUs;
+        }
+
+        // Dropout Detection
+        ULONG outMinOffsetFrame = m_audioIsochronousEngine->GetUsbLatency().OutputOffsetFrame;
+        if (outMinOffsetFrame >= (m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 2) * outputPacketsPerIrp)
+        {
+            outMinOffsetFrame = ((m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 2) * outputPacketsPerIrp) - 1;
+        }
+
+        ULONG dpcOffset = outputPacketsPerIrp;
+        LONG  safetyOffset = (LONG)(m_outputProcessedPacket - m_inputProcessedPacket) - (LONG)m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame - (LONG)(dpcOffset);
+        if ((safetyOffset < (LONG)(outMinOffsetFrame)) && (hasOutputIsochronousInterface && hasInputIsochronousInterface))
+        {
+            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "dropout detected. Safety offset %d, minimum offset frame %d", safetyOffset, outMinOffsetFrame);
+            deviceContext->ErrorStatistics->LogErrorOccurrence(ErrorStatus::DropoutDetectedSafetyOffset, 0);
+        }
+
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - In buffers count %u, ioStable 0x%x, inLoopExitReason %u", inBuffersCount, static_cast<ULONG>(streamStatus), static_cast<ULONG>(inLoopExitReason));
+        if ((streamStatus == c_ioSteady) && hasInputIsochronousInterface)
+        {
+            for (ULONG bufIndex = 0; bufIndex < inBuffersCount; ++bufIndex)
+            {
+                // ULONG length = m_inputBuffers[bufIndex].length;
+                if (m_audioIsochronousEngine->GetRtPacketObject() != nullptr)
+                {
+                    m_audioIsochronousEngine->AcquireStreamEngineWaitLock();
+                    for (ULONG deviceIndex = 0; deviceIndex < m_audioIsochronousEngine->GetNumOfInputDevices(); deviceIndex++)
+                    {
+                        if ((m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex) != nullptr) && (m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex)->GetCurrentState() == AcxStreamStateRun))
+                        {
+                            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - buffer index %u, transfer object %p", bufIndex, m_inputBuffers[bufIndex].TransferObject);
+                            m_audioIsochronousEngine->GetRtPacketObject()->CopyToRtPacketFromInputData(
+                                deviceIndex,
+                                m_inputBuffers[bufIndex].Buffer + m_inputBuffers[bufIndex].Offset,
+                                m_inputBuffers[bufIndex].Length,
+                                m_inputBuffers[bufIndex].TotalProcessedBytesSoFar,
+                                m_inputBuffers[bufIndex].TransferObject,
+                                m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerSample /* ex: 3 */,
+                                m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.ValidBitsPerSample /* ex: 24*/,
+                                m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.UsbChannels
+                            );
+                        }
+                    }
+                    m_audioIsochronousEngine->ReleaseStreamEngineWaitLock();
+                }
+            }
+        }
+        ULONG bytesPerBlock = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
+
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - Out buffers count %u, ioStable 0x%x, outLoopExitReason %u", outBuffersCount, static_cast<int>(streamStatus), static_cast<ULONG>(outLoopExitReason));
+
+        if (hasOutputIsochronousInterface)
+        {
+            for (ULONG bufIndex = 0; bufIndex < outBuffersCount; ++bufIndex)
+            {
+                ULONG  transferSize = m_outputBuffers[bufIndex].Length;
+                PUCHAR outBufferStart = m_outputBuffers[bufIndex].Buffer + m_outputBuffers[bufIndex].Offset;
+                ULONG  outChannels = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels;
+                ULONG  samples = transferSize / bytesPerBlock;
+
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - outputBuffers[%u] Irp, Packet, PacketID, TransferObject, Index, %u, %u, %u, %p, %u, %llu, %lld", bufIndex, m_outputBuffers[bufIndex].Irp, m_outputBuffers[bufIndex].Packet, m_outputBuffers[bufIndex].PacketId, m_outputBuffers[bufIndex].TransferObject, m_outputBuffers[bufIndex].TransferObject->GetIndex(), m_outputBuffers[bufIndex].TransferObject->GetQPCPosition(), (bufIndex == 0) ? 0LL : (LONGLONG)(m_outputBuffers[bufIndex].TransferObject->GetQPCPosition()) - (LONGLONG)(m_outputBuffers[bufIndex - 1].TransferObject->GetQPCPosition()));
+
+                StreamObject::ClearOutputBuffer(m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat, outBufferStart, outChannels, bytesPerBlock, samples);
+                if (streamStatus == c_ioSteady)
+                {
+                    if (m_audioIsochronousEngine->GetRtPacketObject() != nullptr)
+                    {
+                        m_audioIsochronousEngine->AcquireStreamEngineWaitLock();
+                        for (ULONG deviceIndex = 0; deviceIndex < m_audioIsochronousEngine->GetNumOfOutputDevices(); deviceIndex++)
+                        {
+                            if ((m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex) != nullptr) && (m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex)->GetCurrentState() == AcxStreamStateRun))
+                            {
+                                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - buffer index %u, transfer object %p", bufIndex, m_outputBuffers[bufIndex].TransferObject);
+                                m_audioIsochronousEngine->GetRtPacketObject()->CopyFromRtPacketToOutputData(
+                                    deviceIndex,
+                                    outBufferStart,
+                                    transferSize,
+                                    m_outputBuffers[bufIndex].TotalProcessedBytesSoFar,
+                                    m_outputBuffers[bufIndex].TransferObject,
+                                    m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerSample /* ex: 3 */,
+                                    m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ValidBitsPerSample /* ex: 24*/,
+                                    m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels
+                                );
+                            }
+                        }
+                        m_audioIsochronousEngine->ReleaseStreamEngineWaitLock();
+                    }
+                }
+            }
+        }
+        if (inBuffersCount != 0 || outBuffersCount != 0)
+        {
+            if (m_bufferProcessed < 2)
+            {
+                ++(m_bufferProcessed);
+            }
+        }
+        // LastBusTime = usbBusTimeCurrent;
+    }
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+    return;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+void StreamObject::MixingEngineInputThreadMainWithoutASIO(
+    PDEVICE_CONTEXT deviceContext
+)
+{
+    ULONGLONG       currentTimePCUs = 0ULL;
+    ULONGLONG       currentTimePC = 0ULL;
+    const ULONG     inputInterval = m_audioIsochronousEngine->GetInputInterfaceAndPipe().PipeInfo.Interval;
+    const ULONG     inputPacketsPerMs = m_deviceContext->FramesPerMs >> (inputInterval - 1);
+    const ULONG     inputPacketsPerIrp = m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * inputPacketsPerMs;
+    const ULONG     numIrp = m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber;
+    BUFFER_PROPERTY inRemainder{};
+    ULONGLONG       lastInProcessedPCUs = 0ULL;
+    LARGE_INTEGER   timerExpired = {0};
+    LONGLONG        inBuffersTotalCount = 0ULL;
+    const bool      hasInputIsochronousInterface = m_audioIsochronousEngine->HasInputIsochronousInterface();
+
+    PAGED_CODE();
+
+    for (;;)
+    {
+        NTSTATUS wakeupReason = STATUS_SUCCESS;
+        bool     isProcessIo = false;
+        wakeupReason = Wait();
+
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "MaxingEngineThreadMain() WakeUp reason = %d", static_cast<int>(wakeupReason));
+
+        // If the wakeup result is an error, exit.
+        if (!NT_SUCCESS(wakeupReason) || (wakeupReason == STATUS_WAIT_0) || IsTerminateStream())
+        {
+            break;
+        }
+
+        // Get the current status of stream.
+        StreamStatuses streamStatus = GetStreamStatuses(isProcessIo);
+
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "GetStreamStatuses() %s, %d", isProcessIo ? "true" : "false", static_cast<int>(streamStatus));
+
+        // Updated valid wake-up count.
+        // Since timerExpired and ThreadWakeup are initialized and updated at the same time, they will be made common.
+        IncrementWakeUpCount();
+
+        // Gets highly accurate current time based on KeQueryPerformanceCounter.
+        currentTimePCUs = USBAudioAcxDriverStreamGetCurrentTimeUs(deviceContext, &currentTimePC);
+
+        SaveWakeUpTimePCUs(currentTimePCUs);
+
+        ULONG pcDiffUs = static_cast<ULONG>(GetWakeUpDiffPCUs());
+
+        // Use WdfUsbTargetDeviceRetrieveCurrentFrameNumber() instead of USB_BUS_INTERFACE_USBDI_V1::QueryBusTime().
+        // Use USB bus time for control
+        ULONG usbBusTimeCurrent = GetCurrentFrame(deviceContext);
+
+        // Guess USB bus time so that you can respond even if the obtained USB bus time is an abnormal value.
+        ULONG usbBusTimeDiff = EstimateUSBBusTime(usbBusTimeCurrent, pcDiffUs);
+
+        UpdateElapsedTimeUs(pcDiffUs);
+
+        LONGLONG inCompletedPacket = 0LL; // IN Number of packets that have been transferred isochronous
+        GetCompletedPacket(true, inCompletedPacket);
+        // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - in completed packet %llu", inCompletedPacket);
+
+        // Analyze and decide which packets to use.
+        // The determined packet will be recorded in StreamObject::m_inputEstimatedPacket.
+        DeterminePacket(inCompletedPacket, usbBusTimeDiff, inputPacketsPerIrp, inputPacketsPerMs);
+
+        // Counts packets for which isochronous IN processing has been completed and creates a list.
+        // The created list is stored in inBuffer, and if there is a remainder (inputRemainder) from the previous thread wakeup, it is allocated to the beginning of that list.
+        bool             inProcessRemainder = CreateCompletedInputPacketList(m_inputBuffers, &inRemainder, inputPacketsPerIrp, numIrp);
+        ULONG            inBuffersCount = 0;
+        PacketLoopReason inLoopExitReason = PacketLoopReason::ContinueLoop;
+
+        if (isProcessIo)
+        {
+            while (inBuffersCount < (inputPacketsPerIrp * numIrp))
+            {
+                ULONG inOffsetFrame = m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame;
+
+                if (IsInputPacketAtEstimatedPosition(inOffsetFrame))
+                {
+                    // Processing position reaches current position prediction
+                    inLoopExitReason = PacketLoopReason::ExitLoopPacketEstimateReached;
+                    break;
+                }
+
+                if (inBuffersCount != 0 || !inProcessRemainder)
+                {
+                    IncrementInputProcessedPacket();
+                }
+
+                if (m_inputBuffers[inBuffersCount].Length > (m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.MaxSamplesPerPacket * m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock))
+                {
+                    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "IN buffer %u packet size %u exceeded max", inBuffersCount, m_inputBuffers[inBuffersCount].Length);
+                }
+                ++inBuffersCount;
+                ++inBuffersTotalCount;
+
+                if (inRemainder.Buffer != nullptr)
+                {
+                    // Exit loop if ASIO buffer boundary is reached
+                    inLoopExitReason = PacketLoopReason::ExitLoopAtAsioBoundary;
+                    break;
+                }
+            }
+            ReportPacketLoopReason("IN loop", inLoopExitReason);
+        }
+
+        if (inBuffersCount == 0)
+        {
+            LONG inProcessPeriodUs = (LONG)(currentTimePCUs - lastInProcessedPCUs);
+            if ((lastInProcessedPCUs != 0) && (inProcessPeriodUs > (LONG)(m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * numIrp + m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.FirstPacketLatency) * 1000))
+            {
+                // If the IN has not been processed for a long period of time, perform a bus reset.
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Thread interval (%uus) exceeded IRP cycle time (%uus) on first buffer, last loop exit reason in %u.", inProcessPeriodUs, (m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * numIrp) * 1000, static_cast<ULONG>(inLoopExitReason));
+                // RecoverTransferError(StreamObject->DeviceObject, StreamObject);
+                break;
+            }
+            if ((GetStreamStatuses() != c_ioStreaming) ||
+                (m_inputTransferObject[0]->GetLockDelayCount() != 0))
+            {
+                lastInProcessedPCUs = currentTimePCUs;
+            }
+        }
+        else
+        {
+            lastInProcessedPCUs = currentTimePCUs;
+        }
+
+        // Dropout Detection
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - In buffers count %u, ioStable 0x%x, inLoopExitReason %u", inBuffersCount, static_cast<ULONG>(streamStatus), static_cast<ULONG>(inLoopExitReason));
+        if ((streamStatus == c_ioSteady) && hasInputIsochronousInterface)
+        {
+            for (ULONG bufIndex = 0; bufIndex < inBuffersCount; ++bufIndex)
+            {
+                // ULONG length = m_inputBuffers[bufIndex].length;
+                if (m_audioIsochronousEngine->GetRtPacketObject() != nullptr)
+                {
+                    m_audioIsochronousEngine->AcquireStreamEngineWaitLock();
+                    for (ULONG deviceIndex = 0; deviceIndex < m_audioIsochronousEngine->GetNumOfInputDevices(); deviceIndex++)
+                    {
+                        if ((m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex) != nullptr) && (m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex)->GetCurrentState() == AcxStreamStateRun))
+                        {
+                            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - buffer index %u, transfer object %p", bufIndex, m_inputBuffers[bufIndex].TransferObject);
+                            m_audioIsochronousEngine->GetRtPacketObject()->CopyToRtPacketFromInputData(
+                                deviceIndex,
+                                m_inputBuffers[bufIndex].Buffer + m_inputBuffers[bufIndex].Offset,
+                                m_inputBuffers[bufIndex].Length,
+                                m_inputBuffers[bufIndex].TotalProcessedBytesSoFar,
+                                m_inputBuffers[bufIndex].TransferObject,
+                                m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerSample /* ex: 3 */,
+                                m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.ValidBitsPerSample /* ex: 24*/,
+                                m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.UsbChannels
+                            );
+                        }
+                    }
+                    m_audioIsochronousEngine->ReleaseStreamEngineWaitLock();
+                }
+            }
+        }
+
+        if (inBuffersCount != 0)
+        {
+            if (m_bufferProcessed < 2)
+            {
+                ++(m_bufferProcessed);
+            }
+        }
+        // LastBusTime = usbBusTimeCurrent;
+    }
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+    return;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+void StreamObject::MixingEngineOutputThreadMainWithoutASIO(
+    PDEVICE_CONTEXT deviceContext
+)
+{
+    ULONGLONG       currentTimePCUs = 0ULL;
+    ULONGLONG       currentTimePC = 0ULL;
+    const ULONG     inputInterval = m_audioIsochronousEngine->GetInputInterfaceAndPipe().PipeInfo.Interval;
+    const ULONG     outputInterval = m_audioIsochronousEngine->GetOutputInterfaceAndPipe().PipeInfo.Interval;
+    const ULONG     outputPacketsPerMs = m_deviceContext->FramesPerMs >> (outputInterval - 1);
+    const ULONG     outputPacketsPerIrp = m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp * outputPacketsPerMs;
+    const ULONG     numIrp = m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber;
+    bool            safetyOffsetApplied = false;
+    BUFFER_PROPERTY inRemainder{};
+    BUFFER_PROPERTY outRemainder{};
+    ULONGLONG       lastInProcessedPCUs = 0ULL;
+    LARGE_INTEGER   timerExpired = {0};
+    LONGLONG        outBuffersTotalCount = 0ULL;
+    const bool      hasOutputIsochronousInterface = m_audioIsochronousEngine->HasOutputIsochronousInterface();
+
+    PAGED_CODE();
+
+    for (;;)
+    {
+        NTSTATUS wakeupReason = STATUS_SUCCESS;
+        bool     isProcessIo = false;
+        wakeupReason = Wait();
+
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "MaxingEngineThreadMain() WakeUp reason = %d", static_cast<int>(wakeupReason));
+
+        // If the wakeup result is an error, exit.
+        if (!NT_SUCCESS(wakeupReason) || (wakeupReason == STATUS_WAIT_0) || IsTerminateStream())
+        {
+            break;
+        }
+
+        // Get the current status of stream.
+        StreamStatuses streamStatus = GetStreamStatuses(isProcessIo);
+
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "GetStreamStatuses() %s, %d", isProcessIo ? "true" : "false", static_cast<int>(streamStatus));
+
+        // Updated valid wake-up count.
+        // Since timerExpired and ThreadWakeup are initialized and updated at the same time, they will be made common.
+        IncrementWakeUpCount();
+
+        // Gets highly accurate current time based on KeQueryPerformanceCounter.
+        currentTimePCUs = USBAudioAcxDriverStreamGetCurrentTimeUs(deviceContext, &currentTimePC);
+
+        SaveWakeUpTimePCUs(currentTimePCUs);
+
+        ULONG pcDiffUs = static_cast<ULONG>(GetWakeUpDiffPCUs());
+
+        LONG inElapsedTimeAfterDpc = 0;
+
+        {
+            inElapsedTimeAfterDpc = (LONG)((LONGLONG)currentTimePCUs - m_outputIsoRequestCompletionTime.LastTimeUs);
+        }
+
+        UpdateElapsedTimeUs(pcDiffUs);
+
+        LONGLONG inCompletedPacket = 0LL;  // IN Number of packets that have been transferred isochronous
+        LONGLONG outCompletedPacket = 0LL; // OUT Number of packets that have been transferred isochronous
+        GetCompletedPacket(inCompletedPacket, outCompletedPacket);
+        // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - in completed packet, out completed packet %llu, %lld", inCompletedPacket, outCompletedPacket);
+
+        // Counts packets for which isochronous IN processing has been completed and creates a list.
+        // The created list is stored in inBuffer, and if there is a remainder (inputRemainder) from the previous thread wakeup, it is allocated to the beginning of that list.
+        ULONG            outBuffersCount = 0;
+        PacketLoopReason outLoopExitReason = PacketLoopReason::ContinueLoop;
+
+        if (isProcessIo)
+        {
+            ULONG outProcessRemainder = 0;
+
+            while (outBuffersCount < (m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 1) * outputPacketsPerIrp)
+            {
+                if (!safetyOffsetApplied)
+                {
+                    ULONGLONG outAdjustedBuffersCount = (outBuffersTotalCount << (outputInterval - 1));
+
+                    ULONG safetyOffsetFrame = outputPacketsPerIrp + m_audioIsochronousEngine->GetUsbLatency().OutputOffsetFrame;
+                    // The buffer has not yet been processed by this thread.
+                    ULONG dpcOffset = outputPacketsPerIrp;
+
+                    // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - outAdjustedBuffersCount %llu, dpcOffset %lu, InputOffsetFrame %lu, safetyOffsetFrame %lu, %!bool!", outAdjustedBuffersCount, dpcOffset, m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame, safetyOffsetFrame, (outAdjustedBuffersCount >= (dpcOffset + m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame + safetyOffsetFrame)));
+
+                    if (outAdjustedBuffersCount >= (dpcOffset + m_audioIsochronousEngine->GetUsbLatency().InputOffsetFrame + safetyOffsetFrame))
+                    {
+                        // Exit the loop after processing a safety offset
+                        outLoopExitReason = PacketLoopReason::ExitLoopAfterSafetyOffset;
+                        safetyOffsetApplied = true;
+                        break;
+                    }
+                }
+                {
+                    // input disable
+                    if (IsOutputPacketAtEstimatedPosition(inputInterval, outputInterval))
+                    {
+                        // Processing position reaches current position prediction
+                        outLoopExitReason = PacketLoopReason::ExitLoopPacketEstimateReached;
+                        break;
+                    }
+                }
+                outProcessRemainder = CreateCompletedOutputPacketList(m_outputBuffers, &outRemainder, outBuffersCount, outputPacketsPerIrp, numIrp);
+
+                if (outBuffersCount != 0 || !outProcessRemainder)
+                {
+                    IncrementOutputProcessedPacket();
+                }
+
+                ++outBuffersCount;
+                ++outBuffersTotalCount;
+
+                if (outRemainder.Buffer != nullptr)
+                {
+                    // Exit loop if ASIO buffer boundary is reached
+                    outLoopExitReason = PacketLoopReason::ExitLoopAtAsioBoundary;
+                    break;
+                }
+            }
+            ReportPacketLoopReason("OUT loop", outLoopExitReason);
+        }
+
+        {
+            lastInProcessedPCUs = currentTimePCUs;
+        }
+
+        // Dropout Detection
+        ULONG outMinOffsetFrame = m_audioIsochronousEngine->GetUsbLatency().OutputOffsetFrame;
+        if (outMinOffsetFrame >= (m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 2) * outputPacketsPerIrp)
+        {
+            outMinOffsetFrame = ((m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 2) * outputPacketsPerIrp) - 1;
+        }
+
+        ULONG bytesPerBlock = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
+
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - Out buffers count %u, ioStable 0x%x, outLoopExitReason %u", outBuffersCount, static_cast<int>(streamStatus), static_cast<ULONG>(outLoopExitReason));
+
+        if (hasOutputIsochronousInterface)
+        {
+            for (ULONG bufIndex = 0; bufIndex < outBuffersCount; ++bufIndex)
+            {
+                ULONG  transferSize = m_outputBuffers[bufIndex].Length;
+                PUCHAR outBufferStart = m_outputBuffers[bufIndex].Buffer + m_outputBuffers[bufIndex].Offset;
+                ULONG  outChannels = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels;
+                ULONG  samples = transferSize / bytesPerBlock;
+
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - outputBuffers[%u] Irp, Packet, PacketID, TransferObject, Index, %u, %u, %u, %p, %u, %llu, %lld", bufIndex, m_outputBuffers[bufIndex].Irp, m_outputBuffers[bufIndex].Packet, m_outputBuffers[bufIndex].PacketId, m_outputBuffers[bufIndex].TransferObject, m_outputBuffers[bufIndex].TransferObject->GetIndex(), m_outputBuffers[bufIndex].TransferObject->GetQPCPosition(), (bufIndex == 0) ? 0LL : (LONGLONG)(m_outputBuffers[bufIndex].TransferObject->GetQPCPosition()) - (LONGLONG)(m_outputBuffers[bufIndex - 1].TransferObject->GetQPCPosition()));
+
+                StreamObject::ClearOutputBuffer(m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat, outBufferStart, outChannels, bytesPerBlock, samples);
+                if (streamStatus == c_ioSteady)
+                {
+                    if (m_audioIsochronousEngine->GetRtPacketObject() != nullptr)
+                    {
+                        m_audioIsochronousEngine->AcquireStreamEngineWaitLock();
+                        for (ULONG deviceIndex = 0; deviceIndex < m_audioIsochronousEngine->GetNumOfOutputDevices(); deviceIndex++)
+                        {
+                            if ((m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex) != nullptr) && (m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex)->GetCurrentState() == AcxStreamStateRun))
+                            {
+                                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - buffer index %u, transfer object %p", bufIndex, m_outputBuffers[bufIndex].TransferObject);
+                                m_audioIsochronousEngine->GetRtPacketObject()->CopyFromRtPacketToOutputData(
+                                    deviceIndex,
+                                    outBufferStart,
+                                    transferSize,
+                                    m_outputBuffers[bufIndex].TotalProcessedBytesSoFar,
+                                    m_outputBuffers[bufIndex].TransferObject,
+                                    m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerSample /* ex: 3 */,
+                                    m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ValidBitsPerSample /* ex: 24*/,
+                                    m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels
+                                );
+                            }
+                        }
+                        m_audioIsochronousEngine->ReleaseStreamEngineWaitLock();
+                    }
+                }
+            }
+        }
+        if (outBuffersCount != 0)
         {
             if (m_bufferProcessed < 2)
             {

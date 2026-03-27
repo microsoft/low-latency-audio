@@ -26,7 +26,9 @@ Environment:
 
 #include <acx.h>
 
-typedef void (*WORKER_THREAD_FUNCTION)(_In_ PDEVICE_CONTEXT DeviceContext);
+class WorkerThread;
+
+typedef void (*WORKER_THREAD_FUNCTION)(_In_ PDEVICE_CONTEXT DeviceContext, _In_ WorkerThread * ThisThread);
 
 enum class WaitEventsNumber
 {
@@ -59,7 +61,7 @@ class WorkerThread
     PAGED_CODE_SEG
     NTSTATUS
     CreateThread(
-        _In_ WORKER_THREAD_FUNCTION mixingEngineThreadFunction,
+        _In_ WORKER_THREAD_FUNCTION workerThreadFunction,
         _In_ KPRIORITY              priority
     );
 

@@ -30,6 +30,7 @@ Environment:
 #include "ErrorStatistics.h"
 #include "AsioBufferObject.h"
 #include "USBAudioDataFormat.h"
+#include "AudioIsochronousEngine.h"
 
 #ifndef __INTELLISENSE__
 #include "AsioBufferObject.tmh"
@@ -37,19 +38,23 @@ Environment:
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
-AsioBufferObject * AsioBufferObject::Create(PDEVICE_CONTEXT DeviceContext)
+AsioBufferObject * AsioBufferObject::Create(
+    PDEVICE_CONTEXT          deviceContext,
+    AudioIsochronousEngine * audioIsochronousEngine
+)
 {
     PAGED_CODE();
 
-    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) AsioBufferObject(DeviceContext);
+    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) AsioBufferObject(deviceContext, audioIsochronousEngine);
 }
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
 AsioBufferObject::AsioBufferObject(
-    PDEVICE_CONTEXT deviceContext
+    PDEVICE_CONTEXT          deviceContext,
+    AudioIsochronousEngine * audioIsochronousEngine
 )
-    : m_deviceContext(deviceContext)
+    : m_deviceContext(deviceContext), m_audioIsochronousEngine(audioIsochronousEngine)
 {
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ASIO, "%!FUNC! Entry");
@@ -219,8 +224,8 @@ AsioBufferObject::SetBuffer(
     RETURN_NTSTATUS_IF_TRUE_ACTION((m_playHeader->RecChannels < UAC_MIN_ASIO_CHANNELS) && (m_playHeader->PlayChannels < UAC_MIN_ASIO_CHANNELS), status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->PeriodSamples > UAC_MAX_ASIO_PERIOD_SAMPLES, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->PeriodSamples < UAC_MIN_ASIO_PERIOD_SAMPLES, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION((m_playHeader->RecChannels > m_deviceContext->AudioProperty.InputAsioChannels) || (m_playHeader->PlayChannels > m_deviceContext->AudioProperty.OutputAsioChannels), status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION((m_deviceContext->AudioProperty.CurrentSampleFormat != UACSampleFormat::UAC_SAMPLE_FORMAT_PCM && m_deviceContext->AudioProperty.CurrentSampleFormat != UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT), status = STATUS_NO_MATCH, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION((m_playHeader->RecChannels > m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.InputAsioChannels) || (m_playHeader->PlayChannels > m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.OutputAsioChannels), status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION((m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat != UACSampleFormat::UAC_SAMPLE_FORMAT_PCM && m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat != UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT), status = STATUS_NO_MATCH, status);
 
     systemAddress = nullptr;
     status = LockAndGetSystemAddress(false, recBuffer + recBufferOffset, recBufferLength - recBufferOffset, m_recMdl, m_recMdlLocked, systemAddress);
@@ -233,7 +238,7 @@ AsioBufferObject::SetBuffer(
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_recHeader == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_recHeader->HeaderLength != sizeof(UAC_ASIO_REC_BUFFER_HEADER), status = STATUS_INVALID_BUFFER_SIZE, status);
 
-    ULONG bytesPerSample = USBAudioDataFormat::ConvertSampleTypeToBytesPerSample(m_deviceContext->AudioProperty.SampleType);
+    ULONG bytesPerSample = USBAudioDataFormat::ConvertSampleTypeToBytesPerSample(m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleType);
     ULONG bufferSizeBytes = m_playHeader->PeriodSamples;
 
     bufferSizeBytes *= bytesPerSample;
@@ -257,8 +262,8 @@ AsioBufferObject::SetBuffer(
     m_recChannels = m_playHeader->RecChannels;
     m_playChannelsMap = m_playHeader->PlayChannelsMap;
     m_recChannelsMap = m_playHeader->RecChannelsMap;
-    m_recHeader->CurrentSampleRate = m_deviceContext->AudioProperty.SampleRate;
-    m_recHeader->CurrentClockSource = m_deviceContext->CurrentClockSource;
+    m_recHeader->CurrentSampleRate = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate;
+    m_recHeader->CurrentClockSource = 0;
 
     if ((((playBufferLength - playBufferOffset) != (m_playHeader->HeaderLength + requiredPlayBufferLength)) || (recBufferLength - recBufferOffset) != (m_recHeader->HeaderLength + requiredRecBufferLength)))
     {
@@ -372,8 +377,8 @@ AsioBufferObject::SetBuffer(
 
     status = STATUS_SUCCESS;
 
-    m_deviceContext->AudioProperty.AsioBufferPeriod = m_bufferPeriod;
-    m_deviceContext->AudioProperty.AsioDriverVersion = m_playHeader->AsioDriverVersion;
+    m_audioIsochronousEngine->SetAsioBufferPeriod(m_bufferPeriod);
+    m_audioIsochronousEngine->SetAsioDriverVersion(m_playHeader->AsioDriverVersion);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
     return status;
@@ -491,10 +496,10 @@ AsioBufferObject::CopyFromAsioToOutputData(
 
     LONGLONG asioPosition = m_readPosition;
     m_readPosition += samples;
-    ULONG asioReadStartIndex = (ULONG)((asioPosition + m_deviceContext->Params.PreSendFrames) % (m_bufferLength));
-    ULONG asioReadEndIndex = (ULONG)((asioPosition + samples + m_deviceContext->Params.PreSendFrames) % (m_bufferLength));
+    ULONG asioReadStartIndex = (ULONG)((asioPosition + m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.PreSendFrames) % (m_bufferLength));
+    ULONG asioReadEndIndex = (ULONG)((asioPosition + samples + m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.PreSendFrames) % (m_bufferLength));
 
-    ULONG asioSampleSize = USBAudioDataFormat::ConvertSampleTypeToBytesPerSample(m_deviceContext->AudioProperty.SampleType);
+    ULONG asioSampleSize = USBAudioDataFormat::ConvertSampleTypeToBytesPerSample(m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleType);
     ULONG asioByteOffset = asioSampleSize - usbBytesPerSample;
 
     //
@@ -502,13 +507,13 @@ AsioBufferObject::CopyFromAsioToOutputData(
     // are converted and copied into an interleaved format suitable for USB
     // isochronous transfer.
     //
-    switch (m_deviceContext->AudioProperty.CurrentSampleFormat)
+    switch (m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat)
     {
     case UACSampleFormat::UAC_SAMPLE_FORMAT_PCM: {
         for (ULONG asioCh = 0; asioCh < m_playChannels; ++asioCh)
         {
             ULONG usbCh = asioCh;
-            if (usbCh >= m_deviceContext->OutputProperty.UsbChannels)
+            if (usbCh >= m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels)
             {
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ASIO, "ASIO OUT channel %u is not mapped", asioCh);
                 continue;
@@ -587,7 +592,7 @@ AsioBufferObject::CopyFromAsioToOutputData(
         for (ULONG asioCh = 0; asioCh < m_playChannels; ++asioCh)
         {
             ULONG usbCh = asioCh;
-            if (usbCh >= m_deviceContext->OutputProperty.UsbChannels)
+            if (usbCh >= m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels)
             {
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ASIO, "ASIO OUT channel %u is not mapped", asioCh);
                 continue;
@@ -656,16 +661,16 @@ AsioBufferObject::CopyToAsioFromInputData(
     const ULONG asioWriteStartIndex = (ULONG)((asioPosition) % (m_bufferLength));
     const ULONG asioWriteEndIndex = (ULONG)((asioPosition + samples) % (m_bufferLength));
 
-    ULONG asioSampleSize = USBAudioDataFormat::ConvertSampleTypeToBytesPerSample(m_deviceContext->AudioProperty.SampleType);
+    ULONG asioSampleSize = USBAudioDataFormat::ConvertSampleTypeToBytesPerSample(m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleType);
     ULONG asioByteOffset = asioSampleSize - usbBytesPerSample;
 
-    switch (m_deviceContext->AudioProperty.CurrentSampleFormat)
+    switch (m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat)
     {
     case UACSampleFormat::UAC_SAMPLE_FORMAT_PCM: {
         for (ULONG asioCh = 0; asioCh < m_recChannels; ++asioCh)
         {
             ULONG usbCh = asioCh;
-            if (usbCh >= m_deviceContext->InputProperty.UsbChannels)
+            if (usbCh >= m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.UsbChannels)
             {
                 // TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ASIO, "ASIO IN channel %u is not mapped", asioCh);
                 continue;
@@ -761,7 +766,7 @@ AsioBufferObject::CopyToAsioFromInputData(
         for (ULONG asioCh = 0; asioCh < m_recChannels; ++asioCh)
         {
             ULONG usbCh = asioCh;
-            if (usbCh >= m_deviceContext->InputProperty.UsbChannels)
+            if (usbCh >= m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.UsbChannels)
             {
                 // TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ASIO, "ASIO IN channel %u is not mapped", asioCh);
                 continue;
@@ -857,12 +862,12 @@ bool AsioBufferObject::EvaluatePositionAndNotifyIfNeeded(
         _InterlockedExchange64((volatile LONG64 *)&m_recHeader->NotifySystemTime, currentTimePCUs);
         KeSetEvent(m_userNotificationEvent, IO_SOUND_INCREMENT, FALSE);
         curAsioMeasuredPeriodUs = (LONG)(currentTimePCUs - lastAsioNotifyPCUs);
-        ULONG minimumPeriod = m_deviceContext->AudioProperty.SampleRate / 1000;
+        ULONG minimumPeriod = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate / 1000;
         if (minimumPeriod < m_bufferPeriod)
         {
             minimumPeriod = m_bufferPeriod;
         }
-        LONG thresholdUs = (LONG)((LONGLONG)(minimumPeriod + (m_deviceContext->UsbLatency.OutputDriverBuffer)) * 1000000LL / m_deviceContext->AudioProperty.SampleRate);
+        LONG thresholdUs = (LONG)((LONGLONG)(minimumPeriod + (m_audioIsochronousEngine->GetUsbLatency().OutputDriverBuffer)) * 1000000LL / m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate);
         if ((m_bufferLength * 1000 >= m_bufferPeriod) && (asioNotifyCount >= 2) && (curAsioMeasuredPeriodUs > thresholdUs))
         {
             TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ASIO, "dropout detected. Callback period now %dus, last %dus, threshold %dus, processing %dus.", curAsioMeasuredPeriodUs, prevAsioMeasuredPeriodUs, thresholdUs, curClientProcessingTimeUs);
@@ -910,6 +915,6 @@ void AsioBufferObject::UpdateCurrentSampleRate()
 
     if (m_recHeader != nullptr)
     {
-        m_recHeader->CurrentSampleRate = m_deviceContext->AudioProperty.SampleRate;
+        m_recHeader->CurrentSampleRate = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate;
     }
 }

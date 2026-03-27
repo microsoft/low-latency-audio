@@ -36,6 +36,7 @@ Environment:
 #include "Common.h"
 #include "UAC_User.h"
 #include "USBAudioConfiguration.h"
+#include "AudioIsochronousEngine.h"
 
 #ifndef __INTELLISENSE__
 #include "CaptureCircuit.tmh"
@@ -324,17 +325,15 @@ Return Value:
 
     CODEC_PIN_CONTEXT * pinContext = GetCodecPinContext(Pin);
     ASSERT(pinContext != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(pinContext->Device);
-    ASSERT(deviceContext != nullptr);
+    ASSERT(pinContext->AudioIsochronousEngine != nullptr);
 
     if (pinContext->NumOfChannelsPerDevice == 1)
     {
-        RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetChannelName(true, pinContext->Channel, memory, channelName));
+        RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetChannelName(true, pinContext->Channel, memory, channelName));
     }
     else
     {
-        RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStereoChannelName(true, pinContext->Channel, memory, channelName));
+        RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetStereoChannelName(true, pinContext->Channel, memory, channelName));
     }
     RtlInitUnicodeString(&retrievedName, channelName);
 
@@ -406,10 +405,11 @@ VOID CodecC_EvtCircuitCleanup(
 PAGED_CODE_SEG
 NTSTATUS
 CodecC_AddStaticCapture(
-    _In_ WDFDEVICE              Device,
-    _In_ const GUID *           ComponentGuid,
-    _In_ const GUID *           MicCustomName,
-    _In_ const UNICODE_STRING * CircuitName
+    _In_ WDFDEVICE                Device,
+    _In_ const GUID *             ComponentGuid,
+    _In_ const GUID *             MicCustomName,
+    _In_ const UNICODE_STRING *   CircuitName,
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine
 )
 /*++
 
@@ -442,31 +442,18 @@ Return Value:
 
 --*/
 {
-    NTSTATUS                status = STATUS_SUCCESS;
-    PDEVICE_CONTEXT         deviceContext;
-    PCAPTURE_DEVICE_CONTEXT captureDevContext;
-    ACXCIRCUIT              captureCircuit = nullptr;
-    WDF_OBJECT_ATTRIBUTES   attributes;
+    NTSTATUS   status = STATUS_SUCCESS;
+    ACXCIRCUIT captureCircuit = nullptr;
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
 
-    deviceContext = GetDeviceContext(Device);
-    ASSERT(deviceContext != nullptr);
-
-    //
-    // Alloc audio context to current device.
-    //
-    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, CAPTURE_DEVICE_CONTEXT);
-    RETURN_NTSTATUS_IF_FAILED(WdfObjectAllocateContext(Device, &attributes, (PVOID *)&captureDevContext));
-    ASSERT(captureDevContext);
-
     //
     // Create a capture circuit associated with this child device.
     //
-    RETURN_NTSTATUS_IF_FAILED(CodecC_CreateCaptureCircuit(Device, ComponentGuid, MicCustomName, CircuitName, deviceContext->AudioProperty.SupportedSampleRate /* & GetSampleRateMask(deviceContext->AudioProperty.SampleRate) */, &captureCircuit));
+    RETURN_NTSTATUS_IF_FAILED(CodecC_CreateCaptureCircuit(Device, ComponentGuid, MicCustomName, CircuitName, AudioIsochronousEngine, AudioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SupportedSampleRate /* & GetSampleRateMask(AudioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate) */, &captureCircuit));
 
-    deviceContext->Capture = captureCircuit;
+    AudioIsochronousEngine->SetCaptureCircuit(captureCircuit);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 
@@ -579,9 +566,10 @@ CodecC_CreateCaptureCircuit(
     WDFDEVICE    Device,
     const GUID * ComponentGuid,
     const GUID * /* MicCustomName */,
-    const UNICODE_STRING * CircuitName,
-    const ULONG            SupportedSampleRate,
-    ACXCIRCUIT *           Circuit
+    const UNICODE_STRING *   CircuitName,
+    AudioIsochronousEngine * AudioIsochronousEngine,
+    const ULONG              SupportedSampleRate,
+    ACXCIRCUIT *             Circuit
 )
 /*++
 
@@ -641,8 +629,8 @@ Return Value:
     deviceContext = GetDeviceContext(Device);
     ASSERT(deviceContext != nullptr);
 
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamChannelInfo(true, numOfChannels, terminalType, volumeUnitID, muteUnitID));
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetStreamDevices(true, numOfDevices));
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetStreamChannelInfo(true, numOfChannels, terminalType, volumeUnitID, muteUnitID));
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetStreamDevices(true, numOfDevices));
     numOfRemainingChannels = numOfChannels;
 
     if (numOfChannels == 0)
@@ -655,7 +643,7 @@ Return Value:
         volumeUnitID = muteUnitID = USBAudioConfiguration::InvalidID;
     }
 
-    USBAudioDataFormatManager * usbAudioDataFormatManager = deviceContext->UsbAudioConfiguration->GetUSBAudioDataFormatManager(true);
+    USBAudioDataFormatManager * usbAudioDataFormatManager = AudioIsochronousEngine->GetUSBAudioDataFormatManager(true);
     RETURN_NTSTATUS_IF_TRUE_ACTION(usbAudioDataFormatManager == nullptr, status = STATUS_INVALID_PARAMETER, status);
 
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
@@ -756,6 +744,7 @@ Return Value:
         ASSERT(circuitContext);
 
         circuitContext->NumOfDevices = numOfDevices;
+        circuitContext->AudioIsochronousEngine = AudioIsochronousEngine;
 
         WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
         attributes.ParentObject = circuit;
@@ -778,7 +767,7 @@ Return Value:
     {
         ULONG numOfChannelsPerDevice;
 
-        if ((numOfRemainingChannels > 2) && deviceContext->UsbAudioConfiguration->IsDeviceSplittable(true))
+        if ((numOfRemainingChannels > 2) && deviceContext->UsbAudioConfiguration->IsDeviceSplittable())
         {
             numOfChannelsPerDevice = 2;
         }
@@ -909,13 +898,14 @@ Return Value:
             pinContext->DeviceIndex = index;
             pinContext->Channel = index * 2;
             pinContext->NumOfChannelsPerDevice = numOfChannelsPerDevice;
+            pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
 
             ///////////////////////////////////////////////////////////
             //
             // Create capture endpoint pin.
             //
             ACX_PIN_CALLBACKS_INIT(&pinCallbacks);
-            if (deviceContext->InputProperty.ChannelNames != USBAudioConfiguration::InvalidString)
+            if (AudioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.ChannelNames != USBAudioConfiguration::InvalidString)
             {
                 pinCallbacks.EvtAcxPinRetrieveName = CodecC_EvtAcxPinRetrieveName;
             }
@@ -1182,14 +1172,15 @@ Return Value:
 
     circuitContext = GetCaptureCircuitContext(Circuit);
     ASSERT(circuitContext != nullptr);
+    ASSERT(circuitContext->AudioIsochronousEngine);
 
     pinContext = GetCodecPinContext(Pin);
     ASSERT(pinContext != nullptr);
 
-    if (USBAudioAcxDriverHasAsioOwnership(deviceContext))
+    if (circuitContext->AudioIsochronousEngine->HasAsioOwnership())
     {
         ACXDATAFORMAT dataFormat = nullptr;
-        status = USBAudioAcxDriverGetCurrentDataFormat(deviceContext, true, dataFormat);
+        status = circuitContext->AudioIsochronousEngine->GetCurrentDataFormat(true, dataFormat);
         RETURN_NTSTATUS_IF_FAILED(status);
 
         ACXDATAFORMAT stereoDataFormat;
@@ -1246,7 +1237,7 @@ Return Value:
     // Create the virtual streaming engine which will control
     // streaming logic for the capture circuit.
     //
-    streamEngine = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) CCaptureStreamEngine(deviceContext, stream, StreamFormat, pinContext->DeviceIndex, pinContext->Channel, pinContext->NumOfChannelsPerDevice);
+    streamEngine = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) CCaptureStreamEngine(deviceContext, circuitContext->AudioIsochronousEngine, stream, StreamFormat, pinContext->DeviceIndex, pinContext->Channel, pinContext->NumOfChannelsPerDevice);
     RETURN_NTSTATUS_IF_TRUE(streamEngine == nullptr, STATUS_INSUFFICIENT_RESOURCES);
 
     streamContext->StreamEngine = (PVOID)streamEngine;

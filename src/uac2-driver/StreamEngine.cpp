@@ -29,6 +29,8 @@ Environment:
 #include "StreamEngine.h"
 #include "Common.h"
 #include "CircuitHelper.h"
+#include "AudioIsochronousEngine.h"
+
 #ifndef __INTELLISENSE__
 #include "StreamEngine.tmh"
 #endif
@@ -53,17 +55,19 @@ DEFINE_GUIDSTRUCT("00000003-0000-0010-8000-00aa00389b71", KSDATAFORMAT_SUBTYPE_I
 _Use_decl_annotations_
 PAGED_CODE_SEG
 CStreamEngine::CStreamEngine(
-    BOOLEAN         Input,
-    PDEVICE_CONTEXT DeviceContext,
-    ACXSTREAM       Stream,
-    ACXDATAFORMAT   StreamFormat,
-    ULONG           DeviceIndex,
-    ULONG           Channel,
-    ULONG           NumOfChannelsPerDevice,
-    BOOL            Offload
+    BOOLEAN                  Input,
+    PDEVICE_CONTEXT          DeviceContext,
+    AudioIsochronousEngine * AudioIsochronousEngine,
+    ACXSTREAM                Stream,
+    ACXDATAFORMAT            StreamFormat,
+    ULONG                    DeviceIndex,
+    ULONG                    Channel,
+    ULONG                    NumOfChannelsPerDevice,
+    BOOL                     Offload
 )
     : m_input(Input),
       m_deviceContext(DeviceContext),
+      m_audioIsochronousEngine(AudioIsochronousEngine),
       m_packetCount(0),
       m_packetSize(0),
       m_firstPacketOffset(0),
@@ -81,8 +85,8 @@ CStreamEngine::CStreamEngine(
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, %p, isInput = %!bool!, Stream = %p, StreamFormat = %p", this, Input, Stream, StreamFormat);
     RtlZeroMemory(m_packets, sizeof(m_packets));
 
-    USBAudioAcxDriverStreamResetInternal(m_input, m_deviceIndex, m_deviceContext);
-    USBAudioAcxDriverStreamResetCurrentPacket(m_input, m_deviceIndex, m_deviceContext);
+    m_audioIsochronousEngine->StreamResetInternal(m_input, m_deviceIndex);
+    m_audioIsochronousEngine->StreamResetCurrentPacket(m_input, m_deviceIndex);
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, "this = %p, m_streamFormat = %p", this, m_streamFormat);
     TraceAcxDataFormat(TRACE_LEVEL_VERBOSE, m_streamFormat);
@@ -198,7 +202,7 @@ CStreamEngine::AllocateRtPackets(
         packetBuffer = nullptr;
     }
 
-    status = USBAudioAcxDriverStreamSetRtPackets(m_input, m_deviceIndex, m_deviceContext, m_packetTopAddresses, PacketCount, PacketSize, m_channel, m_numOfChannelsPerDevice);
+    status = m_audioIsochronousEngine->StreamSetRtPackets(m_input, m_deviceIndex, m_packetTopAddresses, PacketCount, PacketSize, m_channel, m_numOfChannelsPerDevice);
     IF_FAILED_JUMP(status, exit);
 
     *Packets = packets;
@@ -233,7 +237,7 @@ VOID CStreamEngine::FreeRtPackets(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Entry");
 
-    USBAudioAcxDriverStreamUnsetRtPackets(m_input, m_deviceIndex, m_deviceContext);
+    m_audioIsochronousEngine->StreamUnsetRtPackets(m_input, m_deviceIndex);
 
     for (i = 0; i < PacketCount; ++i)
     {
@@ -348,7 +352,7 @@ CStreamEngine::Pause()
 
     m_currentState = AcxStreamStatePause;
 
-    status = USBAudioAcxDriverStreamPause(m_input, m_deviceIndex, m_deviceContext);
+    status = m_audioIsochronousEngine->StreamPause(m_input, m_deviceIndex);
 
 exit:
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit %!STATUS!", status);
@@ -399,10 +403,10 @@ CStreamEngine::Run()
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, "this = %p, m_streamFormat = %p", this, m_streamFormat);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - %u, %llu, %u, %u, %u, %u, %u, %u, %u", AcxDataFormatGetChannelsCount(m_streamFormat), AcxDataFormatGetChannelMask(m_streamFormat), AcxDataFormatGetSampleSize(m_streamFormat), AcxDataFormatGetBitsPerSample(m_streamFormat), AcxDataFormatGetValidBitsPerSample(m_streamFormat), AcxDataFormatGetSamplesPerBlock(m_streamFormat), AcxDataFormatGetBlockAlign(m_streamFormat), AcxDataFormatGetSampleRate(m_streamFormat), AcxDataFormatGetAverageBytesPerSec(m_streamFormat));
 
-    status = USBAudioAcxDriverStreamSetDataFormat(m_input, m_deviceIndex, m_deviceContext, m_streamFormat);
+    status = m_audioIsochronousEngine->StreamSetDataFormat(m_input, m_deviceIndex, m_streamFormat);
     IF_FAILED_JUMP(status, exit);
 
-    status = USBAudioAcxDriverStreamRun(m_input, m_deviceIndex, m_deviceContext);
+    status = m_audioIsochronousEngine->StreamRun(m_input, m_deviceIndex);
     IF_FAILED_JUMP(status, exit);
 
     m_currentState = AcxStreamStateRun;
@@ -428,7 +432,7 @@ CStreamEngine::GetPresentationPosition(
 
     if (m_currentState == AcxStreamStateRun)
     {
-        status = USBAudioAcxDriverStreamGetPresentationPosition(m_input, m_deviceIndex, m_deviceContext, PositionInBlocks, QPCPosition);
+        status = m_audioIsochronousEngine->StreamGetPresentationPosition(m_input, m_deviceIndex, PositionInBlocks, QPCPosition);
     }
     else
     {
@@ -535,7 +539,7 @@ CStreamEngine::GetCurrentPacket(
     // currentPacket  = (ULONG)InterlockedCompareExchange((LONG *)&m_CurrentPacket, -1, -1);
 
     // *CurrentPacket = currentPacket;
-    status = USBAudioAcxDriverStreamGetCurrentPacket(m_input, m_deviceIndex, m_deviceContext, CurrentPacket);
+    status = m_audioIsochronousEngine->StreamGetCurrentPacket(m_input, m_deviceIndex, CurrentPacket);
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DRIVER, " - *CurrentPacket = %d", *CurrentPacket);
 
@@ -547,15 +551,16 @@ CStreamEngine::GetCurrentPacket(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 CRenderStreamEngine::CRenderStreamEngine(
-    PDEVICE_CONTEXT DeviceContext,
-    ACXSTREAM       Stream,
-    ACXDATAFORMAT   StreamFormat,
-    ULONG           DeviceIndex,
-    ULONG           Channel,
-    ULONG           NumOfChannelsPerDevice,
-    BOOL            Offload
+    PDEVICE_CONTEXT          DeviceContext,
+    AudioIsochronousEngine * AudioIsochronousEngine,
+    ACXSTREAM                Stream,
+    ACXDATAFORMAT            StreamFormat,
+    ULONG                    DeviceIndex,
+    ULONG                    Channel,
+    ULONG                    NumOfChannelsPerDevice,
+    BOOL                     Offload
 )
-    : CStreamEngine(FALSE, DeviceContext, Stream, StreamFormat, DeviceIndex, Channel, NumOfChannelsPerDevice, Offload)
+    : CStreamEngine(FALSE, DeviceContext, AudioIsochronousEngine, Stream, StreamFormat, DeviceIndex, Channel, NumOfChannelsPerDevice, Offload)
 {
     PAGED_CODE();
 
@@ -585,21 +590,21 @@ CRenderStreamEngine::PrepareHardware()
     auto prepareHardwareScope = wil::scope_exit([&]() {
         if (!NT_SUCCESS(status))
         {
-            USBAudioAcxDriverStreamReleaseHardware(false, m_deviceIndex, GetDeviceContext());
+            m_audioIsochronousEngine->StreamReleaseHardware(false, m_deviceIndex);
         }
     });
 
     status = CStreamEngine::PrepareHardware();
     RETURN_NTSTATUS_IF_FAILED(status);
 
-    status = USBAudioAcxDriverStreamPrepareHardware(false, m_deviceIndex, GetDeviceContext(), this);
+    status = m_audioIsochronousEngine->StreamPrepareHardware(false, m_deviceIndex, this);
     RETURN_NTSTATUS_IF_FAILED(status);
 
     //
     // For the reason why sample rate changes are not performed here,
     // please refer to the comments in CStreamEngine::Run().
     //
-    // status = USBAudioAcxDriverStreamSetDataFormat(false, GetDeviceContext(), m_streamFormat);
+    // status = m_audioIsochronousEngine->StreamSetDataFormat(false, GetDeviceContext(), m_streamFormat);
     // RETURN_NTSTATUS_IF_FAILED(status);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit %!STATUS!", status);
@@ -617,8 +622,8 @@ CRenderStreamEngine::ReleaseHardware()
     // m_SaveData.WaitAllWorkItems();
     // m_SaveData.Cleanup();
 
-    USBAudioAcxDriverStreamResetCurrentPacket(false, m_deviceIndex, GetDeviceContext());
-    USBAudioAcxDriverStreamReleaseHardware(false, m_deviceIndex, GetDeviceContext());
+    m_audioIsochronousEngine->StreamResetCurrentPacket(false, m_deviceIndex);
+    m_audioIsochronousEngine->StreamReleaseHardware(false, m_deviceIndex);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit");
 
@@ -698,7 +703,7 @@ CRenderStreamEngine::SetRenderPacket(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Entry, Packet = %u, Flags = 0x%x, EosPacketLength = %u", Packet, Flags, EosPacketLength);
 
-    status = USBAudioAcxDriverStreamGetCurrentPacket(m_input, m_deviceIndex, m_deviceContext, &currentPacket);
+    status = m_audioIsochronousEngine->StreamGetCurrentPacket(m_input, m_deviceIndex, &currentPacket);
     if (!NT_SUCCESS(status))
     {
         goto SetRenderPacket_Exit;
@@ -726,14 +731,15 @@ SetRenderPacket_Exit:
 _Use_decl_annotations_
 PAGED_CODE_SEG
 CCaptureStreamEngine::CCaptureStreamEngine(
-    PDEVICE_CONTEXT DeviceContext,
-    ACXSTREAM       Stream,
-    ACXDATAFORMAT   StreamFormat,
-    ULONG           DeviceIndex,
-    ULONG           Channel,
-    ULONG           NumOfChannelsPerDevice
+    PDEVICE_CONTEXT          DeviceContext,
+    AudioIsochronousEngine * AudioIsochronousEngine,
+    ACXSTREAM                Stream,
+    ACXDATAFORMAT            StreamFormat,
+    ULONG                    DeviceIndex,
+    ULONG                    Channel,
+    ULONG                    NumOfChannelsPerDevice
 )
-    : CStreamEngine(TRUE, DeviceContext, Stream, StreamFormat, DeviceIndex, Channel, NumOfChannelsPerDevice, FALSE)
+    : CStreamEngine(TRUE, DeviceContext, AudioIsochronousEngine, Stream, StreamFormat, DeviceIndex, Channel, NumOfChannelsPerDevice, FALSE)
 {
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Entry");
@@ -764,14 +770,14 @@ CCaptureStreamEngine::PrepareHardware()
     auto prepareHardwareScope = wil::scope_exit([&]() {
         if (!NT_SUCCESS(status))
         {
-            USBAudioAcxDriverStreamReleaseHardware(true, m_deviceIndex, GetDeviceContext());
+            m_audioIsochronousEngine->StreamReleaseHardware(true, m_deviceIndex);
         }
     });
 
     status = CStreamEngine::PrepareHardware();
     RETURN_NTSTATUS_IF_FAILED(status);
 
-    status = USBAudioAcxDriverStreamPrepareHardware(true, m_deviceIndex, GetDeviceContext(), this);
+    status = m_audioIsochronousEngine->StreamPrepareHardware(true, m_deviceIndex, this);
     RETURN_NTSTATUS_IF_FAILED(status);
 
     pwfext = (PWAVEFORMATEXTENSIBLE)AcxDataFormatGetWaveFormatExtensible(m_streamFormat);
@@ -786,7 +792,7 @@ CCaptureStreamEngine::PrepareHardware()
     // For the reason why sample rate changes are not performed here,
     // please refer to the comments in CStreamEngine::Run().
     //
-    // status = USBAudioAcxDriverStreamSetDataFormat(true, GetDeviceContext(), m_streamFormat);
+    // status = m_audioIsochronousEngine->StreamSetDataFormat(true, GetDeviceContext(), m_streamFormat);
     // RETURN_NTSTATUS_IF_FAILED(status);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit %!STATUS!", status);
@@ -801,8 +807,8 @@ CCaptureStreamEngine::ReleaseHardware()
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Entry");
 
-    USBAudioAcxDriverStreamResetCurrentPacket(false, m_deviceIndex, GetDeviceContext());
-    USBAudioAcxDriverStreamReleaseHardware(true, m_deviceIndex, GetDeviceContext());
+    m_audioIsochronousEngine->StreamResetCurrentPacket(false, m_deviceIndex);
+    m_audioIsochronousEngine->StreamReleaseHardware(true, m_deviceIndex);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit");
 
@@ -825,7 +831,7 @@ CCaptureStreamEngine::GetCapturePacket(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Entry");
 
-    status = USBAudioAcxDriverStreamGetCapturePacket(m_deviceContext, m_deviceIndex, LastCapturePacket, QPCPacketStart); // TBD. How to handle ModeData
+    status = m_audioIsochronousEngine->StreamGetCapturePacket(m_deviceIndex, LastCapturePacket, QPCPacketStart); // TBD. How to handle ModeData
 
     // currentPacket      = (ULONG)InterlockedCompareExchange((LONG *)&m_CurrentPacket, -1, -1);
     // qpcPacketStart     = InterlockedCompareExchange64(&m_LastPacketStart.QuadPart, -1, -1);

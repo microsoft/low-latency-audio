@@ -95,20 +95,24 @@ DEFINE_GUID(SYSTEM_CONTAINER_GUID, 0xa11c91bc, 0x6c56, 0x44a4, 0x83, 0x2d, 0x40,
 DEFINE_GUID(DEVICE_CONTAINER_GUID, 0x99a15cbb, 0x8ecf, 0x4ed5, 0xa3, 0xa1, 0xd2, 0x99, 0x26, 0xa1, 0xe0, 0x3e);
 
 // AudioCodec driver tag:
-#define DRIVER_TAG        (ULONG)'DaAU'
+#define DRIVER_TAG         (ULONG)'DaAU'
 
-#define MIXINGENGINE_TAG  (ULONG)'EmAU'
+#define MIXINGENGINE_TAG   (ULONG)'EmAU'
 
 // The idle timeout in msec for power policy structure:
-#define IDLE_TIMEOUT_MSEC (ULONG)10000
+#define IDLE_TIMEOUT_MSEC  (ULONG)10000
 
 // The WPP control GUID defined in Trace.h should also be updated to be unique.
 
+#define CIRCUITNAMELENGTH  128
+
 // This string must match the string defined in AudioCodec.inf for the microphone name:
-DECLARE_CONST_UNICODE_STRING(captureCircuitName, L"CaptureDevice0");
+#define CAPTURECIRCUITNAME L"CaptureDevice%03x"
+DECLARE_CONST_UNICODE_STRING(captureCircuitName, CAPTURECIRCUITNAME);
 
 // This string must match the string defined in AudioCodec.inf for the speaker name:
-DECLARE_CONST_UNICODE_STRING(renderCircuitName, L"RenderDevice0");
+#define RENDERCIRCUITNAME L"RenderDevice%03x"
+DECLARE_CONST_UNICODE_STRING(renderCircuitName, RENDERCIRCUITNAME);
 
 // Diverted from Acx/Samples/AudioCodec/Driver/DriverSettings.h  End
 
@@ -152,8 +156,10 @@ typedef int BOOL;
 #define RGB(r, g, b) (DWORD)(r << 16 | g << 8 | b)
 #endif
 
-#define ALL_CHANNELS_ID     UINT32_MAX
-#define MAX_CHANNELS        32
+#define ALL_CHANNELS_ID UINT32_MAX
+#define MAX_CHANNELS    32
+
+class AudioIsochronousEngine;
 
 //
 // Ks support.
@@ -336,12 +342,13 @@ typedef enum _CODEC_PIN_TYPE
 
 typedef struct _CODEC_PIN_CONTEXT
 {
-    WDFDEVICE      Device;
-    CODEC_PIN_TYPE CodecPinType;
-    ULONG          DeviceIndex;
-    ULONG          Channel;
-    ULONG          NumOfChannelsPerDevice;
-    ACXJACK        jack;
+    WDFDEVICE                Device;
+    CODEC_PIN_TYPE           CodecPinType;
+    ULONG                    DeviceIndex;
+    ULONG                    Channel;
+    ULONG                    NumOfChannelsPerDevice;
+    ACXJACK                  jack;
+    AudioIsochronousEngine * AudioIsochronousEngine;
 } CODEC_PIN_CONTEXT, *PCODEC_PIN_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_PIN_CONTEXT, GetCodecPinContext)
@@ -395,12 +402,13 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DSP_PIN_CONTEXT, GetDspPinContext)
 //
 typedef struct _CODEC_RENDER_CIRCUIT_CONTEXT
 {
-    WDFMEMORY      VolumeElementsMemory;
-    ACXVOLUME *    VolumeElements;
-    WDFMEMORY      MuteElementsMemory;
-    ACXMUTE *      MuteElements;
-    ACXAUDIOENGINE AudioEngineElement;
-    ULONG          NumOfDevices;
+    WDFMEMORY                VolumeElementsMemory;
+    ACXVOLUME *              VolumeElements;
+    WDFMEMORY                MuteElementsMemory;
+    ACXMUTE *                MuteElements;
+    ACXAUDIOENGINE           AudioEngineElement;
+    ULONG                    NumOfDevices;
+    AudioIsochronousEngine * AudioIsochronousEngine;
 } CODEC_RENDER_CIRCUIT_CONTEXT, *PCODEC_RENDER_CIRCUIT_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_RENDER_CIRCUIT_CONTEXT, GetRenderCircuitContext)
@@ -463,11 +471,12 @@ EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL CodecR_EvtRampedVolumeAssignLevel;
 PAGED_CODE_SEG
 NTSTATUS
 CodecR_CreateRenderCircuit(
-    _In_ WDFDEVICE              Device,
-    _In_ const GUID *           ComponentGuid,
-    _In_ const UNICODE_STRING * CircuitName,
-    _In_ const ULONG            SupportedSampleRate,
-    _Out_ ACXCIRCUIT *          Circuit
+    _In_ WDFDEVICE                Device,
+    _In_ const GUID *             ComponentGuid,
+    _In_ const UNICODE_STRING *   CircuitName,
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ const ULONG              SupportedSampleRate,
+    _Out_ ACXCIRCUIT *            Circuit
 );
 
 PAGED_CODE_SEG
@@ -507,6 +516,7 @@ typedef struct _CODEC_CAPTURE_CIRCUIT_CONTEXT
     ACXMUTE *   MuteElements;
     ULONG       NumOfDevices;
     // ACXKEYWORDSPOTTER KeywordSpotter;
+    AudioIsochronousEngine * AudioIsochronousEngine;
 } CODEC_CAPTURE_CIRCUIT_CONTEXT, *PCODEC_CAPTURE_CIRCUIT_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_CAPTURE_CIRCUIT_CONTEXT, GetCaptureCircuitContext)
@@ -574,12 +584,13 @@ EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL CodecC_EvtRampedVolumeAssignLevel;
 PAGED_CODE_SEG
 NTSTATUS
 CodecC_CreateCaptureCircuit(
-    _In_ WDFDEVICE              Device,
-    _In_ const GUID *           ComponentGuid,
-    _In_ const GUID *           MicCustomName,
-    _In_ const UNICODE_STRING * CircuitName,
-    _In_ const ULONG            SupportedSampleRate,
-    _Out_ ACXCIRCUIT *          Circuit
+    _In_ WDFDEVICE                Device,
+    _In_ const GUID *             ComponentGuid,
+    _In_ const GUID *             MicCustomName,
+    _In_ const UNICODE_STRING *   CircuitName,
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ const ULONG              SupportedSampleRate,
+    _Out_ ACXCIRCUIT *            Circuit
 );
 
 PAGED_CODE_SEG

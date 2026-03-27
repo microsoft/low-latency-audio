@@ -659,6 +659,35 @@ NTSTATUS SplitAcxDataFormatByDeviceChannels(
 }
 
 PAGED_CODE_SEG
+NTSTATUS
+NotifyDataFormatChange(
+    _In_ WDFDEVICE     Device,
+    _In_ ACXCIRCUIT    Circuit,
+    _In_ ACXPIN        Pin,
+    _In_ ACXDATAFORMAT OriginalDataFormat
+)
+{
+    NTSTATUS      status = STATUS_SUCCESS;
+    ACXDATAFORMAT desiredDataFormat = nullptr;
+
+    PAGED_CODE();
+
+    CODEC_PIN_CONTEXT * pinContext = GetCodecPinContext(Pin);
+    ASSERT(pinContext != nullptr);
+
+    status = SplitAcxDataFormatByDeviceChannels(Device, Circuit, pinContext->NumOfChannelsPerDevice, desiredDataFormat, OriginalDataFormat);
+    RETURN_NTSTATUS_IF_FAILED(status);
+
+    ACXDATAFORMATLIST dataFormatList = AcxPinGetRawDataFormatList(Pin);
+    status = AcxDataFormatListAssignDefaultDataFormat(dataFormatList, desiredDataFormat);
+    RETURN_NTSTATUS_IF_FAILED(status);
+
+    status = AcxPinNotifyDataFormatChange(Pin);
+
+    return status;
+}
+
+PAGED_CODE_SEG
 const char * GetKsDataFormatSubTypeString(
     _In_ GUID ksDataFormatSubType
 )
