@@ -583,7 +583,7 @@ class AudioIsochronousEngine
     _Success_(NT_SUCCESS(return))
     NTSTATUS
     SetAsioDevice(
-        _In_ PUNICODE_STRING asioDevice
+        _In_ const WDFSTRING asioDeviceString
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -591,7 +591,7 @@ class AudioIsochronousEngine
     _Success_(NT_SUCCESS(return))
     NTSTATUS
     GetAsioDevice(
-        _Out_ UNICODE_STRING & asioDevice
+        _Inout_ WDFSTRING & asioDeviceString
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -686,12 +686,6 @@ class AudioIsochronousEngine
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
     const ULONG GetNumOfOutputDevices();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    NTSTATUS SaveAsioDeviceToRegistry(
-        _In_ PUNICODE_STRING asioDevice
-    );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -847,8 +841,15 @@ class AudioIsochronousEngine
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS SaveAsioDeviceToRegistry(
+        _In_ const WDFSTRING asioDeviceString
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    _Success_(NT_SUCCESS(return))
     NTSTATUS LoadAsioDeviceFromRegistry(
-        _Out_ PUNICODE_STRING asioDevice
+        _Inout_ WDFSTRING & asioDeviceString
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -860,6 +861,7 @@ class AudioIsochronousEngine
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    _Success_(NT_SUCCESS(return))
     NTSTATUS LoadSampleRateFromRegistry(
         _In_ WDFDEVICE device,
         _Out_ ULONG &  sampleRate
@@ -867,6 +869,7 @@ class AudioIsochronousEngine
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    _Success_(NT_SUCCESS(return))
     NTSTATUS OpenSubRegistryKey(
         _In_ WDFKEY    registryKey,
         _Out_ WDFKEY & subRegistryKey
@@ -874,6 +877,7 @@ class AudioIsochronousEngine
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    _Success_(NT_SUCCESS(return))
     NTSTATUS MakeRegistoryIndexKey(
         _In_ ULONG              index,
         _Out_ UNICODE_STRING *  keyName,

@@ -1690,26 +1690,6 @@ VOID USBAudioAcxDriverEvtIsoRequestContextCleanup(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
-bool USBAudioAcxDriverHasAsioOwnership(
-    PDEVICE_CONTEXT deviceContext
-)
-{
-    bool hasAsioOwnership = false;
-
-    ASSERT(deviceContext != nullptr);
-
-    PAGED_CODE();
-
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
-    {
-        hasAsioOwnership = deviceContext->AudioIsochronousEngines[0]->HasAsioOwnership();
-    }
-
-    return hasAsioOwnership;
-}
-
-PAGED_CODE_SEG
-_Use_decl_annotations_
 VOID EvtUSBAudioAcxDriverGetAudioProperty(
     WDFOBJECT  object,
     WDFREQUEST request
@@ -1721,11 +1701,8 @@ VOID EvtUSBAudioAcxDriverGetAudioProperty(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -1751,9 +1728,9 @@ VOID EvtUSBAudioAcxDriverGetAudioProperty(
     ULONG               minValueSize = sizeof(UAC_AUDIO_PROPERTY);
     PUAC_AUDIO_PROPERTY audioProperty = static_cast<PUAC_AUDIO_PROPERTY>(params.Parameters.Property.Value);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        status = deviceContext->AudioIsochronousEngines[0]->GetAudioProperty(*audioProperty);
+        status = circuitContext->AudioIsochronousEngine->GetAudioProperty(*audioProperty);
     }
 
     outDataCb = minValueSize;
@@ -1780,11 +1757,8 @@ VOID EvtUSBAudioAcxDriverGetChannelInfo(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     ACX_REQUEST_PARAMETERS_INIT(&params);
     AcxRequestGetParameters(request, &params);
@@ -1801,12 +1775,12 @@ VOID EvtUSBAudioAcxDriverGetChannelInfo(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         ULONG                         minValueSize = 0;
         PUAC_GET_CHANNEL_INFO_CONTEXT channelInfo = static_cast<PUAC_GET_CHANNEL_INFO_CONTEXT>(params.Parameters.Property.Value);
 
-        status = deviceContext->AudioIsochronousEngines[0]->GetChannelInfo(channelInfo, params.Parameters.Property.ValueCb, minValueSize);
+        status = circuitContext->AudioIsochronousEngine->GetChannelInfo(channelInfo, params.Parameters.Property.ValueCb, minValueSize);
         outDataCb = minValueSize;
     }
 Exit:
@@ -1830,11 +1804,8 @@ VOID EvtUSBAudioAcxDriverGetClockInfo(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     ACX_REQUEST_PARAMETERS_INIT(&params);
     AcxRequestGetParameters(request, &params);
@@ -1851,12 +1822,12 @@ VOID EvtUSBAudioAcxDriverGetClockInfo(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         ULONG                         minValueSize = 0;
         PUAC_GET_CHANNEL_INFO_CONTEXT channelInfo = (PUAC_GET_CHANNEL_INFO_CONTEXT)(params.Parameters.Property.Value);
 
-        status = deviceContext->AudioIsochronousEngines[0]->GetChannelInfo(channelInfo, params.Parameters.Property.ValueCb, minValueSize);
+        status = circuitContext->AudioIsochronousEngine->GetChannelInfo(channelInfo, params.Parameters.Property.ValueCb, minValueSize);
         outDataCb = minValueSize;
     }
 Exit:
@@ -1881,11 +1852,8 @@ VOID EvtUSBAudioAcxDriverSetClockSource(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     ACX_REQUEST_PARAMETERS_INIT(&params);
     AcxRequestGetParameters(request, &params);
@@ -1905,12 +1873,12 @@ VOID EvtUSBAudioAcxDriverSetClockSource(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         ULONG                         minValueSize = 0;
         PUAC_SET_CLOCK_SOURCE_CONTEXT clockSource = (PUAC_SET_CLOCK_SOURCE_CONTEXT)params.Parameters.Property.Value;
 
-        status = deviceContext->AudioIsochronousEngines[0]->SetClockSource(clockSource, params.Parameters.Property.ValueCb, minValueSize);
+        status = circuitContext->AudioIsochronousEngine->SetClockSource(clockSource, params.Parameters.Property.ValueCb, minValueSize);
         outDataCb = minValueSize;
     }
 
@@ -1932,11 +1900,8 @@ VOID EvtUSBAudioAcxDriverSetSampleFormat(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -1959,11 +1924,11 @@ VOID EvtUSBAudioAcxDriverSetSampleFormat(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         UACSampleFormat sampleFormat = (UACSampleFormat)(*(PULONG)params.Parameters.Property.Value);
 
-        status = deviceContext->AudioIsochronousEngines[0]->SetSampleFormat(sampleFormat);
+        status = circuitContext->AudioIsochronousEngine->SetSampleFormat(sampleFormat);
     }
 
 Exit:
@@ -1984,11 +1949,8 @@ VOID EvtUSBAudioAcxDriverChangeSampleRate(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -2011,11 +1973,11 @@ VOID EvtUSBAudioAcxDriverChangeSampleRate(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         ULONG desiredSampleRate = *((ULONG *)params.Parameters.Property.Value);
 
-        status = deviceContext->AudioIsochronousEngines[0]->ChangeSampleRate(desiredSampleRate);
+        status = circuitContext->AudioIsochronousEngine->ChangeSampleRate(desiredSampleRate);
     }
 
 Exit:
@@ -2048,11 +2010,8 @@ Return Value:
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -2075,9 +2034,9 @@ Return Value:
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        status = deviceContext->AudioIsochronousEngines[0]->GetAsioOwnership(WdfRequestGetFileObject(request));
+        status = circuitContext->AudioIsochronousEngine->GetAsioOwnership(WdfRequestGetFileObject(request));
     }
 
 Exit:
@@ -2098,11 +2057,8 @@ VOID EvtUSBAudioAcxDriverStartAsioStream(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -2125,9 +2081,9 @@ VOID EvtUSBAudioAcxDriverStartAsioStream(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        status = deviceContext->AudioIsochronousEngines[0]->StartAsioStream();
+        status = circuitContext->AudioIsochronousEngine->StartAsioStream();
     }
 Exit:
     WdfRequestCompleteWithInformation(request, status, outDataCb);
@@ -2147,11 +2103,8 @@ VOID EvtUSBAudioAcxDriverStopAsioStream(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -2174,9 +2127,9 @@ VOID EvtUSBAudioAcxDriverStopAsioStream(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        status = deviceContext->AudioIsochronousEngines[0]->StopAsioStream();
+        status = circuitContext->AudioIsochronousEngine->StopAsioStream();
     }
 
 Exit:
@@ -2197,11 +2150,8 @@ VOID EvtUSBAudioAcxDriverSetAsioBuffer(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -2234,11 +2184,11 @@ VOID EvtUSBAudioAcxDriverSetAsioBuffer(
     ULONG              inBufferLength = irpStack->Parameters.DeviceIoControl.InputBufferLength;
     ULONG              outBufferLength = irpStack->Parameters.DeviceIoControl.OutputBufferLength;
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         outDataCb = params.Parameters.Property.ValueCb;
 
-        status = deviceContext->AudioIsochronousEngines[0]->SetAsioBuffer(
+        status = circuitContext->AudioIsochronousEngine->SetAsioBuffer(
             static_cast<ULONG>(outBufferLength),
             (PBYTE)outBuffer,
             0,
@@ -2267,11 +2217,8 @@ VOID EvtUSBAudioAcxDriverUnsetAsioBuffer(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -2294,9 +2241,9 @@ VOID EvtUSBAudioAcxDriverUnsetAsioBuffer(
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        status = deviceContext->AudioIsochronousEngines[0]->UnsetAsioBuffer();
+        status = circuitContext->AudioIsochronousEngine->UnsetAsioBuffer();
     }
 
 Exit:
@@ -2329,11 +2276,8 @@ Return Value:
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -2356,9 +2300,9 @@ Return Value:
                         outDataCb = 0; status = STATUS_INVALID_PARAMETER;,
                                                                          Exit);
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        status = deviceContext->AudioIsochronousEngines[0]->ReleaseAsioOwnership(WdfRequestGetFileObject(request));
+        status = circuitContext->AudioIsochronousEngine->ReleaseAsioOwnership(WdfRequestGetFileObject(request));
     }
 
 Exit:
@@ -2392,11 +2336,8 @@ VOID EvtUSBAudioAcxDriverGetBufferPeriod(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(params.Parameters.Property.ValueCb == sizeof(ULONG));
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     IF_TRUE_ACTION_JUMP(
         (
@@ -2411,10 +2352,10 @@ VOID EvtUSBAudioAcxDriverGetBufferPeriod(
                                           Exit
     );
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         ULONG * bufferPeriod = static_cast<ULONG *>(params.Parameters.Property.Value);
-        status = deviceContext->AudioIsochronousEngines[0]->GetBufferPeriod(*bufferPeriod);
+        status = circuitContext->AudioIsochronousEngine->GetBufferPeriod(*bufferPeriod);
         outDataCb = sizeof(ULONG);
     }
 
@@ -2450,11 +2391,8 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(params.Parameters.Property.ValueCb == sizeof(ULONG));
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     IF_TRUE_ACTION_JUMP(
         (
@@ -2469,13 +2407,13 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
                                           Exit
     );
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         ULONG * bufferPeriod = static_cast<ULONG *>(params.Parameters.Property.Value);
 
         TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "BufferPeriod = %u", *bufferPeriod);
 
-        status = deviceContext->AudioIsochronousEngines[0]->SetBufferPeriod(*bufferPeriod);
+        status = circuitContext->AudioIsochronousEngine->SetBufferPeriod(*bufferPeriod);
     }
 
 Exit:
@@ -2510,11 +2448,8 @@ VOID EvtUSBAudioAcxDriverGetInputLatency(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(params.Parameters.Property.ValueCb == sizeof(LONG));
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     IF_TRUE_ACTION_JUMP(
         (
@@ -2529,11 +2464,11 @@ VOID EvtUSBAudioAcxDriverGetInputLatency(
                                           Exit
     );
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         LONG * inputLatency = static_cast<LONG *>(params.Parameters.Property.Value);
 
-        status = deviceContext->AudioIsochronousEngines[0]->GetInputLatency(*inputLatency);
+        status = circuitContext->AudioIsochronousEngine->GetInputLatency(*inputLatency);
         TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "InputLatency = %d", *inputLatency);
 
         outDataCb = sizeof(LONG);
@@ -2571,11 +2506,8 @@ VOID EvtUSBAudioAcxDriverGetOutputLatency(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(params.Parameters.Property.ValueCb == sizeof(LONG));
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     IF_TRUE_ACTION_JUMP(
         (
@@ -2590,11 +2522,11 @@ VOID EvtUSBAudioAcxDriverGetOutputLatency(
                                           Exit
     );
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         LONG * outputLatency = static_cast<LONG *>(params.Parameters.Property.Value);
 
-        status = deviceContext->AudioIsochronousEngines[0]->GetOutputLatency(*outputLatency);
+        status = circuitContext->AudioIsochronousEngine->GetOutputLatency(*outputLatency);
         TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "OutputLatency = %d", *outputLatency);
 
         outDataCb = sizeof(LONG);
@@ -2631,11 +2563,8 @@ VOID EvtUSBAudioAcxDriverSetAsioDevice(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(0 < params.Parameters.Property.ValueCb);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     IF_TRUE_ACTION_JUMP(
         (
@@ -2649,14 +2578,39 @@ VOID EvtUSBAudioAcxDriverSetAsioDevice(
                                           Exit
     );
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        UNICODE_STRING asioDevice;
-        RtlInitUnicodeString(&asioDevice, (PCWSTR)params.Parameters.Property.Value);
+        WDFSTRING             asioDeviceString = nullptr;
+        UNICODE_STRING        asioDevice;
+        WDFMEMORY             unicodeMemory = nullptr;
+        PWCHAR                unicodeStrings = nullptr;
+        size_t                unicodeStringsBytes = params.Parameters.Property.ValueCb + sizeof(WCHAR);
+        WDF_OBJECT_ATTRIBUTES attributes{};
 
-        status = deviceContext->AudioIsochronousEngines[0]->SaveAsioDeviceToRegistry(&asioDevice);
+        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+        attributes.ParentObject = request;
+
+        //
+        // The ASIO device selection string passed in is not null-terminated,
+        // so ensure it is null-terminated before treating it as a UNICODE_STRING.
+        //
+        status = WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, unicodeStringsBytes, &unicodeMemory, (PVOID *)&unicodeStrings);
+        IF_FAILED_JUMP(status, Exit);
+
+        RtlZeroMemory(unicodeStrings, unicodeStringsBytes);
+        RtlCopyMemory(unicodeStrings, params.Parameters.Property.Value, params.Parameters.Property.ValueCb);
+        RtlInitUnicodeString(&asioDevice, unicodeStrings);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - asio device %wZ", &asioDevice);
+
+        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+        attributes.ParentObject = request;
+
+        status = WdfStringCreate(&asioDevice, &attributes, &asioDeviceString);
+        if (NT_SUCCESS(status))
+        {
+            status = circuitContext->AudioIsochronousEngine->SetAsioDevice(asioDeviceString);
+        }
     }
-
 Exit:
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
@@ -2687,11 +2641,8 @@ VOID EvtUSBAudioAcxDriverGetAsioDevice(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(0 < params.Parameters.Property.ValueCb);
 
-    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)object);
-    ASSERT(device != nullptr);
-
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    ASSERT(deviceContext != nullptr);
+    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    ASSERT(circuitContext != nullptr);
 
     NTSTATUS status = STATUS_NOT_SUPPORTED;
 
@@ -2707,12 +2658,36 @@ VOID EvtUSBAudioAcxDriverGetAsioDevice(
                                           Exit
     );
 
-    if ((deviceContext->AudioIsochronousEngines != nullptr) && (deviceContext->AudioIsochronousEngines[0] != nullptr))
+    if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        UNICODE_STRING asioDevice;
-        status = deviceContext->AudioIsochronousEngines[0]->GetAsioDevice(asioDevice);
-        if (NT_SUCCESS(status))
+        WDFSTRING             asioDeviceString = nullptr;
+        UNICODE_STRING        asioDevice;
+        WDF_OBJECT_ATTRIBUTES attributes{};
+
+        WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+        attributes.ParentObject = request;
+
+        status = WdfStringCreate(nullptr, &attributes, &asioDeviceString);
+        IF_FAILED_JUMP(status, Exit);
+
+        status = circuitContext->AudioIsochronousEngine->GetAsioDevice(asioDeviceString);
+        if (NT_SUCCESS(status) || (status == STATUS_OBJECT_NAME_NOT_FOUND))
         {
+            if (NT_SUCCESS(status))
+            {
+                WdfStringGetUnicodeString(asioDeviceString, &asioDevice);
+            }
+            else
+            {
+                //
+                // If the "AsioDevice" value has not been created yet (first call), return an empty string and treat it as a normal completion.
+                //
+                RtlInitUnicodeString(&asioDevice, L"");
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - asio device value has not been created yes (first call).");
+                status = STATUS_SUCCESS;
+            }
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - asio device %wZ", &asioDevice);
+
             if (params.Parameters.Property.ValueCb >= asioDevice.MaximumLength)
             {
                 RtlZeroMemory(params.Parameters.Property.Value, params.Parameters.Property.ValueCb);

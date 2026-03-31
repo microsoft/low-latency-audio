@@ -2162,7 +2162,7 @@ class USBAudioStreamInterfaceGroup
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    UCHAR Dump();
+    void Dump();
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -2219,6 +2219,7 @@ class USBAudioStreamInterfaceGroup
     VariableArray<USBAudioInterfaceInfo *, DEFAULT_SIZE_OF_STREAM_INTERFACES> m_usbAudioStreamInterfaceInfoes;
     ULONG                                                                     m_groupIndex{0};
     UCHAR                                                                     m_clockSourceID{0};
+    UCHAR                                                                     m_targetClockSourceID{0};
 };
 
 class USBAudioConfiguration
@@ -2312,6 +2313,11 @@ class USBAudioConfiguration
         _In_ UCHAR           entityID,
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
     );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    bool
+    IsMultipleClockSources();
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG

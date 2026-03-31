@@ -5255,7 +5255,7 @@ USBAudioStreamInterfaceGroup::USBAudioStreamInterfaceGroup(
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
-    m_clockSourceID = USBAudioConfiguration::InvalidID;
+    m_targetClockSourceID = m_clockSourceID = USBAudioConfiguration::InvalidID;
     m_groupIndex = groupIndex;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
@@ -5317,7 +5317,7 @@ USBAudioStreamInterfaceGroup::SetCurrentSampleFrequency(
     ASSERT(m_usbAudioControlInterface != nullptr);
     if (m_usbAudioControlInterface != nullptr)
     {
-        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->SetCurrentSampleFrequency(m_deviceContext, m_clockSourceID, desiredSampleRate));
+        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->SetCurrentSampleFrequency(m_deviceContext, m_targetClockSourceID, desiredSampleRate));
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
@@ -5340,7 +5340,7 @@ USBAudioStreamInterfaceGroup::GetCurrentSampleFrequency(
     ASSERT(m_usbAudioControlInterface != nullptr);
     if (m_usbAudioControlInterface != nullptr)
     {
-        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetCurrentSampleFrequency(m_deviceContext, m_clockSourceID, sampleRate));
+        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetCurrentSampleFrequency(m_deviceContext, m_targetClockSourceID, sampleRate));
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
@@ -5357,7 +5357,7 @@ bool USBAudioStreamInterfaceGroup::CanSetSampleFrequency()
     ASSERT(m_usbAudioControlInterface != nullptr);
     if (m_usbAudioControlInterface != nullptr)
     {
-        return m_usbAudioControlInterface->CanSetSampleFrequency(m_clockSourceID);
+        return m_usbAudioControlInterface->CanSetSampleFrequency(m_targetClockSourceID);
     }
 
     return false;
@@ -5588,16 +5588,18 @@ NTSTATUS USBAudioStreamInterfaceGroup::QueryRangeAttributeAll(
     AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet
 )
 {
-    UCHAR targetClockSourceID = m_clockSourceID;
-
     PAGED_CODE();
 
-    RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->SetCurrentClockSourceInternal(m_deviceContext, targetClockSourceID));
+    m_targetClockSourceID = m_clockSourceID;
 
-    RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetCurrentClockSourceID(m_deviceContext, targetClockSourceID));
+    RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->SetCurrentClockSourceInternal(m_deviceContext, m_targetClockSourceID));
+
+    RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetCurrentClockSourceID(m_deviceContext, m_targetClockSourceID));
 
     //  CS_SAM_FREQ_CONTROL ranges
-    RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetRangeSampleFrequency(m_deviceContext, targetClockSourceID, audioStreamPropertySet.AudioProperty.SupportedSampleRate));
+    RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetRangeSampleFrequency(m_deviceContext, m_targetClockSourceID, audioStreamPropertySet.AudioProperty.SupportedSampleRate));
+
+    audioStreamPropertySet.AudioProperty.SupportedSampleFormats = GetSupportedSampleFormats();
 
     return STATUS_SUCCESS;
 }
@@ -5776,6 +5778,7 @@ USBAudioStreamInterfaceGroup::GetStreamChannelInfo(
         }
         volumeUnitID = muteUnitID = USBAudioConfiguration::InvalidID;
     }
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - %!bool! %u channels, terminal type 0x%x, volumeUnitID 0x%02x, muteUnitID 0x%02x", isInput, numOfChannels, terminalType, volumeUnitID, muteUnitID);
 
     return status;
 }
@@ -5824,11 +5827,11 @@ USBAudioStreamInterfaceGroup::GetStreamDevices(
 
     if (m_isDeviceSplittable)
     {
-        numOfDevices = 1;
+        numOfDevices = (numOfChannels / 2) + (numOfChannels % 2); // stereo or stereo + mono
     }
     else
     {
-        numOfDevices = (numOfChannels / 2) + (numOfChannels % 2); // stereo or stereo + mono
+        numOfDevices = 1;
     }
 
     return STATUS_SUCCESS;
@@ -6109,11 +6112,11 @@ USBAudioStreamInterfaceGroup::GetGroupIndex()
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
-UCHAR USBAudioStreamInterfaceGroup::Dump()
+void USBAudioStreamInterfaceGroup::Dump()
 {
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - USBAudioStreamInterfaceGroup %u, clock id 0x%02x", m_groupIndex, GetClockSourceID());
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - USBAudioStreamInterfaceGroup %u, clock id 0x%02x, target clock id 0x%02x", m_groupIndex, GetClockSourceID(), m_targetClockSourceID);
     for (auto usbAudioInterfaceInfo : m_usbAudioStreamInterfaceInfoes)
     {
         if (usbAudioInterfaceInfo != nullptr)
@@ -6121,8 +6124,6 @@ UCHAR USBAudioStreamInterfaceGroup::Dump()
             usbAudioInterfaceInfo->Dump();
         }
     }
-
-    return m_clockSourceID;
 }
 
 _Use_decl_annotations_
@@ -7752,12 +7753,23 @@ bool USBAudioConfiguration::IsEnableASIO()
     // If the device supports USB Audio Data Format Type III, ASIO is treated as unsupported.
     //
     // TBD 202603
-    if (/* ((m_deviceContext->AudioProperty.SupportedSampleFormats & sampleFormatsTypeIII) != 0) || */ (GetClockEntityCountForTerminal() > 1) || (GetClockEntityCountForInterface() > 1))
+    if (/* ((m_deviceContext->AudioProperty.SupportedSampleFormats & sampleFormatsTypeIII) != 0) || */ IsMultipleClockSources())
     {
         enableASIO = false;
     }
 
     return enableASIO;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+bool USBAudioConfiguration::IsMultipleClockSources()
+{
+    PAGED_CODE();
+
+    bool isMultipleClockSources = (GetClockEntityCountForTerminal() > 1) || (GetClockEntityCountForInterface() > 1);
+
+    return isMultipleClockSources;
 }
 
 PAGED_CODE_SEG

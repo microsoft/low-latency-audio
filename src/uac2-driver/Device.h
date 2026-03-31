@@ -434,12 +434,6 @@ USBAudioAcxDriverStreamGetCurrentTimeUs(
 
 __drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-bool USBAudioAcxDriverHasAsioOwnership(
-    _In_ PDEVICE_CONTEXT deviceContext
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
 VOID EvtUSBAudioAcxDriverGetAudioProperty(
     _In_ WDFOBJECT  object,
     _In_ WDFREQUEST request

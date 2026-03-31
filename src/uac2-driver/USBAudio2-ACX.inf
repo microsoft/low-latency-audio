@@ -118,21 +118,22 @@ HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 ;
 [USBAudio2-ACX_Device.NT.Interfaces]
 ; Interfaces for render endpoint.
-AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_RenderDevice%,  USBAudio2-ACX_Device.I.RenderDevice
-AddInterface=%KSCATEGORY_RENDER%,   %KSNAME_RenderDevice%,  USBAudio2-ACX_Device.I.RenderDevice
-AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_RenderDevice%,  USBAudio2-ACX_Device.I.RenderDevice
+AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_RenderDevice000%,  USBAudio2-ACX_Device.I.RenderDevice
+AddInterface=%KSCATEGORY_RENDER%,   %KSNAME_RenderDevice000%,  USBAudio2-ACX_Device.I.RenderDevice
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_RenderDevice000%,  USBAudio2-ACX_Device.I.RenderDevice
 
-; Interfaces for mic capture endpoint 
-AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_CaptureDevice%, USBAudio2-ACX_Device.I.CaptureDevice
-AddInterface=%KSCATEGORY_CAPTURE%,  %KSNAME_CaptureDevice%, USBAudio2-ACX_Device.I.CaptureDevice
-AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_CaptureDevice%, USBAudio2-ACX_Device.I.CaptureDevice
+; Interfaces for capture endpoint 
+AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_CaptureDevice000%, USBAudio2-ACX_Device.I.CaptureDevice
+AddInterface=%KSCATEGORY_CAPTURE%,  %KSNAME_CaptureDevice000%, USBAudio2-ACX_Device.I.CaptureDevice
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_CaptureDevice000%, USBAudio2-ACX_Device.I.CaptureDevice
+
 
 [Strings]
 ;
 ;Non-localizable
 ;
-KSNAME_RenderDevice="RenderDevice0"
-KSNAME_CaptureDevice="CaptureDevice0"
+KSNAME_RenderDevice000="RenderDevice000"
+KSNAME_CaptureDevice000="CaptureDevice000"
 
 SPSVCINST_ASSOCSERVICE= 0x00000002
 ProviderName = "Microsoft Corporation"

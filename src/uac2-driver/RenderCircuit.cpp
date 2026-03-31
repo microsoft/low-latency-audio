@@ -596,8 +596,8 @@ Routine Description:
     *                                                                         *
     ***************************************************************************
 
-    For example, if the Circuit name is "Speaker0", the path to the device interface for this Circuit would be:
-    "\\?\usb#vid_0499&pid_1509#5&3821233e&0&11#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\RenderDevice0"
+    For example, if the Circuit name is "RenderDevice000", the path to the device interface for this Circuit would be:
+    "\\?\usb#vid_0499&pid_1509#5&3821233e&0&11#{6994ad04-93ef-11d0-a3cc-00a0c9223196}\RenderDevice000"
 
 Return Value:
 
@@ -1110,6 +1110,7 @@ Return Value:
             pinContext->DeviceIndex = index;
             pinContext->Channel = index * 2;
             pinContext->NumOfChannelsPerDevice = numOfChannelsPerDevice;
+            pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
         }
 
         ///////////////////////////////////////////////////////////

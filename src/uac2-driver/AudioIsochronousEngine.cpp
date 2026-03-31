@@ -120,8 +120,21 @@ AudioIsochronousEngine::AudioIsochronousEngine(
     m_audioStreamPropertySet.AudioProperty.DeviceRelease = m_deviceContext->DeviceRelease;
     m_audioStreamPropertySet.DesiredSampleFormat = UACSampleFormat::UAC_SAMPLE_FORMAT_PCM;
     m_audioStreamPropertySet.AudioProperty.CurrentSampleFormat = UACSampleFormat::UAC_SAMPLE_FORMAT_PCM;
+    m_audioStreamPropertySet.AudioProperty.ProductName[0] = NULL;
 
-    RtlStringCbCopyW(m_audioStreamPropertySet.AudioProperty.ProductName, UAC_MAX_PRODUCT_NAME_LENGTH * sizeof(WCHAR), m_deviceContext->ProductName);
+    if (m_deviceContext->UsbAudioConfiguration->IsMultipleClockSources())
+    {
+        DECLARE_UNICODE_STRING_SIZE(productName, UAC_MAX_PRODUCT_NAME_LENGTH);
+        NTSTATUS status = RtlUnicodeStringPrintf(&productName, L"%ws %d", m_deviceContext->ProductName, m_usbAudioStreamInterfaceGroup->GetGroupIndex());
+        if (NT_SUCCESS(status))
+        {
+            RtlStringCbCopyW(m_audioStreamPropertySet.AudioProperty.ProductName, UAC_MAX_PRODUCT_NAME_LENGTH * sizeof(WCHAR), productName.Buffer);
+        }
+    }
+    if (m_audioStreamPropertySet.AudioProperty.ProductName[0] == NULL)
+    {
+        RtlStringCbCopyW(m_audioStreamPropertySet.AudioProperty.ProductName, UAC_MAX_PRODUCT_NAME_LENGTH * sizeof(WCHAR), m_deviceContext->ProductName);
+    }
 
     if (m_deviceContext->IsDeviceHighSpeed || m_deviceContext->IsDeviceSuperSpeed)
     {
@@ -1515,7 +1528,6 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
     ASSERT(streamObject);
 
     currentTimeUs = USBAudioAcxDriverStreamGetCurrentTimeUs(m_deviceContext, &qpcPosition);
-    TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " %llu, %llu", currentTimeUs, qpcPosition);
 
     status = completionParams->IoStatus.Status;
     if (!NT_SUCCESS(status) && (status != STATUS_CANCELLED))
@@ -4045,7 +4057,7 @@ NTSTATUS AudioIsochronousEngine::GetOutputLatency(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS AudioIsochronousEngine::SetAsioDevice(
-    _In_ PUNICODE_STRING asioDevice
+    const WDFSTRING asioDeviceString
 )
 {
     NTSTATUS status = STATUS_SUCCESS;
@@ -4054,7 +4066,7 @@ NTSTATUS AudioIsochronousEngine::SetAsioDevice(
 
     AcquireStreamWaitLock();
 
-    status = SaveAsioDeviceToRegistry(asioDevice);
+    status = SaveAsioDeviceToRegistry(asioDeviceString);
 
     ReleaseStreamWaitLock();
 
@@ -4064,7 +4076,7 @@ NTSTATUS AudioIsochronousEngine::SetAsioDevice(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS AudioIsochronousEngine::GetAsioDevice(
-    UNICODE_STRING & asioDevice
+    WDFSTRING & asioDeviceString
 )
 {
     NTSTATUS status = STATUS_SUCCESS;
@@ -4073,7 +4085,7 @@ NTSTATUS AudioIsochronousEngine::GetAsioDevice(
 
     AcquireStreamWaitLock();
 
-    status = LoadAsioDeviceFromRegistry(&asioDevice);
+    status = LoadAsioDeviceFromRegistry(asioDeviceString);
 
     ReleaseStreamWaitLock();
 
@@ -4438,7 +4450,7 @@ NTSTATUS AudioIsochronousEngine::LoadInternalParametersFromDeviceRegistry()
             }
         );
 
-        RETURN_NTSTATUS_IF_FAILED(WdfDeviceOpenRegistryKey(m_deviceContext->Device, PLUGPLAY_REGKEY_DEVICE, KEY_WRITE | KEY_READ, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
+        RETURN_NTSTATUS_IF_FAILED(WdfDeviceOpenRegistryKey(m_deviceContext->Device, PLUGPLAY_REGKEY_DEVICE, KEY_READ | KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
 
         RETURN_NTSTATUS_IF_FAILED(OpenSubRegistryKey(registryKey, registrySubKey));
 
@@ -4549,7 +4561,7 @@ NTSTATUS AudioIsochronousEngine::SaveInternalParametersToDeviceRegistry()
         }
     );
 
-    RETURN_NTSTATUS_IF_FAILED(WdfDeviceOpenRegistryKey(m_deviceContext->Device, PLUGPLAY_REGKEY_DEVICE, KEY_WRITE | KEY_READ, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
+    RETURN_NTSTATUS_IF_FAILED(WdfDeviceOpenRegistryKey(m_deviceContext->Device, PLUGPLAY_REGKEY_DEVICE, KEY_READ | KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
 
     RETURN_NTSTATUS_IF_FAILED(OpenSubRegistryKey(registryKey, registrySubKey));
 
@@ -4594,7 +4606,7 @@ NTSTATUS AudioIsochronousEngine::SaveInternalParametersToDeviceRegistry()
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS AudioIsochronousEngine::SaveAsioDeviceToRegistry(
-    PUNICODE_STRING asioDevice
+    const WDFSTRING asioDeviceString
 )
 {
     PAGED_CODE();
@@ -4603,16 +4615,9 @@ NTSTATUS AudioIsochronousEngine::SaveAsioDeviceToRegistry(
 
     NTSTATUS status = STATUS_SUCCESS;
     WDFKEY   registryKey = nullptr;
-    WDFKEY   registrySubKey = nullptr;
 
     auto exitProcess = wil::scope_exit(
         [&]() {
-            if (registrySubKey != nullptr)
-            {
-                WdfRegistryClose(registrySubKey);
-                registrySubKey = nullptr;
-            }
-
             if (registryKey != nullptr)
             {
                 WdfRegistryClose(registryKey);
@@ -4623,19 +4628,12 @@ NTSTATUS AudioIsochronousEngine::SaveAsioDeviceToRegistry(
         }
     );
 
-    RETURN_NTSTATUS_IF_TRUE(asioDevice == nullptr, STATUS_INVALID_PARAMETER);
-
-    RETURN_NTSTATUS_IF_FAILED(WdfRegistryOpenKey(nullptr, &g_RegistryPath, KEY_WRITE | KEY_READ, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
-
-    RETURN_NTSTATUS_IF_FAILED(OpenSubRegistryKey(registryKey, registrySubKey));
+    RETURN_NTSTATUS_IF_FAILED(WdfRegistryOpenKey(nullptr, &g_RegistryPath, KEY_READ | KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
 
     UNICODE_STRING valueName;
     RtlInitUnicodeString(&valueName, c_AsioDeviceName);
 
-    WDFSTRING value = nullptr;
-    RETURN_NTSTATUS_IF_FAILED(WdfStringCreate(asioDevice, WDF_NO_OBJECT_ATTRIBUTES, &value));
-
-    RETURN_NTSTATUS_IF_FAILED(WdfRegistryAssignString(registrySubKey, &valueName, value));
+    RETURN_NTSTATUS_IF_FAILED(WdfRegistryAssignString(registryKey, &valueName, asioDeviceString));
 
     return STATUS_SUCCESS;
 }
@@ -4643,7 +4641,7 @@ NTSTATUS AudioIsochronousEngine::SaveAsioDeviceToRegistry(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS AudioIsochronousEngine::LoadAsioDeviceFromRegistry(
-    PUNICODE_STRING asioDevice
+    WDFSTRING & asioDeviceString
 )
 {
     PAGED_CODE();
@@ -4652,16 +4650,9 @@ NTSTATUS AudioIsochronousEngine::LoadAsioDeviceFromRegistry(
 
     NTSTATUS status = STATUS_SUCCESS;
     WDFKEY   registryKey = nullptr;
-    WDFKEY   registrySubKey = nullptr;
 
     auto exitProcess = wil::scope_exit(
         [&]() {
-            if (registrySubKey != nullptr)
-            {
-                WdfRegistryClose(registrySubKey);
-                registrySubKey = nullptr;
-            }
-
             if (registryKey != nullptr)
             {
                 WdfRegistryClose(registryKey);
@@ -4672,26 +4663,12 @@ NTSTATUS AudioIsochronousEngine::LoadAsioDeviceFromRegistry(
         }
     );
 
-    RETURN_NTSTATUS_IF_TRUE(asioDevice == nullptr, STATUS_INVALID_PARAMETER);
-
-    RETURN_NTSTATUS_IF_FAILED(WdfRegistryOpenKey(nullptr, &g_RegistryPath, KEY_WRITE | KEY_READ, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
-
-    RETURN_NTSTATUS_IF_FAILED(OpenSubRegistryKey(registryKey, registrySubKey));
+    RETURN_NTSTATUS_IF_FAILED(WdfRegistryOpenKey(nullptr, &g_RegistryPath, KEY_READ | KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
 
     UNICODE_STRING valueName;
     RtlInitUnicodeString(&valueName, c_AsioDeviceName);
 
-    WDFSTRING value = nullptr;
-    RETURN_NTSTATUS_IF_FAILED(WdfStringCreate(nullptr, WDF_NO_OBJECT_ATTRIBUTES, &value));
-    RETURN_NTSTATUS_IF_FAILED(WdfRegistryQueryString(registrySubKey, &valueName, value));
-
-    WdfStringGetUnicodeString(value, asioDevice);
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "asioDevice->Buffer = %ls", asioDevice->Buffer);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "asioDevice->Length = %u", asioDevice->Length);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "asioDevice->MaximumLength = %u", asioDevice->MaximumLength);
-
-    return STATUS_SUCCESS;
+    return WdfRegistryQueryString(registryKey, &valueName, asioDeviceString);
 }
 
 PAGED_CODE_SEG
@@ -4705,9 +4682,8 @@ NTSTATUS AudioIsochronousEngine::SaveSampleRateToRegistry(
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    NTSTATUS status = STATUS_SUCCESS;
-    WDFKEY   registryKey = nullptr;
-    WDFKEY   registrySubKey = nullptr;
+    WDFKEY registryKey = nullptr;
+    WDFKEY registrySubKey = nullptr;
 
     auto exitProcess = wil::scope_exit(
         [&]() {
@@ -4723,13 +4699,13 @@ NTSTATUS AudioIsochronousEngine::SaveSampleRateToRegistry(
                 registryKey = nullptr;
             }
 
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
         }
     );
 
     RETURN_NTSTATUS_IF_TRUE(device == nullptr, STATUS_INVALID_PARAMETER);
 
-    RETURN_NTSTATUS_IF_FAILED(WdfDeviceOpenRegistryKey(device, PLUGPLAY_REGKEY_DEVICE, KEY_WRITE | KEY_READ, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
+    RETURN_NTSTATUS_IF_FAILED(WdfDeviceOpenRegistryKey(device, PLUGPLAY_REGKEY_DEVICE, KEY_READ | KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
 
     RETURN_NTSTATUS_IF_FAILED(OpenSubRegistryKey(registryKey, registrySubKey));
 
@@ -4785,11 +4761,18 @@ NTSTATUS AudioIsochronousEngine::LoadSampleRateFromRegistry(
     ULONG value = 0;
     ULONG resultLength = 0;
 
-    RETURN_NTSTATUS_IF_FAILED(WdfRegistryQueryValue(registrySubKey, &valueName, sizeof(ULONG), &value, &resultLength, nullptr));
+    NTSTATUS status = WdfRegistryQueryValue(registrySubKey, &valueName, sizeof(ULONG), &value, &resultLength, nullptr);
+    if (NT_SUCCESS(status))
+    {
+        sampleRate = value;
+    }
+    else if (status == STATUS_OBJECT_NAME_NOT_FOUND)
+    {
+        status = STATUS_SUCCESS;
+        sampleRate = UAC_DEFAULT_SAMPLE_RATE;
+    }
 
-    sampleRate = value;
-
-    return STATUS_SUCCESS;
+    return status;
 }
 
 PAGED_CODE_SEG
