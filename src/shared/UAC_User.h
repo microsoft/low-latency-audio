@@ -194,7 +194,8 @@ typedef struct _UAC_AUDIO_PROPERTY
     LONG            OutputLatencyOffset;                      // Output latency compensation
     ULONG           OutputDriverBuffer;                       //
     ULONG           ClockSources;                             //
-    BOOLEAN         IsAccessible;
+    BOOLEAN         IsAccessible;                             //
+    BOOLEAN         IsEnableASIO;                             //
 } UAC_AUDIO_PROPERTY, *PUAC_AUDIO_PROPERTY;
 
 typedef struct UAC_CHANNEL_INFO_

@@ -284,6 +284,8 @@ AudioIsochronousEngine::Initialize()
         }
     }
 
+    m_audioStreamPropertySet.AudioProperty.IsEnableASIO = m_deviceContext->UsbAudioConfiguration->IsEnableASIO() ? TRUE : FALSE;
+
     ULONG desiredSampleRate = UAC_DEFAULT_SAMPLE_RATE;
 
     LoadSampleRateFromRegistry(m_deviceContext->Device, desiredSampleRate);

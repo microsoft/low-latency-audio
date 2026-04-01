@@ -1545,8 +1545,25 @@ void StreamObject::MixingEngineThreadFunction(
     ASSERT(streamObject->m_deviceContext != nullptr);
     ASSERT(streamObject->m_deviceContext == deviceContext);
 
-    streamObject->MixingEngineThreadMain(deviceContext);
-    // streamObject->MixingEngineThreadMainWithoutASIO(deviceContext);
+    const bool hasInputIsochronousInterface = streamObject->m_audioIsochronousEngine->HasInputIsochronousInterface();
+    const bool hasOutputIsochronousInterface = streamObject->m_audioIsochronousEngine->HasOutputIsochronousInterface();
+
+    if (deviceContext->UsbAudioConfiguration->IsEnableASIO())
+    {
+        streamObject->MixingEngineThreadMain(deviceContext);
+    }
+    else if (hasInputIsochronousInterface && !hasOutputIsochronousInterface)
+    {
+        streamObject->MixingEngineInputThreadMainWithoutASIO(deviceContext);
+    }
+    else if (!hasInputIsochronousInterface && hasOutputIsochronousInterface)
+    {
+        streamObject->MixingEngineOutputThreadMainWithoutASIO(deviceContext);
+    }
+    else
+    {
+        streamObject->MixingEngineThreadMainWithoutASIO(deviceContext);
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
@@ -1583,6 +1600,8 @@ void StreamObject::MixingEngineThreadMain(
     LONGLONG        asioNotifyCount = 0LL;
     const bool      hasInputIsochronousInterface = m_audioIsochronousEngine->HasInputIsochronousInterface();
     const bool      hasOutputIsochronousInterface = m_audioIsochronousEngine->HasOutputIsochronousInterface();
+    const ULONG     basePacketsPerIrp = hasInputIsochronousInterface ? inputPacketsPerIrp : outputPacketsPerIrp;
+    const ULONG     basePacketsPerMs = hasInputIsochronousInterface ? inputPacketsPerMs : outputPacketsPerMs;
 
     PAGED_CODE();
 
@@ -1690,7 +1709,7 @@ void StreamObject::MixingEngineThreadMain(
 
         // Analyze and decide which packets to use.
         // The determined packet will be recorded in StreamObject::m_inputEstimatedPacket.
-        DeterminePacket(inCompletedPacket, usbBusTimeDiff, inputPacketsPerIrp, inputPacketsPerMs);
+        DeterminePacket(inCompletedPacket, usbBusTimeDiff, basePacketsPerIrp, basePacketsPerMs);
 
         // Counts packets for which isochronous IN processing has been completed and creates a list.
         // The created list is stored in inBuffer, and if there is a remainder (inputRemainder) from the previous thread wakeup, it is allocated to the beginning of that list.
@@ -2316,7 +2335,7 @@ void StreamObject::MixingEngineThreadMainWithoutASIO(
             deviceContext->ErrorStatistics->LogErrorOccurrence(ErrorStatus::DropoutDetectedSafetyOffset, 0);
         }
 
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - In buffers count %u, ioStable 0x%x, inLoopExitReason %u", inBuffersCount, static_cast<ULONG>(streamStatus), static_cast<ULONG>(inLoopExitReason));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - In buffers count %u, ioStable 0x%x, inLoopExitReason %u", inBuffersCount, static_cast<ULONG>(streamStatus), static_cast<ULONG>(inLoopExitReason));
         if ((streamStatus == c_ioSteady) && hasInputIsochronousInterface)
         {
             for (ULONG bufIndex = 0; bufIndex < inBuffersCount; ++bufIndex)
@@ -2348,7 +2367,7 @@ void StreamObject::MixingEngineThreadMainWithoutASIO(
         }
         ULONG bytesPerBlock = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
 
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - Out buffers count %u, ioStable 0x%x, outLoopExitReason %u", outBuffersCount, static_cast<int>(streamStatus), static_cast<ULONG>(outLoopExitReason));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Out buffers count %u, ioStable 0x%x, outLoopExitReason %u", outBuffersCount, static_cast<int>(streamStatus), static_cast<ULONG>(outLoopExitReason));
 
         if (hasOutputIsochronousInterface)
         {
@@ -2531,8 +2550,7 @@ void StreamObject::MixingEngineInputThreadMainWithoutASIO(
             lastInProcessedPCUs = currentTimePCUs;
         }
 
-        // Dropout Detection
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - In buffers count %u, ioStable 0x%x, inLoopExitReason %u", inBuffersCount, static_cast<ULONG>(streamStatus), static_cast<ULONG>(inLoopExitReason));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - In buffers count %u, ioStable 0x%x, inLoopExitReason %u", inBuffersCount, static_cast<ULONG>(streamStatus), static_cast<ULONG>(inLoopExitReason));
         if ((streamStatus == c_ioSteady) && hasInputIsochronousInterface)
         {
             for (ULONG bufIndex = 0; bufIndex < inBuffersCount; ++bufIndex)
@@ -2635,12 +2653,23 @@ void StreamObject::MixingEngineOutputThreadMainWithoutASIO(
             inElapsedTimeAfterDpc = (LONG)((LONGLONG)currentTimePCUs - m_outputIsoRequestCompletionTime.LastTimeUs);
         }
 
+        // Use WdfUsbTargetDeviceRetrieveCurrentFrameNumber() instead of USB_BUS_INTERFACE_USBDI_V1::QueryBusTime().
+        // Use USB bus time for control
+        ULONG usbBusTimeCurrent = GetCurrentFrame(deviceContext);
+
+        // Guess USB bus time so that you can respond even if the obtained USB bus time is an abnormal value.
+        ULONG usbBusTimeDiff = EstimateUSBBusTime(usbBusTimeCurrent, pcDiffUs);
+
         UpdateElapsedTimeUs(pcDiffUs);
 
         LONGLONG inCompletedPacket = 0LL;  // IN Number of packets that have been transferred isochronous
         LONGLONG outCompletedPacket = 0LL; // OUT Number of packets that have been transferred isochronous
         GetCompletedPacket(inCompletedPacket, outCompletedPacket);
         // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - in completed packet, out completed packet %llu, %lld", inCompletedPacket, outCompletedPacket);
+
+        // Analyze and decide which packets to use.
+        // The determined packet will be recorded in StreamObject::m_inputEstimatedPacket.
+        DeterminePacket(inCompletedPacket, usbBusTimeDiff, outputPacketsPerIrp, outputPacketsPerMs);
 
         // Counts packets for which isochronous IN processing has been completed and creates a list.
         // The created list is stored in inBuffer, and if there is a remainder (inputRemainder) from the previous thread wakeup, it is allocated to the beginning of that list.
@@ -2704,7 +2733,6 @@ void StreamObject::MixingEngineOutputThreadMainWithoutASIO(
             lastInProcessedPCUs = currentTimePCUs;
         }
 
-        // Dropout Detection
         ULONG outMinOffsetFrame = m_audioIsochronousEngine->GetUsbLatency().OutputOffsetFrame;
         if (outMinOffsetFrame >= (m_audioIsochronousEngine->GetAudioStreamPropertySet().InternalParameters.MaxIrpNumber - 2) * outputPacketsPerIrp)
         {
@@ -2713,7 +2741,7 @@ void StreamObject::MixingEngineOutputThreadMainWithoutASIO(
 
         ULONG bytesPerBlock = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
 
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - Out buffers count %u, ioStable 0x%x, outLoopExitReason %u", outBuffersCount, static_cast<int>(streamStatus), static_cast<ULONG>(outLoopExitReason));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Out buffers count %u, ioStable 0x%x, outLoopExitReason %u", outBuffersCount, static_cast<int>(streamStatus), static_cast<ULONG>(outLoopExitReason));
 
         if (hasOutputIsochronousInterface)
         {

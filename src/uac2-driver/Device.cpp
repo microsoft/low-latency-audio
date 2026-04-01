@@ -590,7 +590,8 @@ Return Value:
         WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
         attributes.ParentObject = deviceContext->UsbDevice;
 
-        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(AudioIsochronousEngine *) * deviceContext->NumberOfAudioIsochronousEngines, &deviceContext->AudioIsochronousEnginesMemory, (PVOID *)&deviceContext->AudioIsochronousEngines));
+        RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(AudioIsochronousEngine *) * deviceContext->NumberOfAudioIsochronousEngines, &deviceContext->AudioIsochronousEnginesMemory, nullptr));
+		deviceContext->AudioIsochronousEngines = (AudioIsochronousEngine**)WdfMemoryGetBuffer( deviceContext->AudioIsochronousEnginesMemory, nullptr);
 
         RtlZeroMemory(deviceContext->AudioIsochronousEngines, sizeof(AudioIsochronousEngine *) * deviceContext->NumberOfAudioIsochronousEngines);
 
