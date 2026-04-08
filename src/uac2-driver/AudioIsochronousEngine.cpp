@@ -3975,40 +3975,28 @@ NTSTATUS AudioIsochronousEngine::SetBufferPeriod(
 
     if (bufferPeriod != m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod)
     {
-
-        if ((m_startCounterAsio != 0) || (m_startCounterWdmAudio != 0))
-        {
-            StopIsoStream();
-        }
-
-        status = UpdateFramePerIrp(bufferPeriod);
-        ASSERT(NT_SUCCESS(status));
-
-        status = UpdateBufferOperationOffset(bufferPeriod);
-        ASSERT(NT_SUCCESS(status));
-
-        m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod = bufferPeriod;
-
-        status = ActivateAudioInterface(
-            m_audioStreamPropertySet.AudioProperty.SampleRate,
-            NS_USBAudio0200::FORMAT_TYPE_I,
-            NS_USBAudio0200::PCM,
-            m_audioStreamPropertySet.InputProperty.BytesPerSample,
-            m_audioStreamPropertySet.InputProperty.ValidBitsPerSample,
-            m_audioStreamPropertySet.OutputProperty.BytesPerSample,
-            m_audioStreamPropertySet.OutputProperty.ValidBitsPerSample
-        );
-
-        if (NT_SUCCESS(status))
+        if (m_asioOwner != nullptr)
         {
             if ((m_startCounterAsio != 0) || (m_startCounterWdmAudio != 0))
             {
-                StartIsoStream();
+                StopIsoStream();
             }
-            else
-            {
-                ASSERT(NT_SUCCESS(status));
-            }
+
+            status = UpdateFramePerIrp(bufferPeriod);
+            ASSERT(NT_SUCCESS(status));
+
+            status = UpdateBufferOperationOffset(bufferPeriod);
+            ASSERT(NT_SUCCESS(status));
+
+            m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod = bufferPeriod;
+
+            m_asioBufferObject->SetRecDeviceStatus(DeviceStatuses::ResetRequired);
+            status = STATUS_SUCCESS;
+        }
+        else
+        {
+            m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod = bufferPeriod;
+            status = STATUS_SUCCESS;
         }
     }
     else
