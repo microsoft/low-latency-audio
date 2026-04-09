@@ -300,6 +300,110 @@ exit:
 } // EvtAudioCpuResourcesCallback
 
 PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
+ProcessRequestHandler_BasicSupport(
+    PACX_REQUEST_PARAMETERS Params,
+    ULONG                   Flags,
+    DWORD                   PropTypeSetId
+)
+{
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    ASSERT(Flags & KSPROPERTY_TYPE_BASICSUPPORT);
+
+    if (Params->Parameters.Property.ValueCb >= sizeof(KSPROPERTY_DESCRIPTION))
+    {
+        // if return buffer can hold a KSPROPERTY_DESCRIPTION, return it
+        //
+        PKSPROPERTY_DESCRIPTION propertyDescription = (PKSPROPERTY_DESCRIPTION)Params->Parameters.Property.Value;
+
+        propertyDescription->AccessFlags = Flags;
+        propertyDescription->DescriptionSize = sizeof(KSPROPERTY_DESCRIPTION);
+        if (VT_ILLEGAL != PropTypeSetId)
+        {
+            propertyDescription->PropTypeSet.Set = KSPROPTYPESETID_General;
+            propertyDescription->PropTypeSet.Id = PropTypeSetId;
+        }
+        else
+        {
+            propertyDescription->PropTypeSet.Set = GUID_NULL;
+            propertyDescription->PropTypeSet.Id = 0;
+        }
+        propertyDescription->PropTypeSet.Flags = 0;
+        propertyDescription->MembersListCount = 0;
+        propertyDescription->Reserved = 0;
+
+        Params->Parameters.Property.ValueCb = sizeof(KSPROPERTY_DESCRIPTION);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Description       = KSPROPERTY_DESCRIPTION ");
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AccessFlags       = 0x%08x", propertyDescription->AccessFlags);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - DescriptionSize   = 0x%08x", propertyDescription->DescriptionSize);
+        if (VT_ILLEGAL != PropTypeSetId)
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - PropertySet       = KSPROPERTYSETID_General %d", propertyDescription->PropTypeSet.Id);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  Set              = KSPROPTYPESETID_General");
+        }
+        else
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - PropertySet       = GUID_NULL 0");
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  Set              = GUID_NULL");
+        }
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  Id               = 0x%08x", propertyDescription->PropTypeSet.Id);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  Flags            = 0x%08x", propertyDescription->PropTypeSet.Flags);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  MembersListCount = 0x%08x", propertyDescription->MembersListCount);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  Reserved         = 0x%08x", propertyDescription->Reserved);
+        status = STATUS_SUCCESS;
+    }
+    else if (Params->Parameters.Property.ValueCb >= sizeof(ULONG))
+    {
+        // if return buffer can hold a ULONG, return the access flags
+        //
+        *(PULONG)(Params->Parameters.Property.Value) = Flags;
+
+        Params->Parameters.Property.ValueCb = sizeof(ULONG);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(Params->Parameters.Property.Value));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - ValueCb = 0x%08x", Params->Parameters.Property.ValueCb);
+        status = STATUS_SUCCESS;
+    }
+    else
+    {
+        Params->Parameters.Property.ValueCb = 0;
+        status = STATUS_BUFFER_TOO_SMALL;
+    }
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
+
+    return status;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
+ProcessRequestHandler_BasicSupportAgc(
+    PACX_REQUEST_PARAMETERS /* Params */,
+    ULONG /* Flags */,
+    DWORD /* PropTypeSetId */
+)
+{
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    // ASSERT(Flags & KSPROPERTY_TYPE_BASICSUPPORT);
+
+    // TBD
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
+
+    return status;
+}
+
+PAGED_CODE_SEG
 ULONG GetSampleRateFromIndex(_In_ ULONG Index)
 {
     PAGED_CODE();

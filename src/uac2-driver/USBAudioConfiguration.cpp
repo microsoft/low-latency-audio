@@ -1572,6 +1572,46 @@ bool USBAudio1ControlInterface::CanSetSampleFrequency(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+NTSTATUS
+USBAudio1ControlInterface::GetSelectorConfiguration(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* entityID */,
+    UCHAR & /* pins */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio1ControlInterface::SetCurrentSelector(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* entityID */,
+    UCHAR /* selectorIndex */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio1ControlInterface::GetCurrentSelector(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* entityID */,
+    UCHAR & /* selectorIndex */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 NTSTATUS USBAudio1ControlInterface::GetClockSourceIDFromTerminal(
     UCHAR /* terminalLink */,
     UCHAR & /* clockSourceID */
@@ -2361,6 +2401,82 @@ bool USBAudio2ControlInterface::CanSetSampleFrequency(
         canSetSampleFrequency = ((sampleFrequencyControls & NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_MASK) == NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_READ_WRITE);
     }
     return canSetSampleFrequency;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
+USBAudio2ControlInterface::GetSelectorConfiguration(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR   entityID,
+    UCHAR & pins
+)
+{
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    //
+    // Retrieve the range of the first valid channel.
+    //
+    for (auto & selectorUnitDescriptor : m_acSelectorUnitInfo)
+    {
+        if (selectorUnitDescriptor->bUnitID == entityID)
+        {
+            pins = selectorUnitDescriptor->bNrInPins;
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - selector unit pins %u", pins);
+            status = STATUS_SUCCESS;
+            break;
+        }
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio2ControlInterface::SetCurrentSelector(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           entityID,
+    UCHAR           selectorIndex
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    status = ControlRequestSetSelector(deviceContext, GetInterfaceNumber(), entityID, selectorIndex);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio2ControlInterface::GetCurrentSelector(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           entityID,
+    UCHAR &         selectorIndex
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    status = ControlRequestGetSelector(deviceContext, GetInterfaceNumber(), entityID, selectorIndex);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
 }
 
 _Use_decl_annotations_
@@ -6650,7 +6766,7 @@ USBAudioConfiguration::ParseDescriptors(PUSB_CONFIGURATION_DESCRIPTOR usbConfigu
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - MaxPower            = %u", m_usbConfigurationDescriptor->MaxPower);
 
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.ParentObject = m_deviceContext->UsbDevice;
+    attributes.ParentObject = m_deviceContext->Device;
 
     RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(USBAudioInterfaceInfo *) * m_usbConfigurationDescriptor->bNumInterfaces, &m_usbAudioStreamInterfaceInfoesMemory, (PVOID *)&m_usbAudioStreamInterfaceInfoes));
 
@@ -6990,7 +7106,7 @@ Return Value:
     ULONG indexLast;
 
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.ParentObject = m_deviceContext->UsbDevice;
+    attributes.ParentObject = m_deviceContext->Device;
     RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, length * sizeof(WCHAR), &memory, (PVOID *)&channelName));
 
     for (index = 0; (index < leftLength) && (index < rightLength); index++)
@@ -7733,6 +7849,75 @@ USBAudioConfiguration::GetCurrentConnectorState(
     if (m_usbAudioControlInterface != nullptr)
     {
         RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetCurrentConnectorState(deviceContext, entityID, connectorState));
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
+
+    return STATUS_SUCCESS;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
+USBAudioConfiguration::GetSelectorConfiguration(
+    UCHAR   entityID,
+    UCHAR & pins
+)
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+
+    PAGED_CODE();
+
+    ASSERT(m_usbAudioControlInterface != nullptr);
+    if (m_usbAudioControlInterface != nullptr)
+    {
+        status = m_usbAudioControlInterface->GetSelectorConfiguration(m_deviceContext, entityID, pins);
+    }
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudioConfiguration::SetCurrentSelector(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           entityID,
+    UCHAR           selectorIndex
+)
+{
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    ASSERT(m_usbAudioControlInterface != nullptr);
+    if (m_usbAudioControlInterface != nullptr)
+    {
+        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->SetCurrentSelector(deviceContext, entityID, selectorIndex));
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
+
+    return STATUS_SUCCESS;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudioConfiguration::GetCurrentSelector(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           entityID,
+    UCHAR &         selectorIndex
+)
+{
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    selectorIndex = 0;
+
+    ASSERT(m_usbAudioControlInterface != nullptr);
+    if (m_usbAudioControlInterface != nullptr)
+    {
+        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetCurrentSelector(deviceContext, entityID, selectorIndex));
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");

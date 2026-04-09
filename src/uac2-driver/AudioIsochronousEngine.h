@@ -458,9 +458,9 @@ class AudioIsochronousEngine
     _Success_(NT_SUCCESS(return))
     NTSTATUS
     GetChannelInfo(
-        _In_ PUAC_GET_CHANNEL_INFO_CONTEXT channelInfo,
-        _In_ ULONG                         contextSize,
-        _Out_ ULONG &                      minValueSize
+        _Inout_ PUAC_GET_CHANNEL_INFO_CONTEXT channelInfo,
+        _In_ ULONG                            contextSize,
+        _Out_ ULONG &                         minValueSize
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -468,9 +468,9 @@ class AudioIsochronousEngine
     _Success_(NT_SUCCESS(return))
     NTSTATUS
     GetClockInfo(
-        _In_ PUAC_GET_CLOCK_INFO_CONTEXT clockInfo,
-        _In_ ULONG                       contextSize,
-        _Out_ ULONG &                    minValueSize
+        _Inout_ PUAC_GET_CLOCK_INFO_CONTEXT clockInfo,
+        _In_ ULONG                          contextSize,
+        _Out_ ULONG &                       minValueSize
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)

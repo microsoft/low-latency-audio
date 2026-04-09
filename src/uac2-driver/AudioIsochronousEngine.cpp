@@ -2461,7 +2461,7 @@ _Use_decl_annotations_
 PAGED_CODE_SEG
 USBAudioDataFormatManager *
 AudioIsochronousEngine::GetUSBAudioDataFormatManager(
-    _In_ bool isInput
+    bool isInput
 )
 {
     PAGED_CODE();
@@ -3434,9 +3434,9 @@ AudioIsochronousEngine::GetChannelInfo(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS AudioIsochronousEngine::GetClockInfo(
-    _In_ PUAC_GET_CLOCK_INFO_CONTEXT clockInfo,
-    _In_ ULONG                       contextSize,
-    _Out_ ULONG &                    minValueSize
+    PUAC_GET_CLOCK_INFO_CONTEXT clockInfo,
+    ULONG                       contextSize,
+    ULONG &                     minValueSize
 )
 {
     NTSTATUS status = STATUS_SUCCESS;
@@ -3945,7 +3945,7 @@ Exit:
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS AudioIsochronousEngine::GetBufferPeriod(
-    _Out_ ULONG & bufferPeriod
+    ULONG & bufferPeriod
 )
 {
     PAGED_CODE();

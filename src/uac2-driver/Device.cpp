@@ -588,10 +588,10 @@ Return Value:
         deviceContext->NumberOfAudioIsochronousEngines = deviceContext->UsbAudioConfiguration->GetNumOfStreamInterfaceGroup();
 
         WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-        attributes.ParentObject = deviceContext->UsbDevice;
+        attributes.ParentObject = device;
 
         RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(AudioIsochronousEngine *) * deviceContext->NumberOfAudioIsochronousEngines, &deviceContext->AudioIsochronousEnginesMemory, nullptr));
-		deviceContext->AudioIsochronousEngines = (AudioIsochronousEngine**)WdfMemoryGetBuffer( deviceContext->AudioIsochronousEnginesMemory, nullptr);
+        deviceContext->AudioIsochronousEngines = (AudioIsochronousEngine **)WdfMemoryGetBuffer(deviceContext->AudioIsochronousEnginesMemory, nullptr);
 
         RtlZeroMemory(deviceContext->AudioIsochronousEngines, sizeof(AudioIsochronousEngine *) * deviceContext->NumberOfAudioIsochronousEngines);
 
@@ -1195,7 +1195,7 @@ Return Value:
     //
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
 
-    attributes.ParentObject = deviceContext->UsbDevice;
+    attributes.ParentObject = device;
 
     status = WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, size, &memory, (PVOID *)&configurationDescriptor);
     if (!NT_SUCCESS(status))
@@ -1825,10 +1825,10 @@ VOID EvtUSBAudioAcxDriverGetClockInfo(
 
     if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        ULONG                         minValueSize = 0;
-        PUAC_GET_CHANNEL_INFO_CONTEXT channelInfo = (PUAC_GET_CHANNEL_INFO_CONTEXT)(params.Parameters.Property.Value);
+        ULONG                       minValueSize = 0;
+        PUAC_GET_CLOCK_INFO_CONTEXT clockInfo = (PUAC_GET_CLOCK_INFO_CONTEXT)(params.Parameters.Property.Value);
 
-        status = circuitContext->AudioIsochronousEngine->GetChannelInfo(channelInfo, params.Parameters.Property.ValueCb, minValueSize);
+        status = circuitContext->AudioIsochronousEngine->GetClockInfo(clockInfo, params.Parameters.Property.ValueCb, minValueSize);
         outDataCb = minValueSize;
     }
 Exit:

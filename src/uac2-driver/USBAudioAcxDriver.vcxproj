@@ -27,6 +27,7 @@
     <ClCompile Include="AsioBufferObject.cpp" />
     <ClCompile Include="AudioIsochronousEngine.cpp" />
     <ClCompile Include="CaptureCircuit.cpp" />
+    <ClCompile Include="CircuitCommon.cpp" />
     <ClCompile Include="CircuitHelper.cpp" />
     <ClCompile Include="ContiguousMemory.cpp" />
     <ClCompile Include="Device.cpp" />

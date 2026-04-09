@@ -159,6 +159,7 @@ typedef int BOOL;
 #define ALL_CHANNELS_ID UINT32_MAX
 #define MAX_CHANNELS    32
 
+class USBAudioDataFormatManager;
 class AudioIsochronousEngine;
 
 //
@@ -240,6 +241,31 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(VOLUME_ELEMENT_CONTEXT, GetVolumeElementConte
 #define VOLUME_STEPPING      0x8000
 #define VOLUME_LEVEL_MAXIMUM 0x00000000
 #define VOLUME_LEVEL_MINIMUM (-96 * 0x10000)
+
+//
+// Define circuit/stream element context.
+//
+typedef struct _MUX_ELEMENT_CONTEXT
+{
+    WDFDEVICE Device;
+    UCHAR     EntityID;
+    ULONG     SelectedPinId;
+    ULONG     NumberOfChannels;
+} MUX_ELEMENT_CONTEXT, *PMUX_ELEMENT_CONTEXT;
+
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(MUX_ELEMENT_CONTEXT, GetMuxElementContext)
+
+//
+// Define circuit/stream element context.
+//
+typedef struct _AGC_ELEMENT_CONTEXT
+{
+    WDFDEVICE Device;
+    UCHAR     EntityID;
+    ULONG     NumberOfChannels;
+} AGC_ELEMENT_CONTEXT, *PAGC_ELEMENT_CONTEXT;
+
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(AGC_ELEMENT_CONTEXT, GetAgcElementContext)
 
 //
 // Define mute timer context.
@@ -427,6 +453,55 @@ typedef enum
     RenderElementCount = 2
 } CODEC_RENDER_ELEMENTS;
 
+// Common callbackes.
+PAGED_CODE_SEG
+EVT_ACX_PIN_SET_DATAFORMAT Codec_EvtAcxPinSetDataFormat;
+
+PAGED_CODE_SEG
+EVT_ACX_MUTE_ASSIGN_STATE Codec_EvtMuteAssignState;
+
+PAGED_CODE_SEG
+EVT_ACX_MUTE_RETRIEVE_STATE Codec_EvtMuteRetrieveState;
+
+PAGED_CODE_SEG
+EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL Codec_EvtRampedVolumeAssignLevel;
+
+PAGED_CODE_SEG
+EVT_ACX_VOLUME_RETRIEVE_LEVEL Codec_EvtVolumeRetrieveLevel;
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_CreateVolumeElement(
+    _In_ WDFDEVICE     Device,
+    _In_ ACXCIRCUIT    Circuit,
+    _In_ UCHAR         VolumeUnitID,
+    _In_ const GUID *  Name,
+    _In_ ULONG         ChannelsCount,
+    _Out_ ACXELEMENT & VolumeElement
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_CreateMuteElement(
+    _In_ WDFDEVICE     Device,
+    _In_ ACXCIRCUIT    Circuit,
+    _In_ UCHAR         MuteUnitID,
+    _In_ const GUID *  Name,
+    _In_ ULONG         ChannelsCount,
+    _Out_ ACXELEMENT & MuteElement
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_AllocateSupportedFormats(
+    _In_ WDFDEVICE                   Device,
+    _In_ ACXPIN                      Pin,
+    _In_ ACXCIRCUIT                  Circuit,
+    _In_ const ULONG                 SupportedSampleRate,
+    _In_ const ULONG                 Channels,
+    _In_ USBAudioDataFormatManager * UsbAudioDataFormatManager
+);
+
 // Render callbacks.
 
 PAGED_CODE_SEG
@@ -439,22 +514,14 @@ PAGED_CODE_SEG
 EVT_ACX_STREAM_SET_RENDER_PACKET CodecR_EvtStreamSetRenderPacket;
 // EVT_ACX_STREAM_GET_CAPTURE_PACKET   CodecR_EvtStreamGetLoopbackPacket;
 
-PAGED_CODE_SEG
-EVT_ACX_PIN_SET_DATAFORMAT CodecR_EvtAcxPinSetDataFormat;
-
 NONPAGED_CODE_SEG
 EVT_WDF_DEVICE_CONTEXT_CLEANUP CodecR_EvtPinContextCleanup;
 
-PAGED_CODE_SEG
-EVT_ACX_MUTE_ASSIGN_STATE CodecR_EvtMuteAssignState;
+// EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecR_EvtVolumeAssignLevel;
 
 PAGED_CODE_SEG
-EVT_ACX_MUTE_RETRIEVE_STATE CodecR_EvtMuteRetrieveState;
-// EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecR_EvtVolumeAssignLevel;
-PAGED_CODE_SEG
-EVT_ACX_VOLUME_RETRIEVE_LEVEL CodecR_EvtVolumeRetrieveLevel;
-PAGED_CODE_SEG
-EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL CodecR_EvtRampedVolumeAssignLevel;
+EVT_ACX_PIN_RETRIEVE_NAME CodecR_EvtAcxPinRetrieveName;
+
 // EVT_ACX_AUDIOENGINE_RETRIEVE_BUFFER_SIZE_LIMITS CodecR_EvtAcxAudioEngineRetrieveBufferSizeLimits;
 // EVT_ACX_AUDIOENGINE_RETRIEVE_EFFECTS_STATE      CodecR_EvtAcxAudioEngineRetrieveEffectsState;
 // EVT_ACX_AUDIOENGINE_ASSIGN_EFFECTS_STATE        CodecR_EvtAcxAudioEngineAssignEffectsState;
@@ -510,11 +577,15 @@ CodecR_ConnectorChangeStateNotification(
 //
 typedef struct _CODEC_CAPTURE_CIRCUIT_CONTEXT
 {
-    WDFMEMORY   VolumeElementsMemory;
-    ACXVOLUME * VolumeElements;
-    WDFMEMORY   MuteElementsMemory;
-    ACXMUTE *   MuteElements;
-    ULONG       NumOfDevices;
+    WDFMEMORY    VolumeElementsMemory;
+    ACXVOLUME *  VolumeElements;
+    WDFMEMORY    MuteElementsMemory;
+    ACXMUTE *    MuteElements;
+    WDFMEMORY    MuxElementsMemory;
+    ACXELEMENT * MuxElements;
+    WDFMEMORY    AgcElementsMemory;
+    ACXELEMENT * AgcElements;
+    ULONG        NumOfDevices;
     // ACXKEYWORDSPOTTER KeywordSpotter;
     AudioIsochronousEngine * AudioIsochronousEngine;
 } CODEC_CAPTURE_CIRCUIT_CONTEXT, *PCODEC_CAPTURE_CIRCUIT_CONTEXT;
@@ -550,14 +621,7 @@ PAGED_CODE_SEG
 EVT_ACX_VOLUME_ASSIGN_LEVEL CodecC_EvtVolumeAssignLevelCallback;
 
 PAGED_CODE_SEG
-EVT_ACX_VOLUME_RETRIEVE_LEVEL CodecC_EvtVolumeRetrieveLevelCallback;
-// EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecC_EvtBoostAssignLevelCallback;
-// EVT_ACX_VOLUME_RETRIEVE_LEVEL       CodecC_EvtBoostRetrieveLevelCallback;
-PAGED_CODE_SEG
 EVT_ACX_STREAM_GET_CAPTURE_PACKET CodecC_EvtStreamGetCapturePacket;
-
-PAGED_CODE_SEG
-EVT_ACX_PIN_SET_DATAFORMAT CodecC_EvtAcxPinSetDataFormat;
 
 PAGED_CODE_SEG
 EVT_ACX_PIN_RETRIEVE_NAME CodecC_EvtAcxPinRetrieveName;
@@ -565,16 +629,10 @@ EVT_ACX_PIN_RETRIEVE_NAME CodecC_EvtAcxPinRetrieveName;
 NONPAGED_CODE_SEG
 EVT_WDF_DEVICE_CONTEXT_CLEANUP CodecC_EvtPinContextCleanup;
 
-PAGED_CODE_SEG
-EVT_ACX_MUTE_ASSIGN_STATE CodecC_EvtMuteAssignState;
+// EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecC_EvtVolumeAssignLevel;
 
 PAGED_CODE_SEG
-EVT_ACX_MUTE_RETRIEVE_STATE CodecC_EvtMuteRetrieveState;
-// EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecC_EvtVolumeAssignLevel;
-PAGED_CODE_SEG
-EVT_ACX_VOLUME_RETRIEVE_LEVEL CodecC_EvtVolumeRetrieveLevel;
-PAGED_CODE_SEG
-EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL CodecC_EvtRampedVolumeAssignLevel;
+EVT_ACX_PIN_RETRIEVE_NAME CodecR_EvtAcxPinRetrieveName;
 
 // EVT_ACX_KEYWORDSPOTTER_RETRIEVE_ARM     CodecC_EvtAcxKeywordSpotterRetrieveArm;
 // EVT_ACX_KEYWORDSPOTTER_ASSIGN_ARM       CodecC_EvtAcxKeywordSpotterAssignArm;

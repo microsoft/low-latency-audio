@@ -537,7 +537,6 @@ class USBAudioControlInterface : public USBAudioInterface
         _Out_ UCHAR & entityID
     ) = 0;
 
-    __drv_maxIRQL(PASSIVE_LEVEL)
     NTSTATUS
     virtual _Success_(NT_SUCCESS(return))
     GetVolumeConfiguration(
@@ -596,6 +595,24 @@ class USBAudioControlInterface : public USBAudioInterface
 
     virtual bool CanSetSampleFrequency(
         _In_ UCHAR clockSourceID
+    ) = 0;
+
+    virtual NTSTATUS GetSelectorConfiguration(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _Out_ UCHAR &        pins
+    ) = 0;
+
+    virtual NTSTATUS SetCurrentSelector(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           selectorIndex
+    ) = 0;
+
+    virtual NTSTATUS GetCurrentSelector(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _Out_ UCHAR &        selectorIndex
     ) = 0;
 
     _Success_(NT_SUCCESS(return))
@@ -1021,6 +1038,30 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
     PAGED_CODE_SEG
     virtual bool CanSetSampleFrequency(
         _In_ UCHAR clockSourceID
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual NTSTATUS GetSelectorConfiguration(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _Out_ UCHAR &        pins
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual NTSTATUS SetCurrentSelector(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           selectorIndex
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual NTSTATUS GetCurrentSelector(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _Out_ UCHAR &        selectorIndex
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1476,6 +1517,30 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     PAGED_CODE_SEG
     virtual bool CanSetSampleFrequency(
         _In_ UCHAR clockSourceID
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual NTSTATUS GetSelectorConfiguration(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _Out_ UCHAR &        pins
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual NTSTATUS SetCurrentSelector(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           selectorIndex
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual NTSTATUS GetCurrentSelector(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _Out_ UCHAR &        selectorIndex
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -2312,6 +2377,29 @@ class USBAudioConfiguration
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           entityID,
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS GetSelectorConfiguration(
+        _In_ UCHAR    entityID,
+        _Out_ UCHAR & pins
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS SetCurrentSelector(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           selectorIndex
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS GetCurrentSelector(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _Out_ UCHAR &        selectorIndex
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)

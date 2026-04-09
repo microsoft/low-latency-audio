@@ -87,6 +87,24 @@ VOID CpuResourcesCallbackHelper(
 );
 
 PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS
+ProcessRequestHandler_BasicSupport(
+    _In_ PACX_REQUEST_PARAMETERS Params,
+    _In_ ULONG                   Flags,
+    _In_ DWORD                   PropTypeSetId
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS
+ProcessRequestHandler_BasicSupportAgc(
+    _In_ PACX_REQUEST_PARAMETERS Params,
+    _In_ ULONG                   Flags,
+    _In_ DWORD                   PropTypeSetId
+);
+
+PAGED_CODE_SEG
 ULONG GetSampleRateFromIndex(
     _In_ ULONG Index
 );
