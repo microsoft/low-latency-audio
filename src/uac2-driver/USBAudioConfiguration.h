@@ -493,6 +493,7 @@ class USBAudioControlInterface : public USBAudioInterface
         _In_ UCHAR           terminalLink,
         _Out_ UCHAR &        numOfChannels,
         _Out_ USHORT &       terminalType,
+        _Out_ UCHAR &        terminalID,
         _Out_ UCHAR &        volumeUnitID,
         _Out_ UCHAR &        muteUnitID
     ) = 0;
@@ -503,6 +504,7 @@ class USBAudioControlInterface : public USBAudioInterface
         _In_ UCHAR           terminalLink,
         _Out_ UCHAR &        numOfChannels,
         _Out_ USHORT &       terminalType,
+        _Out_ UCHAR &        terminalID,
         _Out_ UCHAR &        volumeUnitID,
         _Out_ UCHAR &        muteUnitID
     ) = 0;
@@ -896,6 +898,7 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
         _In_ UCHAR           terminalLink,
         _Out_ UCHAR &        numOfChannels,
         _Out_ USHORT &       terminalType,
+        _Out_ UCHAR &        terminalID,
         _Out_ UCHAR &        volumeUnitID,
         _Out_ UCHAR &        muteUnitID
     );
@@ -908,6 +911,7 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
         _In_ UCHAR           terminalLink,
         _Out_ UCHAR &        numOfChannels,
         _Out_ USHORT &       terminalType,
+        _Out_ UCHAR &        terminalID,
         _Out_ UCHAR &        volumeUnitID,
         _Out_ UCHAR &        muteUnitID
     );
@@ -1375,6 +1379,7 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _In_ UCHAR           terminalLink,
         _Out_ UCHAR &        numOfChannels,
         _Out_ USHORT &       terminalType,
+        _Out_ UCHAR &        terminalID,
         _Out_ UCHAR &        volumeUnitID,
         _Out_ UCHAR &        muteUnitID
     );
@@ -1387,6 +1392,7 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _In_ UCHAR           terminalLink,
         _Out_ UCHAR &        numOfChannels,
         _Out_ USHORT &       terminalType,
+        _Out_ UCHAR &        terminalID,
         _Out_ UCHAR &        volumeUnitID,
         _Out_ UCHAR &        muteUnitID
     );
@@ -1649,6 +1655,7 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _Inout_ UCHAR &  sourceID,
         _Inout_ UCHAR &  numOfChannels,
         _Inout_ USHORT & terminalType,
+        _Inout_ UCHAR &  terminalID,
         _Inout_ UCHAR &  volumeUnitID,
         _Inout_ UCHAR &  muteUnitID,
         _In_ SCHAR       recursionCount
@@ -2136,6 +2143,7 @@ class USBAudioStreamInterfaceGroup
         _In_ const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
         _Out_ UCHAR &                          numOfChannels,
         _Out_ USHORT &                         terminalType,
+        _Out_ UCHAR &                          terminalID,
         _Out_ UCHAR &                          volumeUnitID,
         _Out_ UCHAR &                          muteUnitID
     );
@@ -2149,6 +2157,7 @@ class USBAudioStreamInterfaceGroup
         _In_ const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
         _Out_ UCHAR &                          numOfChannels,
         _Out_ USHORT &                         terminalType,
+        _Out_ UCHAR &                          terminalID,
         _Out_ UCHAR &                          volumeUnitID,
         _Out_ UCHAR &                          muteUnitID
     );

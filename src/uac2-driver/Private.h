@@ -373,6 +373,7 @@ typedef struct _CODEC_PIN_CONTEXT
     ULONG                    DeviceIndex;
     ULONG                    Channel;
     ULONG                    NumOfChannelsPerDevice;
+    UCHAR                    TerminalID;
     ACXJACK                  jack;
     AudioIsochronousEngine * AudioIsochronousEngine;
 } CODEC_PIN_CONTEXT, *PCODEC_PIN_CONTEXT;

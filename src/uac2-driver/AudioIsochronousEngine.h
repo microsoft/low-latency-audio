@@ -221,6 +221,7 @@ class AudioIsochronousEngine
         _In_ bool      isInput,
         _Out_ UCHAR &  numOfChannels,
         _Out_ USHORT & terminalType,
+        _Out_ UCHAR &  terminalID,
         _Out_ UCHAR &  volumeUnitID,
         _Out_ UCHAR &  muteUnitID
     );
@@ -233,6 +234,7 @@ class AudioIsochronousEngine
         _In_ bool      isInput,
         _Out_ UCHAR &  numOfChannels,
         _Out_ USHORT & terminalType,
+        _Out_ UCHAR &  terminalID,
         _Out_ UCHAR &  volumeUnitID,
         _Out_ UCHAR &  muteUnitID
     );

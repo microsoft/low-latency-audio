@@ -2574,13 +2574,14 @@ AudioIsochronousEngine::GetStreamChannelInfo(
     bool     isInput,
     UCHAR &  numOfChannels,
     USHORT & terminalType,
+    UCHAR &  terminalID,
     UCHAR &  volumeUnitID,
     UCHAR &  muteUnitID
 )
 {
     PAGED_CODE();
 
-    return m_usbAudioStreamInterfaceGroup->GetStreamChannelInfo(isInput, m_audioStreamPropertySet, numOfChannels, terminalType, volumeUnitID, muteUnitID);
+    return m_usbAudioStreamInterfaceGroup->GetStreamChannelInfo(isInput, m_audioStreamPropertySet, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID);
 }
 
 _Use_decl_annotations_
@@ -2590,13 +2591,14 @@ AudioIsochronousEngine::GetStreamChannelInfoAdjusted(
     bool     isInput,
     UCHAR &  numOfChannels,
     USHORT & terminalType,
+    UCHAR &  terminalID,
     UCHAR &  volumeUnitID,
     UCHAR &  muteUnitID
 )
 {
     PAGED_CODE();
 
-    return m_usbAudioStreamInterfaceGroup->GetStreamChannelInfoAdjusted(isInput, m_audioStreamPropertySet, numOfChannels, terminalType, volumeUnitID, muteUnitID);
+    return m_usbAudioStreamInterfaceGroup->GetStreamChannelInfoAdjusted(isInput, m_audioStreamPropertySet, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID);
 }
 
 _Use_decl_annotations_

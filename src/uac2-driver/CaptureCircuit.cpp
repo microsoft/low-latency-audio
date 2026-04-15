@@ -68,14 +68,14 @@ static NTSTATUS CreateCaptureStreamingPin(
 
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, id %u, device index %u, channel %u, channels count %u", Id, DeviceIndex, Channel, ChannelsCount);
 
     ///////////////////////////////////////////////////////////
     //
     // Create capture streaming pin.
     //
     ACX_PIN_CONFIG_INIT(&pinCfg);
-    pinCfg.Id = Id,
+    pinCfg.Id = Id;
     pinCfg.Type = AcxPinTypeSource;
     pinCfg.Communication = AcxPinCommunicationSink;
     pinCfg.Category = &KSCATEGORY_AUDIO;
@@ -97,6 +97,7 @@ static NTSTATUS CreateCaptureStreamingPin(
     pinContext->Channel = Channel;
     pinContext->NumOfChannelsPerDevice = ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 
@@ -110,10 +111,12 @@ static NTSTATUS CreateCaptureEndpointPin(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _Inout_ ACXPIN &              Pin,
+    _In_ ULONG                    Id,
     _In_ ULONG                    DeviceIndex,
     _In_ ULONG                    Channel,
     _In_ ULONG                    ChannelsCount,
-    _In_ USHORT                   TerminalType
+    _In_ USHORT                   TerminalType,
+    _In_ UCHAR                    TerminalID
 )
 {
     ACX_PIN_CONFIG        pinCfg{};
@@ -124,7 +127,7 @@ static NTSTATUS CreateCaptureEndpointPin(
 
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, id %u, device index %u, channel %u, channels count %u", Id, DeviceIndex, Channel, ChannelsCount);
 
     ///////////////////////////////////////////////////////////
     //
@@ -138,6 +141,7 @@ static NTSTATUS CreateCaptureEndpointPin(
 
     ACX_PIN_CONFIG_INIT(&pinCfg);
     pinCfg.Type = AcxPinTypeSink;
+    pinCfg.Id = Id;
     pinCfg.Communication = AcxPinCommunicationNone;
     pinCfg.Category = ConvertTerminalType(TerminalType);
     pinCfg.PinCallbacks = &pinCallbacks;
@@ -159,6 +163,7 @@ static NTSTATUS CreateCaptureEndpointPin(
     pinContext->Channel = Channel;
     pinContext->NumOfChannelsPerDevice = ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->TerminalID = TerminalID;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 
@@ -204,7 +209,7 @@ static NTSTATUS AddAudioJackToBridgePin(
     ASSERT(jack != nullptr);
     jackContext = GetJackContext(jack);
     ASSERT(jackContext);
-    jackContext->IsConnected = true;
+    jackContext->IsConnected = TRUE;
 
     PCODEC_PIN_CONTEXT pinContext = GetCodecPinContext(Pin);
     pinContext->jack = jack;
@@ -414,6 +419,7 @@ Return Value:
     ACX_CONNECTION *                connections = nullptr;
     UCHAR                           numOfChannels = 0;
     USHORT                          terminalType = 0;
+    UCHAR                           terminalLink = USBAudioConfiguration::InvalidID;
     UCHAR                           volumeUnitID = USBAudioConfiguration::InvalidID;
     UCHAR                           muteUnitID = USBAudioConfiguration::InvalidID;
     ULONG                           numOfDevices = 0;
@@ -449,7 +455,7 @@ Return Value:
     deviceContext = GetDeviceContext(Device);
     ASSERT(deviceContext != nullptr);
 
-    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetStreamChannelInfo(true, numOfChannels, terminalType, volumeUnitID, muteUnitID));
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetStreamChannelInfo(true, numOfChannels, terminalType, terminalLink, volumeUnitID, muteUnitID));
     RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetStreamDevices(true, numOfDevices));
     numOfRemainingChannels = numOfChannels;
 
@@ -483,7 +489,7 @@ Return Value:
     RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACX_CONNECTION) * numOfConnections, &connectionsMemory, nullptr));
     connections = (ACX_CONNECTION *)WdfMemoryGetBuffer(connectionsMemory, nullptr);
     RtlZeroMemory(connections, sizeof(ACX_CONNECTION) * numOfConnections);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - num of channels = %u, num of connections = %u", numOfChannels, numOfConnections);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - num of channels = %u, num of connections = %u, num of devices = %u", numOfChannels, numOfConnections, numOfDevices);
 
     //
     // Init output value.
@@ -640,7 +646,7 @@ Return Value:
         //
         // Create capture endpoint pin.
         //
-        RETURN_NTSTATUS_IF_FAILED(CreateCaptureEndpointPin(AudioIsochronousEngine, Device, circuit, pins[index * CodecCapturePinCount + CodecCaptureBridgePin], index, index * 2, numOfChannelsPerDevice, terminalType));
+        RETURN_NTSTATUS_IF_FAILED(CreateCaptureEndpointPin(AudioIsochronousEngine, Device, circuit, pins[index * CodecCapturePinCount + CodecCaptureBridgePin], index * CodecCapturePinCount + CodecCaptureBridgePin, index, index * 2, numOfChannelsPerDevice, terminalType, terminalLink));
 
         ///////////////////////////////////////////////////////////
         //
@@ -835,8 +841,8 @@ Return Value:
     });
 
     PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_ERROR, TRACE_CIRCUIT, "%!FUNC! Entry");
-    TraceEvents(TRACE_LEVEL_ERROR, TRACE_CIRCUIT, " - capture Pin Id %u", AcxPinGetId(Pin));
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - capture Pin Id %u", AcxPinGetId(Pin));
 
     // ASSERT(IsEqualGUID(*SignalProcessingMode, AUDIO_SIGNALPROCESSINGMODE_RAW));
 
@@ -927,7 +933,7 @@ Return Value:
     //
     status = STATUS_SUCCESS;
 
-    TraceEvents(TRACE_LEVEL_ERROR, TRACE_CIRCUIT, "%!FUNC! Exit %!STATUS!", status);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
 }
@@ -1088,47 +1094,43 @@ CodecC_ConnectorChangeStateNotification(
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
 
-    ULONG pinCount = AcxCircuitGetPinsCount(Circuit) / CodecCapturePinCount;
+    ULONG pinCount = AcxCircuitGetPinsCount(Circuit);
 
-    for (ULONG pinIndex = 0; pinIndex < pinCount; ++pinIndex)
+    for (ULONG pinID = 0; pinID < pinCount; pinID++)
     {
-        ULONG  pinID = pinIndex * CodecCapturePinCount + CodecCaptureBridgePin;
         ACXPIN pin = AcxCircuitGetPinById(Circuit, pinID);
 
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "pinID %u, pin %p", pinID, pin);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - pinID %u, pin %p", pinID, pin);
 
-        if (pin == nullptr)
+        if (pin != nullptr)
         {
-            continue;
+            PCODEC_PIN_CONTEXT pinContext = GetCodecPinContext(pin);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - pinContext %p, terminal ID 0x%02x, entity ID 0x%02x", pinContext, pinContext != nullptr ? pinContext->TerminalID : USBAudioConfiguration::InvalidID, EntityID);
+            if ((pinContext != nullptr) && (pinContext->jack != nullptr) && (pinContext->TerminalID == EntityID))
+            {
+                PDEVICE_CONTEXT deviceContext = GetDeviceContext(pinContext->Device);
+                ASSERT(deviceContext != nullptr);
+
+                NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR connectorState{};
+
+                status = deviceContext->UsbAudioConfiguration->GetCurrentConnectorState(deviceContext, EntityID, connectorState);
+
+                if (NT_SUCCESS(status))
+                {
+                    BOOLEAN isConnected = (0 < connectorState.bmChannelConfig) ? TRUE : FALSE;
+
+                    PJACK_CONTEXT jackContext = GetJackContext(pinContext->jack);
+                    ASSERT(jackContext != nullptr);
+
+                    if (jackContext->IsConnected ^ isConnected)
+                    {
+                        jackContext->IsConnected = isConnected;
+                        AcxJackChangeStateNotification(pinContext->jack);
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " call AcxJackChangeStateNotification");
+                    }
+                }
+            }
         }
-
-        PCODEC_PIN_CONTEXT pinContext = GetCodecPinContext(pin);
-
-        PDEVICE_CONTEXT deviceContext = GetDeviceContext(pinContext->Device);
-
-        NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR connectorState;
-
-        status = deviceContext->UsbAudioConfiguration->GetCurrentConnectorState(
-            deviceContext,
-            EntityID,
-            connectorState
-        );
-
-        BOOLEAN isConnected = false;
-        if (0 < connectorState.bmChannelConfig)
-        {
-            isConnected = true;
-        }
-
-        if (pinContext->jack == nullptr)
-        {
-            continue;
-        }
-
-        ACXJACK       jack = pinContext->jack;
-        PJACK_CONTEXT jackContext = GetJackContext(jack);
-        jackContext->IsConnected = isConnected;
-        AcxJackChangeStateNotification(jack);
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit %!STATUS!", status);

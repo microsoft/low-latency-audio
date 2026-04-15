@@ -1330,6 +1330,7 @@ NTSTATUS USBAudio1ControlInterface::SearchOutputTerminalFromInputTerminal(
     UCHAR /* terminalLink */,
     UCHAR & /* numOfChannels */,
     USHORT & /* terminalType */,
+    UCHAR & /* terminalID */,
     UCHAR & /* volumeUnitID */,
     UCHAR & /* muteUnitID */
 )
@@ -1347,6 +1348,7 @@ NTSTATUS USBAudio1ControlInterface::SearchInputTerminalFromOutputTerminal(
     UCHAR /* terminalLink */,
     UCHAR & /* numOfChannels */,
     USHORT & /* terminalType */,
+    UCHAR & /* terminalID */,
     UCHAR & /* volumeUnitID */,
     UCHAR & /* muteUnitID */
 )
@@ -3182,6 +3184,7 @@ NTSTATUS USBAudio2ControlInterface::SearchOutputTerminal(
     UCHAR &  sourceID,
     UCHAR &  numOfChannels,
     USHORT & terminalType,
+    UCHAR &  terminalID,
     UCHAR &  volumeUnitID,
     UCHAR &  muteUnitID,
     SCHAR    recursionCount
@@ -3205,6 +3208,7 @@ NTSTATUS USBAudio2ControlInterface::SearchOutputTerminal(
             if (((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor)->bSourceID == sourceID)
             {
                 terminalType = ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor)->wTerminalType;
+                terminalID = ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor)->bTerminalID;
                 return STATUS_SUCCESS;
             }
             break;
@@ -3249,7 +3253,7 @@ NTSTATUS USBAudio2ControlInterface::SearchOutputTerminal(
                         {
                             UCHAR sourceIDBackup = sourceID;
                             sourceID = mixerUnitDescriptor->bUnitID;
-                            status = SearchOutputTerminal(sourceID, numOfChannels, terminalType, volumeUnitID, muteUnitID, recursionCount);
+                            status = SearchOutputTerminal(sourceID, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID, recursionCount);
                             if (NT_SUCCESS(status))
                             {
                                 return status;
@@ -3328,6 +3332,7 @@ NTSTATUS USBAudio2ControlInterface::SearchOutputTerminalFromInputTerminal(
     UCHAR    terminalLink,
     UCHAR &  numOfChannels,
     USHORT & terminalType,
+    UCHAR &  terminalID,
     UCHAR &  volumeUnitID,
     UCHAR &  muteUnitID
 )
@@ -3344,6 +3349,7 @@ NTSTATUS USBAudio2ControlInterface::SearchOutputTerminalFromInputTerminal(
 
     numOfChannels = 0;
     terminalType = NS_USBAudio0200::LINE_CONNECTOR;
+    terminalID = USBAudioConfiguration::InvalidID;
     volumeUnitID = USBAudioConfiguration::InvalidID;
     muteUnitID = USBAudioConfiguration::InvalidID;
 
@@ -3368,7 +3374,7 @@ NTSTATUS USBAudio2ControlInterface::SearchOutputTerminalFromInputTerminal(
         };
         UCHAR sourceIDBackup = sourceID;
 
-        status = SearchOutputTerminal(sourceID, numOfChannels, terminalType, volumeUnitID, muteUnitID, MAX_CHAINED_MIXER_UNITS);
+        status = SearchOutputTerminal(sourceID, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID, MAX_CHAINED_MIXER_UNITS);
         if (NT_SUCCESS(status))
         {
             return status;
@@ -3390,6 +3396,7 @@ NTSTATUS USBAudio2ControlInterface::SearchInputTerminalFromOutputTerminal(
     UCHAR           terminalLink,
     UCHAR &         numOfChannels,
     USHORT &        terminalType,
+    UCHAR &         terminalID,
     UCHAR &         volumeUnitID,
     UCHAR &         muteUnitID
 )
@@ -3406,6 +3413,7 @@ NTSTATUS USBAudio2ControlInterface::SearchInputTerminalFromOutputTerminal(
 
     numOfChannels = 0;
     terminalType = NS_USBAudio0200::LINE_CONNECTOR;
+    terminalID = USBAudioConfiguration::InvalidID;
     volumeUnitID = USBAudioConfiguration::InvalidID;
     muteUnitID = USBAudioConfiguration::InvalidID;
 
@@ -3436,6 +3444,7 @@ NTSTATUS USBAudio2ControlInterface::SearchInputTerminalFromOutputTerminal(
                 {
                     numOfChannels = ((NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor)->bNrChannels;
                     terminalType = ((NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor)->wTerminalType;
+                    terminalID = ((NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor)->bTerminalID;
                     return STATUS_SUCCESS;
                 }
                 break;
@@ -3890,6 +3899,8 @@ NTSTATUS USBAudio2ControlInterface::GetCurrentConnectorState(
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
     NTSTATUS status = ControlRequestGetCurrentConnectorState(deviceContext, GetInterfaceNumber(), entityID, connectorState);
+
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - entity id = 0x%02x, channels %u, bmChannelConfig 0x%08x", entityID, connectorState.bNrChannels, connectorState.bmChannelConfig);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit , %!STATUS!", status);
 
@@ -5348,7 +5359,7 @@ USBAudioStreamInterfaceGroup * USBAudioStreamInterfaceGroup::Create(
 {
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry, %u, %!bool!", groupIndex, isDeviceSplittable);
 
     USBAudioStreamInterfaceGroup * usbAudioStreamInterfaceGroup = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) USBAudioStreamInterfaceGroup(deviceContext, groupIndex, usbAudioControlInterface, isDeviceSplittable);
 
@@ -5827,6 +5838,7 @@ USBAudioStreamInterfaceGroup::GetStreamChannelInfo(
     const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
     UCHAR &                           numOfChannels,
     USHORT &                          terminalType,
+    UCHAR &                           terminalID,
     UCHAR &                           volumeUnitID,
     UCHAR &                           muteUnitID
 )
@@ -5837,6 +5849,7 @@ USBAudioStreamInterfaceGroup::GetStreamChannelInfo(
     PAGED_CODE();
 
     numOfChannels = 0;
+    terminalID = USBAudioConfiguration::InvalidID;
     volumeUnitID = USBAudioConfiguration::InvalidID;
     muteUnitID = USBAudioConfiguration::InvalidID;
 
@@ -5848,12 +5861,12 @@ USBAudioStreamInterfaceGroup::GetStreamChannelInfo(
         if (isInput)
         {
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - terminal link 0x%02x", terminalLink);
-            status = m_usbAudioControlInterface->SearchInputTerminalFromOutputTerminal(m_deviceContext, terminalLink, numOfChannels, terminalType, volumeUnitID, muteUnitID);
+            status = m_usbAudioControlInterface->SearchInputTerminalFromOutputTerminal(m_deviceContext, terminalLink, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID);
         }
         else
         {
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - terminal link 0x%02x", terminalLink);
-            status = m_usbAudioControlInterface->SearchOutputTerminalFromInputTerminal(m_deviceContext, terminalLink, numOfChannels, terminalType, volumeUnitID, muteUnitID);
+            status = m_usbAudioControlInterface->SearchOutputTerminalFromInputTerminal(m_deviceContext, terminalLink, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID);
         }
     }
 
@@ -5907,13 +5920,14 @@ USBAudioStreamInterfaceGroup::GetStreamChannelInfoAdjusted(
     const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
     UCHAR &                           numOfChannels,
     USHORT &                          terminalType,
+    UCHAR &                           terminalID,
     UCHAR &                           volumeUnitID,
     UCHAR &                           muteUnitID
 )
 {
     PAGED_CODE();
 
-    RETURN_NTSTATUS_IF_FAILED(GetStreamChannelInfo(isInput, audioStreamPropertySet, numOfChannels, terminalType, volumeUnitID, muteUnitID));
+    RETURN_NTSTATUS_IF_FAILED(GetStreamChannelInfo(isInput, audioStreamPropertySet, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID));
 
     if (numOfChannels == 0)
     {
@@ -5934,12 +5948,13 @@ USBAudioStreamInterfaceGroup::GetStreamDevices(
 {
     UCHAR  numOfChannels = 0;
     USHORT terminalType;
+    UCHAR  terminalID;
     UCHAR  volumeUnitID;
     UCHAR  muteUnitID;
 
     PAGED_CODE();
 
-    RETURN_NTSTATUS_IF_FAILED(GetStreamChannelInfo(isInput, audioStreamPropertySet, numOfChannels, terminalType, volumeUnitID, muteUnitID));
+    RETURN_NTSTATUS_IF_FAILED(GetStreamChannelInfo(isInput, audioStreamPropertySet, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID));
 
     if (m_isDeviceSplittable)
     {
@@ -5983,12 +5998,13 @@ USBAudioStreamInterfaceGroup::GetStreamChannels(
 )
 {
     USHORT terminalType;
+    UCHAR  terminalID;
     UCHAR  volumeUnitID;
     UCHAR  muteUnitID;
 
     PAGED_CODE();
 
-    RETURN_NTSTATUS_IF_FAILED(GetStreamChannelInfo(isInput, audioStreamPropertySet, numOfChannels, terminalType, volumeUnitID, muteUnitID));
+    RETURN_NTSTATUS_IF_FAILED(GetStreamChannelInfo(isInput, audioStreamPropertySet, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID));
 
     return STATUS_SUCCESS;
 }
