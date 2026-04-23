@@ -678,15 +678,13 @@ typedef struct CS_AC_MIXER_UNIT_DESCRIPTOR {
     UCHAR		bDescriptorSubtype;				// MIXER_UNIT descriptor subtype.
     UCHAR		bUnitID;
     UCHAR		bNrInPins;
-    struct {
-        UCHAR	baSourceID;
-        UCHAR	bNrChannels;
-        UCHAR	bmChannelConfig[4];
-        UCHAR	iChannelNames[1];
-        UCHAR	bmMixerControls[N];				// caution! Size = N. Bit map indicating which Mixer Controls are programmable.
-        UCHAR	bmControls;
-        UCHAR	iMixer;
-    } pin[1];
+    UCHAR	    baSourceID[p];
+    UCHAR	    bNrChannels;
+    UCHAR	    bmChannelConfig[4];
+    UCHAR	    iChannelNames[1];
+    UCHAR	    bmMixerControls[N];				// caution! Size = N. Bit map indicating which Mixer Controls are programmable.
+    UCHAR	    bmControls;
+    UCHAR	    iMixer;
 } CS_AC_MIXER_UNIT_DESCRIPTOR, *PCS_AC_MIXER_UNIT_DESCRIPTOR;
 */
 

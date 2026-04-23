@@ -34,6 +34,8 @@ Environment:
 
 class USBAudioDataFormatManager;
 class USBAudioStreamInterfaceGroup;
+enum class TraversalDirection;
+enum class AudioNodeKind;
 
 class AudioIsochronousEngine
 {
@@ -688,6 +690,20 @@ class AudioIsochronousEngine
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
     const ULONG GetNumOfOutputDevices();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS WalkNextUnit(
+        _In_ bool                    isInput,
+        _Inout_updates_(4) ULONGLONG idMap[4],
+        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Out_ AudioNodeKind &        audioNodeKind,
+        _Inout_ UCHAR &              unitID,
+        _Inout_ ULONG &              controlBitmap,
+        _Inout_ UCHAR &              nextUnitID,
+        _Inout_ TraversalDirection & traversalDirection,
+        _Inout_ bool &               hasMoreData
+    );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG

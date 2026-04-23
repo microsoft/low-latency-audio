@@ -4800,7 +4800,7 @@ AudioIsochronousEngine::OpenSubRegistryKey(
 )
 {
     UNICODE_STRING subKeyName;
-    WCHAR          buffer[4];
+    WCHAR          buffer[4]; // 000 ~ 999 + NULL
 
     PAGED_CODE();
 
@@ -4809,6 +4809,32 @@ AudioIsochronousEngine::OpenSubRegistryKey(
     RETURN_NTSTATUS_IF_FAILED(WdfRegistryCreateKey(registryKey, &subKeyName, KEY_READ | KEY_WRITE, REG_OPTION_NON_VOLATILE, nullptr, WDF_NO_OBJECT_ATTRIBUTES, &subRegistryKey));
 
     return STATUS_SUCCESS;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS AudioIsochronousEngine::WalkNextUnit(
+    bool                 isInput,
+    ULONGLONG            idMap[4],
+    ULONGLONG            unvisitedUnitMap[4],
+    AudioNodeKind &      audioNodeKind,
+    UCHAR &              unitID,
+    ULONG &              controlBitmap,
+    UCHAR &              nextUnitID,
+    TraversalDirection & traversalDirection,
+    bool &               hasMoreData
+)
+{
+    PAGED_CODE();
+
+    if (isInput)
+    {
+        return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardSources(m_audioStreamPropertySet, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+    }
+    else
+    {
+        return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardSinks(m_audioStreamPropertySet, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+    }
 }
 
 PAGED_CODE_SEG
