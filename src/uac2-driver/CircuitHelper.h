@@ -70,7 +70,7 @@ NTSTATUS CreateAudioJack(
     _In_ ACX_JACK_GEN_LOCATION    GenLocation,
     _In_ ACX_JACK_PORT_CONNECTION PortConnection,
     _In_ ULONG                    Flags,
-    _In_ ACXPIN                   BridgePin
+    _In_ ACXPIN                   RenderBridgePin
 );
 
 PAGED_CODE_SEG
@@ -130,6 +130,11 @@ NTSTATUS ConvertAudioDataFormat(
     _In_ const ACXDATAFORMAT & DataFormat,
     _Out_ ULONG &              FormatType,
     _Out_ ULONG &              Format
+);
+
+PAGED_CODE_SEG
+ULONG ConverSpeakerPositions(
+    _In_ ULONG channelConfig
 );
 
 PAGED_CODE_SEG

@@ -31,17 +31,17 @@ Environment:
 
 enum class TraversalDirection
 {
-    TowardSinks,  // Source to Sink
-    TowardSources //
+    Forward, // Source to Sink
+    Reverse  //
 };
 
 enum class AudioNodeKind
 {
     Invalid,
-    RenderPin,
-    CaptureEndpointPin,
-    CaptureStreamingPin,
-    BridgePin,
+    RenderHostPin,
+    RenderBridgePin,
+    CaptureHostPin,
+    CaptureBridgePin,
 
     // Mixing / Routing
     MuxElement,
@@ -55,6 +55,11 @@ enum class AudioNodeKind
     EffectElement,
     ProcessingElement
 };
+
+constexpr ULONG toULONG(AudioNodeKind audioNodeKind)
+{
+    return static_cast<ULONG>(audioNodeKind);
+}
 
 PAGED_CODE_SEG
 __drv_maxIRQL(PASSIVE_LEVEL)
@@ -527,6 +532,16 @@ class USBAudioControlInterface : public USBAudioInterface
     ) = 0;
 
     _Success_(NT_SUCCESS(return))
+    virtual NTSTATUS GetInformationForBridgePin(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels,
+        _Out_ USHORT &       terminalType,
+        _Out_ UCHAR &        channelNames,
+        _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+    ) = 0;
+
+    _Success_(NT_SUCCESS(return))
     virtual NTSTATUS SearchOutputTerminalFromInputTerminal(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           terminalLink,
@@ -549,7 +564,7 @@ class USBAudioControlInterface : public USBAudioInterface
     ) = 0;
 
     _Success_(NT_SUCCESS(return))
-    virtual NTSTATUS WalkNextUnitTowardSinks(
+    virtual NTSTATUS WalkNextUnitTowardForward(
         _Inout_updates_(4) ULONGLONG idMap[4],
         _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
@@ -561,7 +576,7 @@ class USBAudioControlInterface : public USBAudioInterface
     ) = 0;
 
     _Success_(NT_SUCCESS(return))
-    virtual NTSTATUS WalkNextUnitTowardSources(
+    virtual NTSTATUS WalkNextUnitTowardReverse(
         _Inout_updates_(4) ULONGLONG idMap[4],
         _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
@@ -994,6 +1009,19 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForBridgePin(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels,
+        _Out_ USHORT &       terminalType,
+        _Out_ UCHAR &        channelNames,
+        _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS SearchOutputTerminalFromInputTerminal(
         _In_ PDEVICE_CONTEXT deviceContext,
@@ -1021,7 +1049,7 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
-    virtual NTSTATUS WalkNextUnitTowardSinks(
+    virtual NTSTATUS WalkNextUnitTowardForward(
         _Inout_updates_(4) ULONGLONG idMap[4],
         _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
@@ -1035,7 +1063,7 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
-    virtual NTSTATUS WalkNextUnitTowardSources(
+    virtual NTSTATUS WalkNextUnitTowardReverse(
         _Inout_updates_(4) ULONGLONG idMap[4],
         _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
@@ -1517,6 +1545,19 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForBridgePin(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels,
+        _Out_ USHORT &       terminalType,
+        _Out_ UCHAR &        channelNames,
+        _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS SearchOutputTerminalFromInputTerminal(
         _In_ PDEVICE_CONTEXT deviceContext,
@@ -1544,7 +1585,7 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
-    virtual NTSTATUS WalkNextUnitTowardSinks(
+    virtual NTSTATUS WalkNextUnitTowardForward(
         _Inout_updates_(4) ULONGLONG idMap[4],
         _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
@@ -1558,7 +1599,7 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
-    virtual NTSTATUS WalkNextUnitTowardSources(
+    virtual NTSTATUS WalkNextUnitTowardReverse(
         _Inout_updates_(4) ULONGLONG idMap[4],
         _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
@@ -1849,7 +1890,7 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    NTSTATUS TraverseTowardSinks(
+    NTSTATUS TraverseTowardForward(
         _Inout_updates_(4) ULONGLONG idMap[4],
         _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
         _Inout_ UCHAR &              unitID,
@@ -1861,7 +1902,7 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    NTSTATUS TraverseTowardSources(
+    NTSTATUS TraverseTowardReverse(
         _Inout_updates_(4) ULONGLONG idMap[4],
         _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
         _Inout_ UCHAR &              unitID,
@@ -1909,6 +1950,13 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     _Success_return_ bool InterlockedGetUpdatedEntity(
         _Inout_updates_(8) ULONG bitmap[8],
         _Out_ UCHAR &            entityID
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS ValidateChannelNamesStringDescriptor(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _Inout_ UCHAR &      index
     );
 
     enum
@@ -2401,6 +2449,18 @@ class USBAudioStreamInterfaceGroup
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForBridgePin(
+        _In_ UCHAR     unitID,
+        _Out_ UCHAR &  numOfChannels,
+        _Out_ USHORT & terminalType,
+        _Out_ UCHAR &  channelNames,
+        _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     ULONG
     GetMaxPacketSize(
         _In_ IsoDirection direction
@@ -2442,7 +2502,7 @@ class USBAudioStreamInterfaceGroup
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    NTSTATUS WalkNextUnitTowardSinks(
+    NTSTATUS WalkNextUnitTowardForward(
         _In_ const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
         _Inout_updates_(4) ULONGLONG           idMap[4],
         _Inout_updates_(4) ULONGLONG           unvisitedUnitMap[4],
@@ -2456,7 +2516,7 @@ class USBAudioStreamInterfaceGroup
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    NTSTATUS WalkNextUnitTowardSources(
+    NTSTATUS WalkNextUnitTowardReverse(
         _In_ const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
         _Inout_updates_(4) ULONGLONG           idMap[4],
         _Inout_updates_(4) ULONGLONG           unvisitedUnitMap[4],

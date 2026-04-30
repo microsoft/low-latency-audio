@@ -215,146 +215,6 @@ static ACX_PROPERTY_ITEM s_PropertyItems[] = {
 
 PAGED_CODE_SEG
 _Success_(NT_SUCCESS(return))
-static NTSTATUS CreateRenderPin(
-    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
-    _In_ WDFDEVICE                Device,
-    _In_ ACXCIRCUIT               Circuit,
-    _Inout_ ACXPIN &              Pin,
-    _In_ ULONG                    Id,
-    _In_ ULONG                    DeviceIndex,
-    _In_ ULONG                    Channel,
-    _In_ ULONG                    ChannelsCount
-)
-{
-    ACX_PIN_CONFIG        pinCfg{};
-    CODEC_PIN_CONTEXT *   pinContext = nullptr;
-    NTSTATUS              status = STATUS_SUCCESS;
-    WDF_OBJECT_ATTRIBUTES attributes{};
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, id %u, device index %u, channel %u, channels count %u", Id, DeviceIndex, Channel, ChannelsCount);
-
-    ///////////////////////////////////////////////////////////
-    //
-    // Create Render Pin.
-    //
-
-    ACX_PIN_CONFIG_INIT(&pinCfg);
-    pinCfg.Id = Id;
-    pinCfg.Type = AcxPinTypeSink;
-    pinCfg.Communication = AcxPinCommunicationSink;
-    pinCfg.Category = &KSCATEGORY_AUDIO;
-
-    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, CODEC_PIN_CONTEXT);
-    attributes.EvtCleanupCallback = CodecR_EvtPinContextCleanup;
-    attributes.ParentObject = Circuit;
-
-    //
-    // The driver uses this DDI to create one or more pins on the circuits.
-    //
-    RETURN_NTSTATUS_IF_FAILED(AcxPinCreate(Circuit, &attributes, &pinCfg, &Pin));
-
-    pinContext = GetCodecPinContext(Pin);
-    ASSERT(pinContext);
-    pinContext->Device = Device;
-    pinContext->CodecPinType = CodecPinTypeHost;
-    pinContext->DeviceIndex = DeviceIndex;
-    pinContext->Channel = Channel;
-    pinContext->NumOfChannelsPerDevice = ChannelsCount;
-    pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
-    pinContext->TerminalID = USBAudioConfiguration::InvalidID;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Success_(NT_SUCCESS(return))
-static NTSTATUS CreateBridgePin(
-    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
-    _In_ WDFDEVICE                Device,
-    _In_ ACXCIRCUIT               Circuit,
-    _Inout_ ACXPIN &              Pin,
-    _In_ ULONG                    Id,
-    _In_ ULONG                    DeviceIndex,
-    _In_ ULONG                    Channel,
-    _In_ ULONG                    ChannelsCount,
-    _In_ USHORT                   TerminalType,
-    _In_ UCHAR                    TerminalID
-)
-{
-    ACX_PIN_CONFIG        pinCfg{};
-    CODEC_PIN_CONTEXT *   pinContext = nullptr;
-    ACX_PIN_CALLBACKS     pinCallbacks{};
-    NTSTATUS              status = STATUS_SUCCESS;
-    WDF_OBJECT_ATTRIBUTES attributes{};
-
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, id %u, device index %u, channel %u, channels count %u", Id, DeviceIndex, Channel, ChannelsCount);
-
-    ///////////////////////////////////////////////////////////
-    //
-    // Create Device Bridge Pin.
-    //
-    ACX_PIN_CALLBACKS_INIT(&pinCallbacks);
-    if (AudioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ChannelNames != USBAudioConfiguration::InvalidString)
-    {
-        pinCallbacks.EvtAcxPinRetrieveName = CodecR_EvtAcxPinRetrieveName;
-    }
-
-    ACX_PIN_CONFIG_INIT(&pinCfg);
-    pinCfg.Id = Id;
-    pinCfg.Type = AcxPinTypeSource;
-    pinCfg.Communication = AcxPinCommunicationNone;
-
-    //
-    // When category is KSNODETYPE_SPEAKER, the name given by
-    // EvtAcxPinRetrieveName is not used and becomes Speaker.
-    //
-    // To solve this problem, when category is KSNODETYPE_SPEAKER and
-    // the name of EvtAcxPinRetrieveName is valid, change it to
-    // KSNODETYPE_LINE_CONNECTOR.
-    //
-    if (IsEqualGUID(*ConvertTerminalType(TerminalType), KSNODETYPE_SPEAKER) && (AudioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ChannelNames != USBAudioConfiguration::InvalidString))
-    {
-        pinCfg.Category = &KSNODETYPE_LINE_CONNECTOR;
-    }
-    else
-    {
-        pinCfg.Category = ConvertTerminalType(TerminalType);
-    }
-
-    pinCfg.PinCallbacks = &pinCallbacks;
-
-    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, CODEC_PIN_CONTEXT);
-    attributes.EvtCleanupCallback = CodecR_EvtPinContextCleanup;
-    attributes.ParentObject = Circuit;
-
-    //
-    // The driver uses this DDI to create one or more pins on the circuits.
-    //
-    RETURN_NTSTATUS_IF_FAILED(AcxPinCreate(Circuit, &attributes, &pinCfg, &Pin));
-
-    pinContext = GetCodecPinContext(Pin);
-    ASSERT(pinContext);
-    pinContext->Device = Device;
-    pinContext->CodecPinType = CodecPinTypeDevice;
-    pinContext->DeviceIndex = DeviceIndex;
-    pinContext->Channel = Channel;
-    pinContext->NumOfChannelsPerDevice = ChannelsCount;
-    pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
-    pinContext->TerminalID = TerminalID;
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
-
-    return status;
-}
-
-PAGED_CODE_SEG
-_Success_(NT_SUCCESS(return))
 static NTSTATUS AddAudioJackToBridgePin(
     _In_ ACXPIN Pin,
     _In_ ULONG  ChannelsCount
@@ -449,28 +309,6 @@ Return Value:
     // TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 
     return status;
-}
-
-NONPAGED_CODE_SEG
-VOID CodecR_EvtPinContextCleanup(
-    _In_ WDFOBJECT /* WdfPin */
-)
-/*++
-
-Routine Description:
-
-    In this callback, it cleans up pin context.
-
-Arguments:
-
-    WdfDevice - WDF device object
-
-Return Value:
-
-    nullptr
-
---*/
-{
 }
 
 PAGED_CODE_SEG
@@ -821,13 +659,13 @@ Return Value:
         //
         // Create Render Pin.
         //
-        RETURN_NTSTATUS_IF_FAILED(CreateRenderPin(AudioIsochronousEngine, Device, circuit, pins[index * CodecRenderPinCount + CodecRenderHostPin], index * CodecRenderPinCount + CodecRenderHostPin, index, index * 2, numOfChannelsPerDevice));
+        RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderPin(AudioIsochronousEngine, Device, circuit, pins[index * CodecRenderPinCount + CodecRenderHostPin], index * CodecRenderPinCount + CodecRenderHostPin, index, index * 2, numOfChannelsPerDevice));
 
         ///////////////////////////////////////////////////////////
         //
         // Create Device Bridge Pin.
         //
-        RETURN_NTSTATUS_IF_FAILED(CreateBridgePin(AudioIsochronousEngine, Device, circuit, pins[index * CodecRenderPinCount + CodecRenderBridgePin], index * CodecRenderPinCount + CodecRenderBridgePin, index, index * 2, numOfChannelsPerDevice, terminalType, terminalLink));
+        RETURN_NTSTATUS_IF_FAILED(Codec_CreateBridgePin(AudioIsochronousEngine, Device, circuit, pins[index * CodecRenderPinCount + CodecRenderBridgePin], index * CodecRenderPinCount + CodecRenderBridgePin, index, index * 2, numOfChannelsPerDevice, terminalType, terminalLink));
 
         ///////////////////////////////////////////////////////////
         //

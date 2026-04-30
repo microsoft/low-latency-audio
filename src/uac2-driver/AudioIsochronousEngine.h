@@ -31,6 +31,7 @@ Environment:
 
 #include "public.h"
 #include "UAC_User.h"
+#include "USBAudio.h"
 
 class USBAudioDataFormatManager;
 class USBAudioStreamInterfaceGroup;
@@ -239,6 +240,18 @@ class AudioIsochronousEngine
         _Out_ UCHAR &  terminalID,
         _Out_ UCHAR &  volumeUnitID,
         _Out_ UCHAR &  muteUnitID
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForBridgePin(
+        _In_ UCHAR     unitID,
+        _Out_ UCHAR &  numOfChannels,
+        _Out_ USHORT & terminalType,
+        _Out_ UCHAR &  channelNames,
+        _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
     );
 
     // Render Circuit

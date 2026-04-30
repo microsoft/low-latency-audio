@@ -48,17 +48,17 @@ const char * GetAudioNodeKindString(
 
     switch (audioNodeKind)
     {
-    case AudioNodeKind::RenderPin:
-        return "RenderPin";
+    case AudioNodeKind::RenderHostPin:
+        return "RenderHostPin";
         break;
-    case AudioNodeKind::CaptureEndpointPin:
-        return "CaptureEndpointPin";
+    case AudioNodeKind::RenderBridgePin:
+        return "RenderBridgePin";
         break;
-    case AudioNodeKind::CaptureStreamingPin:
-        return "CaptureStreamingPin";
+    case AudioNodeKind::CaptureHostPin:
+        return "CaptureHostPin";
         break;
-    case AudioNodeKind::BridgePin:
-        return "BridgePin";
+    case AudioNodeKind::CaptureBridgePin:
+        return "CaptureBridgePin";
         break;
     case AudioNodeKind::MuxElement:
         return "MuxElement";
@@ -87,7 +87,7 @@ const char * GetAudioNodeKindString(
     default:
         break;
     }
-    return "Invalid  ";
+    return "Invalid";
 }
 
 PAGED_CODE_SEG
@@ -98,13 +98,13 @@ const char * GetTraversalDirectionString(
 {
     PAGED_CODE();
 
-    if (traversalDirection == TraversalDirection::TowardSinks)
+    if (traversalDirection == TraversalDirection::Forward)
     {
-        return "TowardSinks";
+        return "Forward";
     }
     else
     {
-        return "TowardSources";
+        return "Reverse";
     }
 }
 
@@ -1445,6 +1445,22 @@ NTSTATUS USBAudio1ControlInterface::GetRangeSampleFrequency(
     return STATUS_NOT_SUPPORTED;
 }
 
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio1ControlInterface::GetInformationForBridgePin(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* unitID */,
+    UCHAR & /* numOfChannels */,
+    USHORT & /* terminalType */,
+    UCHAR & /* channelNames */,
+    NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & /* connectorState */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS USBAudio1ControlInterface::SearchOutputTerminalFromInputTerminal(
@@ -1484,7 +1500,7 @@ NTSTATUS USBAudio1ControlInterface::SearchInputTerminalFromOutputTerminal(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
-USBAudio1ControlInterface::WalkNextUnitTowardSinks(
+USBAudio1ControlInterface::WalkNextUnitTowardForward(
     ULONGLONG /* idMap */[4],
     ULONGLONG /* unvisitedUnitMap */[4],
     AudioNodeKind & /* audioNodeKind */,
@@ -1503,7 +1519,7 @@ USBAudio1ControlInterface::WalkNextUnitTowardSinks(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
-USBAudio1ControlInterface::WalkNextUnitTowardSources(
+USBAudio1ControlInterface::WalkNextUnitTowardReverse(
     ULONGLONG /* idMap */[4],
     ULONGLONG /* unvisitedUnitMap */[4],
     AudioNodeKind & /* audioNodeKind */,
@@ -1604,7 +1620,7 @@ bool USBAudio1ControlInterface::IsOutputConnectorEntityUpdated()
 _Use_decl_annotations_
 PAGED_CODE_SEG
 bool USBAudio1ControlInterface::GetUpdatedVolumeEntity(
-    _Out_ UCHAR & /* entityID */
+    UCHAR & /* entityID */
 )
 {
     PAGED_CODE();
@@ -1615,7 +1631,7 @@ bool USBAudio1ControlInterface::GetUpdatedVolumeEntity(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 bool USBAudio1ControlInterface::GetUpdatedMuteEntity(
-    _Out_ UCHAR & /* entityID */
+    UCHAR & /* entityID */
 )
 {
     PAGED_CODE();
@@ -1626,7 +1642,7 @@ bool USBAudio1ControlInterface::GetUpdatedMuteEntity(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 bool USBAudio1ControlInterface::GetUpdatedInputConnectorEntity(
-    _Out_ UCHAR & /* entityID */
+    UCHAR & /* entityID */
 )
 {
     PAGED_CODE();
@@ -1637,7 +1653,7 @@ bool USBAudio1ControlInterface::GetUpdatedInputConnectorEntity(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 bool USBAudio1ControlInterface::GetUpdatedOutputConnectorEntity(
-    _Out_ UCHAR & /* entityID */
+    UCHAR & /* entityID */
 )
 {
     PAGED_CODE();
@@ -3503,6 +3519,74 @@ bool USBAudio2ControlInterface::InterlockedTestEntityBit(
     return (InterlockedCompareExchange((volatile LONG *)&(bitmap[entityId / 32]), 0, 0) & (1 << (entityId % 32))) ? true : false;
 }
 
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
+    PDEVICE_CONTEXT                                 deviceContext,
+    UCHAR                                           unitID,
+    UCHAR &                                         numOfChannels,
+    USHORT &                                        terminalType,
+    UCHAR &                                         channelNames,
+    NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+)
+{
+    PAGED_CODE();
+
+    channelNames = USBAudioConfiguration::InvalidString;
+    for (auto & outputTerminalDescriptor : m_acOutputTerminalInfo)
+    {
+        if (outputTerminalDescriptor->bTerminalID == unitID)
+        {
+            terminalType = outputTerminalDescriptor->wTerminalType;
+
+            if ((outputTerminalDescriptor->bmControls[0] | (((USHORT)outputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_OUTPUT_TERMINAL_CONTROL_COPY_PROTECT_CONTROL_MASK)
+            {
+                RETURN_NTSTATUS_IF_FAILED(GetCurrentConnectorState(deviceContext, unitID, connectorState));
+                numOfChannels = connectorState.bNrChannels;
+                channelNames = connectorState.iChannelNames;
+            }
+            else
+            {
+                numOfChannels = 2;
+                channelNames = outputTerminalDescriptor->iTerminal;
+                connectorState.bNrChannels = numOfChannels;
+                connectorState.iChannelNames = channelNames;
+                connectorState.bmChannelConfig = (numOfChannels == 1 ? NS_USBAudio0200::FRONT_CENTER : NS_USBAudio0200::FRONT_LEFT | NS_USBAudio0200::FRONT_RIGHT);
+            }
+            ValidateChannelNamesStringDescriptor(deviceContext, channelNames);
+
+            return STATUS_SUCCESS;
+        }
+    }
+
+    for (auto & inputTerminalDescriptor : m_acInputTerminalInfo)
+    {
+        if (inputTerminalDescriptor->bTerminalID == unitID)
+        {
+            terminalType = inputTerminalDescriptor->wTerminalType;
+
+            if ((inputTerminalDescriptor->bmControls[0] | (((USHORT)inputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_INPUT_TERMINAL_CONTROL_COPY_PROTECT_CONTROL_MASK)
+            {
+                RETURN_NTSTATUS_IF_FAILED(GetCurrentConnectorState(deviceContext, unitID, connectorState));
+                numOfChannels = connectorState.bNrChannels;
+                channelNames = connectorState.iChannelNames;
+            }
+            else
+            {
+                numOfChannels = inputTerminalDescriptor->bNrChannels;
+                channelNames = inputTerminalDescriptor->iTerminal;
+                connectorState.bNrChannels = numOfChannels;
+                connectorState.iChannelNames = channelNames;
+                connectorState.bmChannelConfig = ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] | ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] << 8) | ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] << 16) | ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] << 24));
+            }
+            ValidateChannelNamesStringDescriptor(deviceContext, channelNames);
+            return STATUS_SUCCESS;
+        }
+    }
+
+    return STATUS_INVALID_PARAMETER;
+}
+
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS USBAudio2ControlInterface::SearchOutputTerminalFromInputTerminal(
@@ -3691,7 +3775,7 @@ NTSTATUS USBAudio2ControlInterface::SearchInputTerminalFromOutputTerminal(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
-NTSTATUS USBAudio2ControlInterface::TraverseTowardSinks(
+NTSTATUS USBAudio2ControlInterface::TraverseTowardForward(
     ULONGLONG            idMap[4],
     ULONGLONG            unvisitedUnitMap[4],
     UCHAR &              unitID,
@@ -3779,7 +3863,7 @@ NTSTATUS USBAudio2ControlInterface::TraverseTowardSinks(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
-NTSTATUS USBAudio2ControlInterface::TraverseTowardSources(
+NTSTATUS USBAudio2ControlInterface::TraverseTowardReverse(
     ULONGLONG            idMap[4],
     ULONGLONG            unvisitedUnitMap[4],
     UCHAR &              unitID,
@@ -3888,7 +3972,7 @@ NTSTATUS USBAudio2ControlInterface::TraverseTowardSources(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
-USBAudio2ControlInterface::WalkNextUnitTowardSinks(
+USBAudio2ControlInterface::WalkNextUnitTowardForward(
     ULONGLONG            idMap[4],
     ULONGLONG            unvisitedUnitMap[4],
     AudioNodeKind &      audioNodeKind,
@@ -3918,9 +4002,9 @@ USBAudio2ControlInterface::WalkNextUnitTowardSinks(
             if (!TestEntityBit(idMap, inputTerminalDescriptor->bTerminalID) && (inputTerminalDescriptor->bTerminalID == unitID))
             {
                 SetEntityBit(idMap, inputTerminalDescriptor->bTerminalID);
-                audioNodeKind = AudioNodeKind::BridgePin;
+                audioNodeKind = AudioNodeKind::RenderHostPin;
 
-                return TraverseTowardSinks(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                return TraverseTowardForward(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
             }
         }
         break;
@@ -3950,7 +4034,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSinks(
                     if (controlBitmap == 0)
                     {
                         SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
-                        return TraverseTowardSinks(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                        return TraverseTowardForward(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                     }
                     nextUnitID = featureUnitDescriptor->bUnitID;
                     return STATUS_SUCCESS;
@@ -3962,7 +4046,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSinks(
                     if (controlBitmap == 0)
                     {
                         SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
-                        return TraverseTowardSinks(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                        return TraverseTowardForward(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                     }
                     nextUnitID = featureUnitDescriptor->bUnitID;
                     return STATUS_SUCCESS;
@@ -3974,7 +4058,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSinks(
                     if (controlBitmap == 0)
                     {
                         SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
-                        return TraverseTowardSinks(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                        return TraverseTowardForward(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                     }
                     nextUnitID = featureUnitDescriptor->bUnitID;
                     return STATUS_SUCCESS;
@@ -3984,7 +4068,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSinks(
                     controlBitmap = 0;
                     audioNodeKind = AudioNodeKind::Invalid;
                     SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
-                    return TraverseTowardSinks(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                    return TraverseTowardForward(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                 }
             }
         }
@@ -4016,13 +4100,13 @@ USBAudio2ControlInterface::WalkNextUnitTowardSinks(
                         SetEntityBit(idMap, mixerUnitDescriptor->bUnitID);
                     }
                     audioNodeKind = AudioNodeKind::SuperMixElement;
-                    return TraverseTowardSinks(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                    return TraverseTowardForward(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                 }
                 else
                 {
                     audioNodeKind = AudioNodeKind::Invalid;
                     SetEntityBit(idMap, mixerUnitDescriptor->bUnitID);
-                    return TraverseTowardSinks(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                    return TraverseTowardForward(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                 }
             }
         }
@@ -4034,9 +4118,9 @@ USBAudio2ControlInterface::WalkNextUnitTowardSinks(
             if (!TestEntityBit(idMap, outputTerminalDescriptor->bTerminalID) && (outputTerminalDescriptor->bTerminalID == unitID))
             {
                 SetEntityBit(idMap, outputTerminalDescriptor->bTerminalID);
-                audioNodeKind = AudioNodeKind::RenderPin;
+                audioNodeKind = AudioNodeKind::RenderBridgePin;
 
-                return TraverseTowardSinks(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                return TraverseTowardForward(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
             }
         }
         break;
@@ -4053,7 +4137,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSinks(
     }
     audioNodeKind = AudioNodeKind::Invalid;
     SetEntityBit(idMap, unitID);
-    status = TraverseTowardSinks(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+    status = TraverseTowardForward(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
 
     return status;
 }
@@ -4061,7 +4145,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSinks(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
-USBAudio2ControlInterface::WalkNextUnitTowardSources(
+USBAudio2ControlInterface::WalkNextUnitTowardReverse(
     ULONGLONG            idMap[4],
     ULONGLONG            unvisitedUnitMap[4],
     AudioNodeKind &      audioNodeKind,
@@ -4091,8 +4175,8 @@ USBAudio2ControlInterface::WalkNextUnitTowardSources(
             if (!TestEntityBit(idMap, outputTerminalDescriptor->bTerminalID) && (outputTerminalDescriptor->bTerminalID == unitID))
             {
                 SetEntityBit(idMap, outputTerminalDescriptor->bTerminalID);
-                audioNodeKind = AudioNodeKind::CaptureStreamingPin;
-                return TraverseTowardSources(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                audioNodeKind = AudioNodeKind::CaptureHostPin;
+                return TraverseTowardReverse(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
             }
         }
         break;
@@ -4103,8 +4187,8 @@ USBAudio2ControlInterface::WalkNextUnitTowardSources(
             if (!TestEntityBit(idMap, inputTerminalDescriptor->bTerminalID) && (inputTerminalDescriptor->bTerminalID == unitID))
             {
                 SetEntityBit(idMap, inputTerminalDescriptor->bTerminalID);
-                audioNodeKind = AudioNodeKind::CaptureEndpointPin;
-                return TraverseTowardSources(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                audioNodeKind = AudioNodeKind::CaptureBridgePin;
+                return TraverseTowardReverse(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
             }
         }
         break;
@@ -4134,7 +4218,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSources(
                     if (controlBitmap == 0)
                     {
                         SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
-                        return TraverseTowardSources(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                        return TraverseTowardReverse(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                     }
                     nextUnitID = featureUnitDescriptor->bUnitID;
                     return STATUS_SUCCESS;
@@ -4146,7 +4230,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSources(
                     if (controlBitmap == 0)
                     {
                         SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
-                        return TraverseTowardSources(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                        return TraverseTowardReverse(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                     }
                     nextUnitID = featureUnitDescriptor->bUnitID;
                     return STATUS_SUCCESS;
@@ -4158,7 +4242,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSources(
                     if (controlBitmap == 0)
                     {
                         SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
-                        return TraverseTowardSources(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                        return TraverseTowardReverse(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                     }
                     nextUnitID = featureUnitDescriptor->bUnitID;
                     return STATUS_SUCCESS;
@@ -4168,7 +4252,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSources(
                     controlBitmap = 0;
                     audioNodeKind = AudioNodeKind::Invalid;
                     SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
-                    return TraverseTowardSources(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                    return TraverseTowardReverse(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                 }
             }
         }
@@ -4195,7 +4279,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSources(
                             SetEntityBit(unvisitedUnitMap, baSourceID);
                         }
                     }
-                    status = TraverseTowardSources(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                    status = TraverseTowardReverse(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                     TestAndClearEntityBit(unvisitedUnitMap, nextUnitID);
                     if (setEntityBit)
                     {
@@ -4208,7 +4292,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSources(
                 {
                     audioNodeKind = AudioNodeKind::Invalid;
                     SetEntityBit(idMap, mixerUnitDescriptor->bUnitID);
-                    return TraverseTowardSources(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                    return TraverseTowardReverse(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                 }
             }
         }
@@ -4236,7 +4320,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSources(
                             SetEntityBit(unvisitedUnitMap, sourceID);
                         }
                     }
-                    status = TraverseTowardSources(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+                    status = TraverseTowardReverse(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
                     TestAndClearEntityBit(unvisitedUnitMap, nextUnitID);
                     if (setEntityBit)
                     {
@@ -4261,7 +4345,7 @@ USBAudio2ControlInterface::WalkNextUnitTowardSources(
 
     audioNodeKind = AudioNodeKind::Invalid;
     SetEntityBit(idMap, unitID);
-    status = TraverseTowardSources(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+    status = TraverseTowardReverse(idMap, unvisitedUnitMap, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
 
     return status;
 }
@@ -4337,7 +4421,7 @@ USBAudio2ControlInterface::WalkNextUnvisitedUnit(
                         nextUnitID = baSourceID;
                         unitID = mixerUnitDescriptor->bUnitID;
                         audioNodeKind = AudioNodeKind::SuperMixElement;
-                        traversalDirection = TraversalDirection::TowardSources;
+                        traversalDirection = TraversalDirection::Reverse;
                         hasMoreData = true;
                         if (checkEntityBit(((UCHAR *)mixerUnitDescriptor) + sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON), mixerUnitDescriptor->bNrInPins))
                         {
@@ -4365,7 +4449,7 @@ USBAudio2ControlInterface::WalkNextUnvisitedUnit(
                         nextUnitID = sourceID;
                         unitID = selectorUnitDescriptor->bUnitID;
                         audioNodeKind = AudioNodeKind::MuxElement;
-                        traversalDirection = TraversalDirection::TowardSources;
+                        traversalDirection = TraversalDirection::Reverse;
                         hasMoreData = true;
                         if (checkEntityBit(selectorUnitDescriptor->baSourceID, selectorUnitDescriptor->bNrInPins))
                         {
@@ -4618,8 +4702,35 @@ bool USBAudio2ControlInterface::InterlockedGetUpdatedEntity(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+NTSTATUS USBAudio2ControlInterface::ValidateChannelNamesStringDescriptor(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR &         index
+)
+{
+    PAGED_CODE();
+
+    if (index != USBAudioConfiguration::InvalidString)
+    {
+        WDFMEMORY stringMemory = nullptr;
+        USHORT *  string = nullptr;
+        if (!NT_SUCCESS(USBAudioConfiguration::GetStringDescriptor(deviceContext->UsbDevice, index, LANGID_EN_US, stringMemory, string)))
+        {
+            index = USBAudioConfiguration::InvalidString;
+        }
+        else
+        {
+            WdfObjectDelete(stringMemory);
+            stringMemory = nullptr;
+            string = nullptr;
+        }
+    }
+    return STATUS_SUCCESS;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 bool USBAudio2ControlInterface::GetUpdatedVolumeEntity(
-    _Out_ UCHAR & entityID
+    UCHAR & entityID
 )
 {
     PAGED_CODE();
@@ -4630,7 +4741,7 @@ bool USBAudio2ControlInterface::GetUpdatedVolumeEntity(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 bool USBAudio2ControlInterface::GetUpdatedMuteEntity(
-    _Out_ UCHAR & entityID
+    UCHAR & entityID
 )
 {
     PAGED_CODE();
@@ -4641,7 +4752,7 @@ bool USBAudio2ControlInterface::GetUpdatedMuteEntity(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 bool USBAudio2ControlInterface::GetUpdatedInputConnectorEntity(
-    _Out_ UCHAR & entityID
+    UCHAR & entityID
 )
 {
     PAGED_CODE();
@@ -4652,7 +4763,7 @@ bool USBAudio2ControlInterface::GetUpdatedInputConnectorEntity(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 bool USBAudio2ControlInterface::GetUpdatedOutputConnectorEntity(
-    _Out_ UCHAR & entityID
+    UCHAR & entityID
 )
 {
     PAGED_CODE();
@@ -6885,6 +6996,22 @@ USBAudioStreamInterfaceGroup::GetStreamChannels(
     return STATUS_SUCCESS;
 }
 
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
+USBAudioStreamInterfaceGroup::GetInformationForBridgePin(
+    UCHAR                                           unitID,
+    UCHAR &                                         numOfChannels,
+    USHORT &                                        terminalType,
+    UCHAR &                                         channelNames,
+    NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioControlInterface->GetInformationForBridgePin(m_deviceContext, unitID, numOfChannels, terminalType, channelNames, connectorState);
+}
+
 _Use_decl_annotations_
 PAGED_CODE_SEG
 ULONG
@@ -7111,7 +7238,7 @@ USBAudioStreamInterfaceGroup::GetSupportedSampleFormats()
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
-USBAudioStreamInterfaceGroup::WalkNextUnitTowardSinks(
+USBAudioStreamInterfaceGroup::WalkNextUnitTowardForward(
     const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
     ULONGLONG                         idMap[4],
     ULONGLONG                         unvisitedUnitMap[4],
@@ -7143,13 +7270,13 @@ USBAudioStreamInterfaceGroup::WalkNextUnitTowardSinks(
             unitID = terminalLink;
         }
     }
-    if (traversalDirection == TraversalDirection::TowardSinks)
+    if (traversalDirection == TraversalDirection::Forward)
     {
-        status = m_usbAudioControlInterface->WalkNextUnitTowardSinks(idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+        status = m_usbAudioControlInterface->WalkNextUnitTowardForward(idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
     }
     else
     {
-        status = m_usbAudioControlInterface->WalkNextUnitTowardSources(idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+        status = m_usbAudioControlInterface->WalkNextUnitTowardReverse(idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
     }
 
     if (!hasMoreData)
@@ -7167,7 +7294,7 @@ USBAudioStreamInterfaceGroup::WalkNextUnitTowardSinks(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
-USBAudioStreamInterfaceGroup::WalkNextUnitTowardSources(
+USBAudioStreamInterfaceGroup::WalkNextUnitTowardReverse(
     const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
     ULONGLONG                         idMap[4],
     ULONGLONG                         unvisitedUnitMap[4],
@@ -7198,13 +7325,13 @@ USBAudioStreamInterfaceGroup::WalkNextUnitTowardSources(
             unitID = terminalLink;
         }
     }
-    if (traversalDirection == TraversalDirection::TowardSinks)
+    if (traversalDirection == TraversalDirection::Forward)
     {
-        status = m_usbAudioControlInterface->WalkNextUnitTowardSinks(idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+        status = m_usbAudioControlInterface->WalkNextUnitTowardForward(idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
     }
     else
     {
-        status = m_usbAudioControlInterface->WalkNextUnitTowardSources(idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+        status = m_usbAudioControlInterface->WalkNextUnitTowardReverse(idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
     }
     if (!hasMoreData)
     {

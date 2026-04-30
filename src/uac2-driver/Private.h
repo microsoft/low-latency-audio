@@ -207,7 +207,8 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(RENDER_DEVICE_CONTEXT, GetRenderDeviceContext
 //
 typedef struct _ELEMENT_CONTEXT
 {
-    BOOLEAN Dummy;
+    ULONG AudioNodeKind;
+    UCHAR UnitID;
 } ELEMENT_CONTEXT, *PELEMENT_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ELEMENT_CONTEXT, GetElementContext)
@@ -368,6 +369,7 @@ typedef enum _CODEC_PIN_TYPE
 
 typedef struct _CODEC_PIN_CONTEXT
 {
+    bool                     IsInput;
     WDFDEVICE                Device;
     CODEC_PIN_TYPE           CodecPinType;
     ULONG                    DeviceIndex;
@@ -492,6 +494,9 @@ Codec_CreateMuteElement(
     _Out_ ACXELEMENT & MuteElement
 );
 
+NONPAGED_CODE_SEG
+EVT_WDF_DEVICE_CONTEXT_CLEANUP Codec_EvtPinContextCleanup;
+
 PAGED_CODE_SEG
 NTSTATUS
 Codec_AllocateSupportedFormats(
@@ -514,9 +519,6 @@ EVT_ACX_CIRCUIT_POWER_DOWN CodecR_EvtCircuitPowerDown;
 PAGED_CODE_SEG
 EVT_ACX_STREAM_SET_RENDER_PACKET CodecR_EvtStreamSetRenderPacket;
 // EVT_ACX_STREAM_GET_CAPTURE_PACKET   CodecR_EvtStreamGetLoopbackPacket;
-
-NONPAGED_CODE_SEG
-EVT_WDF_DEVICE_CONTEXT_CLEANUP CodecR_EvtPinContextCleanup;
 
 // EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecR_EvtVolumeAssignLevel;
 
@@ -627,9 +629,6 @@ EVT_ACX_STREAM_GET_CAPTURE_PACKET CodecC_EvtStreamGetCapturePacket;
 PAGED_CODE_SEG
 EVT_ACX_PIN_RETRIEVE_NAME CodecC_EvtAcxPinRetrieveName;
 
-NONPAGED_CODE_SEG
-EVT_WDF_DEVICE_CONTEXT_CLEANUP CodecC_EvtPinContextCleanup;
-
 // EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecC_EvtVolumeAssignLevel;
 
 PAGED_CODE_SEG
@@ -671,6 +670,122 @@ NTSTATUS
 CodecC_ConnectorChangeStateNotification(
     _In_ ACXCIRCUIT Circuit,
     _In_ UCHAR      EntityID
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateRenderPin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXPIN &              Pin,
+    _In_ ULONG                    Id,
+    _In_ ULONG                    DeviceIndex,
+    _In_ ULONG                    Channel,
+    _In_ ULONG                    ChannelsCount
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateBridgePin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXPIN &              Pin,
+    _In_ ULONG                    Id,
+    _In_ ULONG                    DeviceIndex,
+    _In_ ULONG                    Channel,
+    _In_ ULONG                    ChannelsCount,
+    _In_ USHORT                   TerminalType,
+    _In_ UCHAR                    TerminalID
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateCaptureStreamingPin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXPIN &              Pin,
+    _In_ ULONG                    Id,
+    _In_ ULONG                    DeviceIndex,
+    _In_ ULONG                    Channel,
+    _In_ ULONG                    ChannelsCount
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateCaptureEndpointPin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXPIN &              Pin,
+    _In_ ULONG                    Id,
+    _In_ ULONG                    DeviceIndex,
+    _In_ ULONG                    Channel,
+    _In_ ULONG                    ChannelsCount,
+    _In_ USHORT                   TerminalType,
+    _In_ UCHAR                    TerminalID
+);
+
+/////////////////////////////////////////////////////////
+//
+// Codec Capture/Render common definitions
+//
+PAGED_CODE_SEG
+EVT_ACX_PIN_RETRIEVE_NAME Codec_EvtAcxPinRetrieveName;
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateRenderHostPin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _In_ ULONG                    PinID,
+    _Inout_ ACXPIN &              Element,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateRenderBridgePin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _In_ ULONG                    PinID,
+    _Inout_ ACXPIN &              Element,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateCaptureHostPin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _In_ ULONG                    PinID,
+    _Inout_ ACXPIN &              Element,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateCaptureBridgePin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _In_ ULONG                    PinID,
+    _Inout_ ACXPIN &              Element,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_AllocateElements(
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _In_ bool                     IsInput,
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine
 );
 
 /* make internal prototypes usable from C++ */

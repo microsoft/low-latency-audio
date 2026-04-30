@@ -673,6 +673,39 @@ NTSTATUS ConvertAudioDataFormat(
 }
 
 PAGED_CODE_SEG
+_Use_decl_annotations_
+ULONG ConverSpeakerPositions(
+    ULONG channelConfig
+)
+{
+	PAGED_CODE();
+	
+    if (channelConfig < NS_USBAudio0200::TOP_FRONT_LEFT_OF_CENTER)
+    {
+        // NS_USBAudio0200::FRONT_LEFT                 , = 0x00000001, SPEAKER_FRONT_LEFT               = 0x00000001
+        // NS_USBAudio0200::FRONT_RIGHT                , = 0x00000002, SPEAKER_FRONT_RIGHT              = 0x00000002
+        // NS_USBAudio0200::FRONT_CENTER               , = 0x00000004, SPEAKER_FRONT_CENTER             = 0x00000004
+        // NS_USBAudio0200::LOW_FREQUENCY_EFFECTS_LFE  , = 0x00000008, SPEAKER_LOW_FREQUENCY            = 0x00000008
+        // NS_USBAudio0200::BACK_LEFT                  , = 0x00000010, SPEAKER_BACK_LEFT                = 0x00000010
+        // NS_USBAudio0200::BACK_RIGHT                 , = 0x00000020, SPEAKER_BACK_RIGHT               = 0x00000020
+        // NS_USBAudio0200::FRONT_LEFT_OF_CENTER       , = 0x00000040, SPEAKER_FRONT_LEFT_OF_CENTER     = 0x00000040
+        // NS_USBAudio0200::FRONT_RIGHT_OF_CENTER      , = 0x00000080, SPEAKER_FRONT_RIGHT_OF_CENTER    = 0x00000080
+        // NS_USBAudio0200::BACK_CENTER                , = 0x00000100, SPEAKER_BACK_CENTER              = 0x00000100
+        // NS_USBAudio0200::SIDE_LEFT                  , = 0x00000200, SPEAKER_SIDE_LEFT                = 0x00000200
+        // NS_USBAudio0200::SIDE_RIGHT                 , = 0x00000400, SPEAKER_SIDE_RIGHT               = 0x00000400
+        // NS_USBAudio0200::TOP_CENTER                 , = 0x00000800, SPEAKER_TOP_CENTER               = 0x00000800
+        // NS_USBAudio0200::TOP_FRONT_LEFT             , = 0x00001000, SPEAKER_TOP_FRONT_LEFT           = 0x00001000
+        // NS_USBAudio0200::TOP_FRONT_CENTER           , = 0x00002000, SPEAKER_TOP_FRONT_CENTER         = 0x00002000
+        // NS_USBAudio0200::TOP_FRONT_RIGHT            , = 0x00004000, SPEAKER_TOP_FRONT_RIGHT          = 0x00004000
+        // NS_USBAudio0200::TOP_BACK_LEFT              , = 0x00008000, SPEAKER_TOP_BACK_LEFT            = 0x00008000
+        // NS_USBAudio0200::TOP_BACK_CENTER            , = 0x00010000, SPEAKER_TOP_BACK_CENTER          = 0x00010000
+        // NS_USBAudio0200::TOP_BACK_RIGHT             , = 0x00020000, SPEAKER_TOP_BACK_RIGHT           = 0x00020000
+        return channelConfig;
+    }
+    return SPEAKER_ALL;
+}
+
+PAGED_CODE_SEG
 NTSTATUS GetChannelsFromMask(
     _In_ DWORD ChannelMask
 )

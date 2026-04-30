@@ -2604,6 +2604,22 @@ AudioIsochronousEngine::GetStreamChannelInfoAdjusted(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
+AudioIsochronousEngine::GetInformationForBridgePin(
+    UCHAR                                           unitID,
+    UCHAR &                                         numOfChannels,
+    USHORT &                                        terminalType,
+    UCHAR &                                         channelNames,
+    NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioStreamInterfaceGroup->GetInformationForBridgePin(unitID, numOfChannels, terminalType, channelNames, connectorState);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
 AudioIsochronousEngine::AddStaticRender(
     WDFDEVICE              device,
     const GUID *           componentGuid,
@@ -4829,11 +4845,11 @@ NTSTATUS AudioIsochronousEngine::WalkNextUnit(
 
     if (isInput)
     {
-        return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardSources(m_audioStreamPropertySet, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+        return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardReverse(m_audioStreamPropertySet, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
     }
     else
     {
-        return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardSinks(m_audioStreamPropertySet, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+        return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardForward(m_audioStreamPropertySet, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
     }
 }
 
