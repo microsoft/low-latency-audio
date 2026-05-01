@@ -542,6 +542,23 @@ class USBAudioControlInterface : public USBAudioInterface
     ) = 0;
 
     _Success_(NT_SUCCESS(return))
+    virtual NTSTATUS GetInformationForVolumeElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels,
+        _Out_ LONG &         minimum,
+        _Out_ LONG &         maximum,
+        _Out_ ULONG &        steppingDelta
+    ) = 0;
+
+    _Success_(NT_SUCCESS(return))
+    virtual NTSTATUS GetInformationForMuteElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
+    ) = 0;
+
+    _Success_(NT_SUCCESS(return))
     virtual NTSTATUS SearchOutputTerminalFromInputTerminal(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           terminalLink,
@@ -1018,6 +1035,29 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
         _Out_ USHORT &       terminalType,
         _Out_ UCHAR &        channelNames,
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForVolumeElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels,
+        _Out_ LONG &         minimum,
+        _Out_ LONG &         maximum,
+        _Out_ ULONG &        steppingDelta
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForMuteElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1554,6 +1594,29 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _Out_ USHORT &       terminalType,
         _Out_ UCHAR &        channelNames,
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForVolumeElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels,
+        _Out_ LONG &         minimum,
+        _Out_ LONG &         maximum,
+        _Out_ ULONG &        steppingDelta
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForMuteElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -2457,6 +2520,27 @@ class USBAudioStreamInterfaceGroup
         _Out_ USHORT & terminalType,
         _Out_ UCHAR &  channelNames,
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForVolumeElement(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfChannels,
+        _Out_ LONG &  minimum,
+        _Out_ LONG &  maximum,
+        _Out_ ULONG & steppingDelta
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForMuteElement(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)

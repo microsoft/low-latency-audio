@@ -475,23 +475,21 @@ EVT_ACX_VOLUME_RETRIEVE_LEVEL Codec_EvtVolumeRetrieveLevel;
 PAGED_CODE_SEG
 NTSTATUS
 Codec_CreateVolumeElement(
-    _In_ WDFDEVICE     Device,
-    _In_ ACXCIRCUIT    Circuit,
-    _In_ UCHAR         VolumeUnitID,
-    _In_ const GUID *  Name,
-    _In_ ULONG         ChannelsCount,
-    _Out_ ACXELEMENT & VolumeElement
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXPIN &              Element,
+    _In_ UCHAR                    UnitID
 );
 
 PAGED_CODE_SEG
 NTSTATUS
 Codec_CreateMuteElement(
-    _In_ WDFDEVICE     Device,
-    _In_ ACXCIRCUIT    Circuit,
-    _In_ UCHAR         MuteUnitID,
-    _In_ const GUID *  Name,
-    _In_ ULONG         ChannelsCount,
-    _Out_ ACXELEMENT & MuteElement
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXPIN &              Element,
+    _In_ UCHAR                    UnitID
 );
 
 NONPAGED_CODE_SEG
@@ -742,7 +740,7 @@ NTSTATUS Codec_CreateRenderHostPin(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _In_ ULONG                    PinID,
-    _Inout_ ACXPIN &              Element,
+    _Inout_ ACXELEMENT &          Element,
     _In_ UCHAR                    UnitID
 );
 
@@ -753,7 +751,7 @@ NTSTATUS Codec_CreateRenderBridgePin(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _In_ ULONG                    PinID,
-    _Inout_ ACXPIN &              Element,
+    _Inout_ ACXELEMENT &          Element,
     _In_ UCHAR                    UnitID
 );
 
@@ -764,7 +762,7 @@ NTSTATUS Codec_CreateCaptureHostPin(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _In_ ULONG                    PinID,
-    _Inout_ ACXPIN &              Element,
+    _Inout_ ACXELEMENT &          Element,
     _In_ UCHAR                    UnitID
 );
 
@@ -775,7 +773,7 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _In_ ULONG                    PinID,
-    _Inout_ ACXPIN &              Element,
+    _Inout_ ACXELEMENT &          Element,
     _In_ UCHAR                    UnitID
 );
 

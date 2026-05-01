@@ -2620,6 +2620,35 @@ AudioIsochronousEngine::GetInformationForBridgePin(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
+AudioIsochronousEngine::GetInformationForVolumeElement(
+    UCHAR   unitID,
+    UCHAR & numOfChannels,
+    LONG &  minimum,
+    LONG &  maximum,
+    ULONG & steppingDelta
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioStreamInterfaceGroup->GetInformationForVolumeElement(unitID, numOfChannels, minimum, maximum, steppingDelta);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
+AudioIsochronousEngine::GetInformationForMuteElement(
+    UCHAR   unitID,
+    UCHAR & numOfChannels
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioStreamInterfaceGroup->GetInformationForMuteElement(unitID, numOfChannels);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
 AudioIsochronousEngine::AddStaticRender(
     WDFDEVICE              device,
     const GUID *           componentGuid,

@@ -254,6 +254,27 @@ class AudioIsochronousEngine
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
     );
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForVolumeElement(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfChannels,
+        _Out_ LONG &  minimum,
+        _Out_ LONG &  maximum,
+        _Out_ ULONG & steppingDelta
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForMuteElement(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfChannels
+    );
+
     // Render Circuit
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG

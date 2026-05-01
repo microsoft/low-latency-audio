@@ -625,29 +625,7 @@ Return Value:
         // Create mute and volume elements.
         //
         {
-            if (volumeUnitID != USBAudioConfiguration::InvalidID)
-            { // Volume Enable
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateVolumeElement(Device, circuit, volumeUnitID, &KSAUDFNAME_VOLUME_CONTROL, numOfChannelsPerDevice, elements[elementIndex]));
-
-                //
-                // Saving the volume elements in the circuit context.
-                //
-                circuitContext->VolumeElements[index] = (ACXVOLUME)elements[elementIndex];
-
-                elementIndex++;
-            }
-
-            if (muteUnitID != USBAudioConfiguration::InvalidID)
-            { // Mute Enable
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuteElement(Device, circuit, muteUnitID, &KSAUDFNAME_WAVE_MUTE, numOfChannelsPerDevice, elements[elementIndex]));
-
-                //
-                // Saving the mute elements in the circuit context.
-                //
-                circuitContext->MuteElements[index] = (ACXMUTE)elements[elementIndex];
-
-                elementIndex++;
-            }
+            ;
         }
 
         ///////////////////////////////////////////////////////////

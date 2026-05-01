@@ -1461,6 +1461,35 @@ NTSTATUS USBAudio1ControlInterface::GetInformationForBridgePin(
     return STATUS_NOT_SUPPORTED;
 }
 
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio1ControlInterface::GetInformationForVolumeElement(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* unitID */,
+    UCHAR & /* numOfChannels */,
+    LONG & /* minimum */,
+    LONG & /* maximum */,
+    ULONG & /* steppingDelta */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio1ControlInterface::GetInformationForMuteElement(
+    _In_ PDEVICE_CONTEXT /* deviceContext */,
+    _In_ UCHAR /* unitID */,
+    _Out_ UCHAR & /* numOfChannels */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS USBAudio1ControlInterface::SearchOutputTerminalFromInputTerminal(
@@ -3547,7 +3576,6 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
             }
             else
             {
-                numOfChannels = 2;
                 channelNames = outputTerminalDescriptor->iTerminal;
                 connectorState.bNrChannels = numOfChannels;
                 connectorState.iChannelNames = channelNames;
@@ -3585,6 +3613,35 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
     }
 
     return STATUS_INVALID_PARAMETER;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio2ControlInterface::GetInformationForVolumeElement(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* unitID */,
+    UCHAR & /* numOfChannels */,
+    LONG & /* minimum */,
+    LONG & /* maximum */,
+    ULONG & /* steppingDelta */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio2ControlInterface::GetInformationForMuteElement(
+    _In_ PDEVICE_CONTEXT /* deviceContext */,
+    _In_ UCHAR /* unitID */,
+    _Out_ UCHAR & /* numOfChannels */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
 }
 
 _Use_decl_annotations_
@@ -7010,6 +7067,33 @@ USBAudioStreamInterfaceGroup::GetInformationForBridgePin(
     PAGED_CODE();
 
     return m_usbAudioControlInterface->GetInformationForBridgePin(m_deviceContext, unitID, numOfChannels, terminalType, channelNames, connectorState);
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudioStreamInterfaceGroup::GetInformationForVolumeElement(
+    UCHAR   unitID,
+    UCHAR & numOfChannels,
+    LONG &  minimum,
+    LONG &  maximum,
+    ULONG & steppingDelta
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioControlInterface->GetInformationForVolumeElement(m_deviceContext, unitID, numOfChannels, minimum, maximum, steppingDelta);
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudioStreamInterfaceGroup::GetInformationForMuteElement(
+    UCHAR   unitID,
+    UCHAR & numOfChannels
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioControlInterface->GetInformationForMuteElement(m_deviceContext, unitID, numOfChannels);
 }
 
 _Use_decl_annotations_

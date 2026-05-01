@@ -382,21 +382,19 @@ _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
 Codec_CreateVolumeElement(
-    WDFDEVICE    Device,
-    ACXCIRCUIT   Circuit,
-    UCHAR        VolumeUnitID,
-    const GUID * Name,
-    ULONG        ChannelsCount,
-    ACXELEMENT & VolumeElement
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID
 )
 {
-    PAGED_CODE();
-
+    UCHAR                 numOfChannels = 0;
+    ACXELEMENT            volumeElement = nullptr;
     WDF_OBJECT_ATTRIBUTES attributes{};
 
+    PAGED_CODE();
     ASSERT(Device != nullptr);
-    PDEVICE_CONTEXT deviceContext = GetDeviceContext(Device);
-    ASSERT(deviceContext != nullptr);
     ASSERT(Circuit != nullptr);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
@@ -415,24 +413,27 @@ Codec_CreateVolumeElement(
     ACX_VOLUME_CONFIG volumeCfg{};
     ACX_VOLUME_CONFIG_INIT(&volumeCfg);
 
-    RETURN_NTSTATUS_IF_FAILED(deviceContext->UsbAudioConfiguration->GetVolumeConfiguration(VolumeUnitID, volumeCfg.Minimum, volumeCfg.Maximum, volumeCfg.SteppingDelta));
-    volumeCfg.ChannelsCount = ChannelsCount;
-    volumeCfg.Name = Name;
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForVolumeElement(UnitID, numOfChannels, volumeCfg.Minimum, volumeCfg.Maximum, volumeCfg.SteppingDelta));
+
+    volumeCfg.ChannelsCount = numOfChannels;
+    volumeCfg.Name = &KSAUDFNAME_VOLUME_CONTROL;
     volumeCfg.Callbacks = &volumeCallbacks;
     TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - volume minimum %ld (0x%lx), maximum %ld (0x%lx), stepping delta %ld (0x%lx)", volumeCfg.Minimum, volumeCfg.Minimum, volumeCfg.Maximum, volumeCfg.Maximum, volumeCfg.SteppingDelta, volumeCfg.SteppingDelta);
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, VOLUME_ELEMENT_CONTEXT);
     attributes.ParentObject = Circuit;
 
-    RETURN_NTSTATUS_IF_FAILED(AcxVolumeCreate(Circuit, &attributes, &volumeCfg, (ACXVOLUME *)&VolumeElement));
+    RETURN_NTSTATUS_IF_FAILED(AcxVolumeCreate(Circuit, &attributes, &volumeCfg, (ACXVOLUME *)&volumeElement));
 
-    PVOLUME_ELEMENT_CONTEXT volumeContext = GetVolumeElementContext(VolumeElement);
+    PVOLUME_ELEMENT_CONTEXT volumeContext = GetVolumeElementContext(volumeElement);
     ASSERT(volumeContext);
 
     RtlZeroMemory(volumeContext, sizeof(VOLUME_ELEMENT_CONTEXT));
     volumeContext->Device = Device;
-    volumeContext->EntityID = VolumeUnitID;
-    volumeContext->NumberOfChannels = min(ChannelsCount, MAX_CHANNELS);
+    volumeContext->EntityID = UnitID;
+    volumeContext->NumberOfChannels = min(numOfChannels, MAX_CHANNELS);
+
+    Element = volumeElement;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
 
@@ -443,17 +444,18 @@ _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
 Codec_CreateMuteElement(
-    WDFDEVICE    Device,
-    ACXCIRCUIT   Circuit,
-    UCHAR        MuteUnitID,
-    const GUID * Name,
-    ULONG        ChannelsCount,
-    ACXELEMENT & MuteElement
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID
 )
 {
-    PAGED_CODE();
-
+    UCHAR                 numOfChannels = 0;
+    ACXELEMENT            muteElement = nullptr;
     WDF_OBJECT_ATTRIBUTES attributes{};
+
+    PAGED_CODE();
 
     ASSERT(Device != nullptr);
     ASSERT(Circuit != nullptr);
@@ -473,22 +475,27 @@ Codec_CreateMuteElement(
     //
     ACX_MUTE_CONFIG muteCfg;
     ACX_MUTE_CONFIG_INIT(&muteCfg);
-    muteCfg.ChannelsCount = ChannelsCount;
-    muteCfg.Name = Name;
+
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForMuteElement(UnitID, numOfChannels));
+
+    muteCfg.ChannelsCount = numOfChannels;
+    muteCfg.Name = &KSAUDFNAME_WAVE_MUTE;
     muteCfg.Callbacks = &muteCallbacks;
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, MUTE_ELEMENT_CONTEXT);
     attributes.ParentObject = Circuit;
 
-    RETURN_NTSTATUS_IF_FAILED(AcxMuteCreate(Circuit, &attributes, &muteCfg, (ACXMUTE *)&MuteElement));
+    RETURN_NTSTATUS_IF_FAILED(AcxMuteCreate(Circuit, &attributes, &muteCfg, (ACXMUTE *)&muteElement));
 
-    PMUTE_ELEMENT_CONTEXT muteContext = GetMuteElementContext(MuteElement);
+    PMUTE_ELEMENT_CONTEXT muteContext = GetMuteElementContext(muteElement);
     ASSERT(muteContext);
 
     RtlZeroMemory(muteContext, sizeof(MUTE_ELEMENT_CONTEXT));
     muteContext->Device = Device;
-    muteContext->EntityID = MuteUnitID;
-    muteContext->NumberOfChannels = min(ChannelsCount, MAX_CHANNELS);
+    muteContext->EntityID = UnitID;
+    muteContext->NumberOfChannels = min(numOfChannels, MAX_CHANNELS);
+
+    Element = muteElement;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
 
@@ -929,9 +936,9 @@ NTSTATUS Codec_CreateRenderHostPin(
     pinContext->IsInput = false;
     pinContext->Device = Device;
     pinContext->CodecPinType = CodecPinTypeHost;
-    pinContext->DeviceIndex = 0;
-    pinContext->Channel = 0;
-    pinContext->NumOfChannelsPerDevice = 0;
+    pinContext->DeviceIndex = 0;            // DeviceIndex;
+    pinContext->Channel = 0;                // Channel;
+    pinContext->NumOfChannelsPerDevice = 0; // ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
@@ -1025,11 +1032,11 @@ NTSTATUS Codec_CreateRenderBridgePin(
     pinContext->IsInput = true;
     pinContext->Device = Device;
     pinContext->CodecPinType = CodecPinTypeDevice;
-    pinContext->DeviceIndex = 0;
-    pinContext->Channel = 0;
-    pinContext->NumOfChannelsPerDevice = 0;
+    pinContext->DeviceIndex = 0;            // DeviceIndex;
+    pinContext->Channel = 0;                // Channel;
+    pinContext->NumOfChannelsPerDevice = 0; // ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
-    pinContext->TerminalID = 0;
+    pinContext->TerminalID = 0;             //  TerminalID;
 
     PVOID context = nullptr;
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, ELEMENT_CONTEXT);
@@ -1093,9 +1100,9 @@ NTSTATUS Codec_CreateCaptureHostPin(
     ASSERT(pinContext);
     pinContext->Device = Device;
     pinContext->CodecPinType = CodecPinTypeHost;
-    pinContext->DeviceIndex = 0;
-    pinContext->Channel = 0;
-    pinContext->NumOfChannelsPerDevice = 0;
+    pinContext->DeviceIndex = 0;            // DeviceIndex;
+    pinContext->Channel = 0;                // Channel;
+    pinContext->NumOfChannelsPerDevice = 0; // ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
@@ -1173,8 +1180,8 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     ASSERT(pinContext);
     pinContext->Device = Device;
     pinContext->CodecPinType = CodecPinTypeDevice;
-    pinContext->DeviceIndex = 0;
-    pinContext->Channel = 0;
+    pinContext->DeviceIndex = 0; // DeviceIndex;
+    pinContext->Channel = 0;     // Channel;
     pinContext->NumOfChannelsPerDevice = numOfChannels;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
     pinContext->TerminalID = UnitID;
@@ -1208,7 +1215,7 @@ Codec_AllocateElements(
     WDF_OBJECT_ATTRIBUTES attributes{};
     WDFMEMORY             elementsMemory = nullptr;
     ACXELEMENT *          elements = nullptr;
-    const ULONG           sizeOfElements = 0x100 * 3; // unitID max + 1 * (volume + mute + agc) 
+    const ULONG           sizeOfElements = 0x100 * 3; // unitID max + 1 * (volume + mute + agc)
     ULONG                 elementIndex = 0;
     ULONG                 numOfElement = 0;
     bool                  hasMoreData = true;
@@ -1284,14 +1291,12 @@ Codec_AllocateElements(
                 elementIndex++;
                 break;
             case AudioNodeKind::VolumeElement: // Feature Unit (FU_VOLUME_CONTROL) : KSNODETYPE_VOLUME
-                // RETURN_NTSTATUS_IF_FAILED(Codec_CreateVolumeElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
-                // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForVolumeElement(unitID));
-                // createVolumeElement(unitID);
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateVolumeElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
+                elementIndex++;
                 break;
             case AudioNodeKind::MuteElement: // Feature Unit (FU_MUTE_CONTROL) : KSNODETYPE_MUTE
-                // RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuteElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
-                // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForMuteElement(unitID));
-                // createMuteElement(unitID);
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuteElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
+                elementIndex++;
                 break;
             case AudioNodeKind::AgcElement: // Feature Unit (FU_AUTOMATIC_GAIN_CONTROL) : KSNODETYPE_AGC
                 // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForAutomaticGainElement(unitID));

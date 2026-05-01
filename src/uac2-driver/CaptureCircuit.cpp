@@ -48,6 +48,260 @@ Environment:
 //  Local function prototypes
 //
 
+#if 0
+__drv_maxIRQL(PASSIVE_LEVEL)
+PAGED_CODE_SEG
+VOID EvtUSBAudioAcxDriverMuxProcessRequest(
+    _In_ WDFOBJECT  object,
+    _In_ WDFREQUEST request
+);
+
+__drv_maxIRQL(PASSIVE_LEVEL)
+PAGED_CODE_SEG
+VOID EvtUSBAudioAcxDriverAgcProcessRequest(
+    _In_ WDFOBJECT  object,
+    _In_ WDFREQUEST request
+);
+
+static ACX_PROPERTY_ITEM s_PropertyItems[] = {
+    {
+        &KSPROPSETID_Audio,                     // const GUID * Set;
+        KSPROPERTY_AUDIO_MUX_SOURCE,
+        ACX_PROPERTY_ITEM_FLAG_GET | ACX_PROPERTY_ITEM_FLAG_SET| ACX_PROPERTY_ITEM_FLAG_BASICSUPPORT, // ULONG Flags;
+        EvtUSBAudioAcxDriverMuxProcessRequest, // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,									   // PVOID Reserved;
+        0,									   // ULONG ControlCb;
+        sizeof(ULONG),						   // ULONG ValueCb;
+		VT_UI4								   // ULONG ValueType;
+    },
+
+    {
+        &KSPROPSETID_Audio,                     // const GUID * Set;
+        KSPROPERTY_AUDIO_AGC,
+        ACX_PROPERTY_ITEM_FLAG_GET | ACX_PROPERTY_ITEM_FLAG_SET| ACX_PROPERTY_ITEM_FLAG_BASICSUPPORT, // ULONG Flags;
+        EvtUSBAudioAcxDriverAgcProcessRequest, // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,									   // PVOID Reserved;
+        0,									   // ULONG ControlCb;
+        sizeof(BOOL),						   // ULONG ValueCb;
+		VT_BOOL								   // ULONG ValueType;
+    },
+};
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+VOID EvtUSBAudioAcxDriverMuxProcessRequest(
+    WDFOBJECT Object,
+    WDFREQUEST Request
+)
+{
+    NTSTATUS               status = STATUS_NOT_SUPPORTED;
+    ACX_REQUEST_PARAMETERS params{};
+
+    PAGED_CODE();
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    ACX_REQUEST_PARAMETERS_INIT(&params);
+    AcxRequestGetParameters(Request, &params);
+
+
+    ASSERT(params.Type == AcxRequestTypeProperty);
+
+    IF_TRUE_ACTION_JUMP((params.Type != AcxRequestTypeProperty) ||
+						(!IsEqualGUID(params.Parameters.Property.Set, KSPROPSETID_Audio) || 
+						 (params.Parameters.Property.Id != KSPROPERTY_AUDIO_MUX_SOURCE)),
+                        ASSERT(FALSE); status = STATUS_INVALID_PARAMETER;,
+						Exit);
+
+	// ACXCIRCUIT circuit = (ACXCIRCUIT)AcxElementGetContainer((ACXELEMENT)Object);
+    // TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, " - ACXCIRCUIT %p", circuit);
+
+	PMUX_ELEMENT_CONTEXT muxContext = GetMuxElementContext((ACXELEMENT)Object);
+	ASSERT(muxContext);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, " - muxContext %p", muxContext);
+
+	if (params.Parameters.Property.Verb == AcxPropertyVerbGet) {
+        *(PULONG(params.Parameters.Property.Value)) = muxContext->SelectedPinId;
+        params.Parameters.Property.ValueCb = sizeof(ULONG);
+		TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - AcxPropertyVerbGet ");
+		TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(params.Parameters.Property.Value));
+		TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
+		status = STATUS_SUCCESS;
+	} else if (params.Parameters.Property.Verb == AcxPropertyVerbSet) {
+		TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - AcxPropertyVerbSet ");
+		TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(params.Parameters.Property.Value));
+		TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
+		muxContext->SelectedPinId = *(PULONG)(params.Parameters.Property.Value);
+		status = STATUS_SUCCESS;
+	} else if (params.Parameters.Property.Verb == AcxPropertyVerbBasicSupport) {
+		TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbBasicSupport ");
+		status = ProcessRequestHandler_BasicSupport(&params, KSPROPERTY_TYPE_ALL, VT_UI4);
+
+		status = STATUS_SUCCESS;
+	} 
+
+Exit:
+    WdfRequestComplete(Request, status);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
+}
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+static NTSTATUS CreateMuxElement(
+    _In_ PDEVICE_CONTEXT /* DeviceContext */,
+	_In_ WDFDEVICE Device, 
+	_In_ ACXCIRCUIT Circuit, 
+	_Inout_ ACXELEMENT* Element,
+	_In_ UCHAR SelectorUnitID, 
+	_In_ UCHAR Channels, 
+	_In_ ULONG SelectedPinId,
+	_Inout_ ACXELEMENT * MuxElement)
+{
+    NTSTATUS              status = STATUS_SUCCESS;
+    WDF_OBJECT_ATTRIBUTES  attributes{};
+    ACX_ELEMENT_CONFIG  config{};
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    ACX_ELEMENT_CONFIG_INIT(&config);
+    config.Type = &KSNODETYPE_MUX;
+    config.Name = &KSNODETYPE_MUX;
+    config.Properties = &(s_PropertyItems[0]);
+	config.PropertiesCount = 1;
+
+	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, MUX_ELEMENT_CONTEXT);
+	attributes.ParentObject = Circuit;
+
+	RETURN_NTSTATUS_IF_FAILED(AcxElementCreate(Circuit, &attributes, &config, (ACXELEMENT*)Element));
+
+	//
+	// Saving the volume elements in the circuit context.
+	//
+	*MuxElement = (ACXELEMENT)*Element;
+
+	PMUX_ELEMENT_CONTEXT muxContext = GetMuxElementContext(*MuxElement);
+	ASSERT(muxContext);
+
+	RtlZeroMemory(muxContext, sizeof(MUX_ELEMENT_CONTEXT));
+	muxContext->Device = Device;
+	muxContext->EntityID =  SelectorUnitID;
+	muxContext->SelectedPinId = SelectedPinId;
+	muxContext->NumberOfChannels = min(Channels, MAX_CHANNELS);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
+
+    return status;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+VOID EvtUSBAudioAcxDriverAgcProcessRequest(
+    WDFOBJECT  /* Object */,
+    WDFREQUEST Request
+)
+{
+    NTSTATUS               status = STATUS_NOT_SUPPORTED;
+    ACX_REQUEST_PARAMETERS params{};
+
+    PAGED_CODE();
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    ACX_REQUEST_PARAMETERS_INIT(&params);
+    AcxRequestGetParameters(Request, &params);
+
+
+    ASSERT(params.Type == AcxRequestTypeProperty);
+
+    IF_TRUE_ACTION_JUMP((params.Type != AcxRequestTypeProperty) ||
+						(!IsEqualGUID(params.Parameters.Property.Set, KSPROPSETID_Audio) || 
+						 (params.Parameters.Property.Id != KSPROPERTY_AUDIO_AGC)),
+                        ASSERT(FALSE); status = STATUS_INVALID_PARAMETER;,
+						Exit);
+
+#if 0
+//	ACXCIRCUIT circuit = AcxElementGetContainer((ACXELEMENT)Object);
+//    ASSERT(circuit != nullptr);
+
+//    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)circuit);
+//    ASSERT(device != nullptr);
+#else
+//    WDFDEVICE       device = AcxCircuitGetWdfDevice((ACXCIRCUIT)Object);
+#endif
+
+    //    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
+    //    ASSERT(deviceContext != nullptr);
+
+	if (params.Parameters.Property.Verb == AcxPropertyVerbGet) {
+		TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbGet ");
+		// Auto Gain Control の ON/OFF を返す。
+		status = STATUS_SUCCESS;
+	} else if (params.Parameters.Property.Verb == AcxPropertyVerbSet) {
+		TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbSet ");
+		// Auto Gain Control の ON/OFF を設定する。
+		status = STATUS_SUCCESS;
+	} else if (params.Parameters.Property.Verb == AcxPropertyVerbBasicSupport) {
+		TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbBasicSupport ");
+		status = ProcessRequestHandler_BasicSupport(&params, KSPROPERTY_TYPE_ALL, VT_BOOL);
+		status = STATUS_SUCCESS;
+	} 
+
+Exit:
+    WdfRequestComplete(Request, status);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
+}
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+static NTSTATUS CreateAgcElement(
+	_In_ PDEVICE_CONTEXT /* DeviceContext */,
+	_In_ WDFDEVICE Device, 
+	_In_ ACXCIRCUIT Circuit, 
+	_Inout_ ACXELEMENT* Element,
+	_In_ UCHAR SelectorUnitID, 
+	_In_ UCHAR Channels, 
+	_Inout_ ACXELEMENT * AgcElement)
+{
+    NTSTATUS              status = STATUS_SUCCESS;
+    WDF_OBJECT_ATTRIBUTES  attributes{};
+    ACX_ELEMENT_CONFIG  config{};
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    ACX_ELEMENT_CONFIG_INIT(&config);
+    config.Type = &KSNODETYPE_AGC;
+    config.Name = &KSNODETYPE_AGC;
+    config.Properties = &(s_PropertyItems[0]);
+	config.PropertiesCount = 1;
+
+	WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, AGC_ELEMENT_CONTEXT);
+	attributes.ParentObject = Circuit;
+
+	RETURN_NTSTATUS_IF_FAILED(AcxElementCreate(Circuit, &attributes, &config, (ACXELEMENT*)Element));
+
+	//
+	// Saving the volume elements in the circuit context.
+	//
+	*AgcElement = (ACXELEMENT)*Element;
+
+	PAGC_ELEMENT_CONTEXT agcContext = GetAgcElementContext(*AgcElement);
+	ASSERT(agcContext);
+
+	RtlZeroMemory(agcContext, sizeof(AGC_ELEMENT_CONTEXT));
+	agcContext->Device = Device;
+    agcContext->EntityID = SelectorUnitID;
+	agcContext->NumberOfChannels = min(Channels, MAX_CHANNELS);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
+
+    return status;
+}
+
+#endif
+
 PAGED_CODE_SEG
 _Success_(NT_SUCCESS(return))
 static NTSTATUS AddAudioJackToBridgePin(
@@ -463,29 +717,6 @@ Return Value:
         // Create mute and volume element.
         //
         {
-            if (volumeUnitID != USBAudioConfiguration::InvalidID)
-            { // Volume Enable
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateVolumeElement(Device, circuit, volumeUnitID, &KSAUDFNAME_VOLUME_CONTROL, numOfChannelsPerDevice, elements[elementIndex]));
-
-                //
-                // Saving the volume elements in the circuit context.
-                //
-                circuitContext->VolumeElements[index] = (ACXVOLUME)elements[elementIndex];
-
-                elementIndex++;
-            }
-
-            if (muteUnitID != USBAudioConfiguration::InvalidID)
-            { // Mute Enable
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuteElement(Device, circuit, muteUnitID, &KSAUDFNAME_WAVE_MUTE, numOfChannelsPerDevice, elements[elementIndex]));
-
-                //
-                // Saving the mute elements in the circuit context.
-                //
-                circuitContext->MuteElements[index] = (ACXMUTE)elements[elementIndex];
-
-                elementIndex++;
-            }
         }
 
         ///////////////////////////////////////////////////////////
