@@ -759,6 +759,11 @@ typedef struct CS_AC_MIXER_UNIT_DESCRIPTOR {
 } CS_AC_MIXER_UNIT_DESCRIPTOR, *PCS_AC_MIXER_UNIT_DESCRIPTOR;
 */
 
+enum 
+{
+	SIZE_OF_MINIMUM_CS_AC_MIXER_UNIT_DESCRIPTOR = sizeof(CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + 1 + 1 + 4 + 1 + 1 + 1
+};
+
 // Table 4-12: Selector Unit Descriptor
 typedef struct CS_AC_SELECTOR_UNIT_DESCRIPTOR
 {
@@ -889,6 +894,16 @@ typedef struct CS_AC_COMMON_PART_OF_PROCESSING_UNIT_DESCRIPTOR
 // Table 4-23: Stereo Extender Processing Unit Descriptor
 
 // Table 4-24: Extension Unit Descriptor
+typedef struct CS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON
+{
+    UCHAR  bLength;            // Size of this descriptor, in bytes: 16+p
+    UCHAR  bDescriptorType;    // CS_INTERFACE descriptor type.
+    UCHAR  bDescriptorSubtype; // EXTENSION_UNIT descriptor subtype.
+    UCHAR  bUnitID;
+    USHORT wExtensionCode;
+    UCHAR  bNrInPins;
+} CS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON, *PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON;
+
 typedef struct CS_AC_EXTENSION_UNIT_DESCRIPTOR
 {
     UCHAR  bLength;            // Size of this descriptor, in bytes: 16+p

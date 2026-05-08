@@ -2649,6 +2649,20 @@ AudioIsochronousEngine::GetInformationForMuteElement(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
+AudioIsochronousEngine::GetInformationForSuperMixElement(
+    UCHAR   unitID,
+    UCHAR & numOfInputChannels,
+    UCHAR & numOfOutputChannels
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioStreamInterfaceGroup->GetInformationForSuperMixElement(unitID, numOfInputChannels, numOfOutputChannels);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
 AudioIsochronousEngine::AddStaticRender(
     WDFDEVICE              device,
     const GUID *           componentGuid,

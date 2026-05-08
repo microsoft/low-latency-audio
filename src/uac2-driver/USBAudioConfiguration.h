@@ -559,6 +559,14 @@ class USBAudioControlInterface : public USBAudioInterface
     ) = 0;
 
     _Success_(NT_SUCCESS(return))
+    virtual NTSTATUS GetInformationForSuperMixElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfInputChannels,
+        _Out_ UCHAR &        numOfOutputChannels
+    ) = 0;
+
+    _Success_(NT_SUCCESS(return))
     virtual NTSTATUS SearchOutputTerminalFromInputTerminal(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           terminalLink,
@@ -1058,6 +1066,17 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           unitID,
         _Out_ UCHAR &        numOfChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForSuperMixElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfInputChannels,
+        _Out_ UCHAR &        numOfOutputChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1621,6 +1640,17 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForSuperMixElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfInputChannels,
+        _Out_ UCHAR &        numOfOutputChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS SearchOutputTerminalFromInputTerminal(
         _In_ PDEVICE_CONTEXT deviceContext,
@@ -1953,6 +1983,12 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    ULONG GetUnitOutputChannelCount(
+        _In_ UCHAR unitID
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     NTSTATUS TraverseTowardForward(
         _Inout_updates_(4) ULONGLONG idMap[4],
         _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
@@ -2027,7 +2063,8 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         MAX_CLOCK_SELECTOR = 10,
         MAX_TERMINAL = 10,
         MAX_FEATURE_UNIT = 10,
-        MAX_SELECTOR_UNIT = 10
+        MAX_SELECTOR_UNIT = 10,
+        MAX_MIXER_UNIT = 10
     };
 
     // NS_USBAudio0200::PCS_AC_INTERFACE_HEADER_DESCRIPTOR m_interfaceDescriptor{nullptr};
@@ -2037,6 +2074,7 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     VariableArray<NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR, MAX_TERMINAL>       m_acInputTerminalInfo;
     VariableArray<NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR, MAX_FEATURE_UNIT>     m_acFeatureUnitInfo;
     VariableArray<NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR, MAX_SELECTOR_UNIT>   m_acSelectorUnitInfo;
+    VariableArray<NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON, MAX_MIXER_UNIT>  m_acMixerUnitInfo;
     ULONG                                                                                m_clockEntityBitmap[8]{};
     ULONG                                                                                m_clockEntityCount{0};
     ULONG                                                                                m_volumeUpdatedEntityBitmap[8]{};
@@ -2541,6 +2579,16 @@ class USBAudioStreamInterfaceGroup
     GetInformationForMuteElement(
         _In_ UCHAR    unitID,
         _Out_ UCHAR & numOfChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForSuperMixElement(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfInputChannels,
+        _Out_ UCHAR & numOfOutputChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)

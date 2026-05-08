@@ -432,138 +432,62 @@ USBAudioAcxDriverStreamGetCurrentTimeUs(
     _Out_opt_ PULONGLONG qpcPosition
 );
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetAudioProperty(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetAudioProperty;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetChannelInfo(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetChannelInfo;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetClockInfo(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetClockInfo;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetLatencyOffsetOfSampleRate(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetLatencyOffsetOfSampleRate;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverSetClockSource(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverSetClockSource;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverSetSampleFormat(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverSetSampleFormat;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverChangeSampleRate(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverChangeSampleRate;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetAsioOwnership(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetAsioOwnership;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverStartAsioStream(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverStartAsioStream;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverStopAsioStream(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverStopAsioStream;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverSetAsioBuffer(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverSetAsioBuffer;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverUnsetAsioBuffer(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverUnsetAsioBuffer;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverReleaseAsioOwnership(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverReleaseAsioOwnership;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetBufferPeriod(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetBufferPeriod;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverSetBufferPeriod(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverSetBufferPeriod;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetInputLatency(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetInputLatency;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetOutputLatency(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetOutputLatency;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverSetAsioDevice(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverSetAsioDevice;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetAsioDevice(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetAsioDevice;
 
 __drv_maxIRQL(DISPATCH_LEVEL)
 NONPAGED_CODE_SEG

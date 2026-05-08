@@ -256,9 +256,6 @@ typedef struct _MUX_ELEMENT_CONTEXT
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(MUX_ELEMENT_CONTEXT, GetMuxElementContext)
 
-//
-// Define circuit/stream element context.
-//
 typedef struct _AGC_ELEMENT_CONTEXT
 {
     WDFDEVICE Device;
@@ -267,6 +264,16 @@ typedef struct _AGC_ELEMENT_CONTEXT
 } AGC_ELEMENT_CONTEXT, *PAGC_ELEMENT_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(AGC_ELEMENT_CONTEXT, GetAgcElementContext)
+
+typedef struct _SUPERMIX_ELEMENT_CONTEXT
+{
+    WDFDEVICE Device;
+    UCHAR     EntityID;
+    ULONG     NumberOfInputChannels;
+    ULONG     NumberOfOutputChannels;
+} SUPERMIX_ELEMENT_CONTEXT, *PSUPERMIX_ELEMENT_CONTEXT;
+
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(SUPERMIX_ELEMENT_CONTEXT, GetSuperMixElementContext)
 
 //
 // Define mute timer context.
@@ -478,7 +485,7 @@ Codec_CreateVolumeElement(
     _In_ AudioIsochronousEngine * AudioIsochronousEngine,
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
-    _Inout_ ACXPIN &              Element,
+    _Inout_ ACXELEMENT &          Element,
     _In_ UCHAR                    UnitID
 );
 
@@ -488,7 +495,37 @@ Codec_CreateMuteElement(
     _In_ AudioIsochronousEngine * AudioIsochronousEngine,
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
-    _Inout_ ACXPIN &              Element,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_CreateMuxElement(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_CreateAgcElement(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_CreateSuperMixElement(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
     _In_ UCHAR                    UnitID
 );
 
@@ -732,6 +769,15 @@ NTSTATUS Codec_CreateCaptureEndpointPin(
 //
 PAGED_CODE_SEG
 EVT_ACX_PIN_RETRIEVE_NAME Codec_EvtAcxPinRetrieveName;
+
+PAGED_CODE_SEG
+EVT_ACX_OBJECT_PROCESS_REQUEST Codec_EvtUSBAudioAcxDriverMuxProcessRequest;
+
+PAGED_CODE_SEG
+EVT_ACX_OBJECT_PROCESS_REQUEST Codec_EvtUSBAudioAcxDriverAgcProcessRequest;
+
+PAGED_CODE_SEG
+EVT_ACX_OBJECT_PROCESS_REQUEST Codec_EvtUSBAudioAcxDriverMixLevelCapsProcessRequest;
 
 PAGED_CODE_SEG
 _Success_(NT_SUCCESS(return))
