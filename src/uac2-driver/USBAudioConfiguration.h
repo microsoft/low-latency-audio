@@ -567,6 +567,20 @@ class USBAudioControlInterface : public USBAudioInterface
     ) = 0;
 
     _Success_(NT_SUCCESS(return))
+    virtual NTSTATUS GetInformationForMuxElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
+    ) = 0;
+
+    _Success_(NT_SUCCESS(return))
+    virtual NTSTATUS GetInformationForAgcElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
+    ) = 0;
+
+    _Success_(NT_SUCCESS(return))
     virtual NTSTATUS SearchOutputTerminalFromInputTerminal(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           terminalLink,
@@ -1077,6 +1091,26 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
         _In_ UCHAR           unitID,
         _Out_ UCHAR &        numOfInputChannels,
         _Out_ UCHAR &        numOfOutputChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForMuxElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForAgcElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1647,6 +1681,26 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _In_ UCHAR           unitID,
         _Out_ UCHAR &        numOfInputChannels,
         _Out_ UCHAR &        numOfOutputChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForMuxElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForAgcElement(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -2589,6 +2643,24 @@ class USBAudioStreamInterfaceGroup
         _In_ UCHAR    unitID,
         _Out_ UCHAR & numOfInputChannels,
         _Out_ UCHAR & numOfOutputChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForMuxElement(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForAgcElement(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)

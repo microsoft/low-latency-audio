@@ -132,6 +132,31 @@ static NTSTATUS AddAudioJackToBridgePin(
 }
 
 PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+static NTSTATUS AllocateElementContext(
+    _In_ ACXELEMENT    Element,
+    _In_ AudioNodeKind AudioNodeKind,
+    _In_ ULONG         UnitID,
+    _In_ ULONG         PinID
+)
+{
+    WDF_OBJECT_ATTRIBUTES attributes{};
+    PVOID                 context = nullptr;
+
+    PAGED_CODE();
+
+    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, ELEMENT_CONTEXT);
+    RETURN_NTSTATUS_IF_FAILED(WdfObjectAllocateContext(Element, &attributes, &context));
+    ASSERT(context);
+    PELEMENT_CONTEXT elementContext = (ELEMENT_CONTEXT *)context;
+    elementContext->AudioNodeKind = toULONG(AudioNodeKind);
+    elementContext->UnitID = (UCHAR)UnitID;
+    elementContext->PinID = PinID;
+
+    return STATUS_SUCCESS;
+}
+
+PAGED_CODE_SEG
 NTSTATUS
 Codec_EvtAcxPinRetrieveName(
     _In_ ACXPIN           Pin,
@@ -454,7 +479,7 @@ Codec_CreateVolumeElement(
     volumeCfg.ChannelsCount = numOfChannels;
     volumeCfg.Name = &KSAUDFNAME_VOLUME_CONTROL;
     volumeCfg.Callbacks = &volumeCallbacks;
-    TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - volume minimum %ld (0x%lx), maximum %ld (0x%lx), stepping delta %ld (0x%lx)", volumeCfg.Minimum, volumeCfg.Minimum, volumeCfg.Maximum, volumeCfg.Maximum, volumeCfg.SteppingDelta, volumeCfg.SteppingDelta);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - volume minimum %ld (0x%lx), maximum %ld (0x%lx), stepping delta %ld (0x%lx)", volumeCfg.Minimum, volumeCfg.Minimum, volumeCfg.Maximum, volumeCfg.Maximum, volumeCfg.SteppingDelta, volumeCfg.SteppingDelta);
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, VOLUME_ELEMENT_CONTEXT);
     attributes.ParentObject = Circuit;
@@ -470,6 +495,8 @@ Codec_CreateVolumeElement(
     volumeContext->NumberOfChannels = min(numOfChannels, MAX_CHANNELS);
 
     Element = volumeElement;
+
+    RETURN_NTSTATUS_IF_FAILED(AllocateElementContext(Element, AudioNodeKind::VolumeElement, UnitID, (ULONG)-1));
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
 
@@ -533,6 +560,8 @@ Codec_CreateMuteElement(
 
     Element = muteElement;
 
+    RETURN_NTSTATUS_IF_FAILED(AllocateElementContext(Element, AudioNodeKind::MuteElement, UnitID, (ULONG)-1));
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
 
     return STATUS_SUCCESS;
@@ -575,16 +604,16 @@ VOID Codec_EvtUSBAudioAcxDriverMuxProcessRequest(
     {
         *(PULONG(params.Parameters.Property.Value)) = muxContext->SelectedPinId;
         params.Parameters.Property.ValueCb = sizeof(ULONG);
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - AcxPropertyVerbGet ");
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(params.Parameters.Property.Value));
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbGet ");
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(params.Parameters.Property.Value));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
         status = STATUS_SUCCESS;
     }
     else if (params.Parameters.Property.Verb == AcxPropertyVerbSet)
     {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - AcxPropertyVerbSet ");
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(params.Parameters.Property.Value));
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbSet ");
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(params.Parameters.Property.Value));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
         muxContext->SelectedPinId = *(PULONG)(params.Parameters.Property.Value);
         status = STATUS_SUCCESS;
     }
@@ -604,14 +633,15 @@ Exit:
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS Codec_CreateMuxElement(
-    _In_ AudioIsochronousEngine * /* AudioIsochronousEngine */,
-    _In_ WDFDEVICE       Device,
-    _In_ ACXCIRCUIT      Circuit,
-    _Inout_ ACXELEMENT & Element,
-    _In_ UCHAR           UnitID
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID
 )
 {
     NTSTATUS              status = STATUS_SUCCESS;
+    UCHAR                 numOfChannels = 0;
     ACXELEMENT            muxElement = nullptr;
     WDF_OBJECT_ATTRIBUTES attributes{};
     ACX_ELEMENT_CONFIG    config{};
@@ -621,6 +651,8 @@ NTSTATUS Codec_CreateMuxElement(
     ASSERT(Circuit != nullptr);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForMuxElement(UnitID, numOfChannels));
 
     ACX_ELEMENT_CONFIG_INIT(&config);
     config.Type = &KSNODETYPE_MUX;
@@ -639,10 +671,12 @@ NTSTATUS Codec_CreateMuxElement(
     RtlZeroMemory(muxContext, sizeof(MUX_ELEMENT_CONTEXT));
     muxContext->Device = Device;
     muxContext->EntityID = UnitID;
-    muxContext->SelectedPinId = 0;    // TBD
-    muxContext->NumberOfChannels = 1; // TBD
+    muxContext->SelectedPinId = 0; // TBD
+    muxContext->NumberOfChannels = numOfChannels;
 
     Element = muxElement;
+
+    RETURN_NTSTATUS_IF_FAILED(AllocateElementContext(Element, AudioNodeKind::MuxElement, UnitID, (ULONG)-1));
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
 
@@ -714,14 +748,15 @@ Exit:
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS Codec_CreateAgcElement(
-    AudioIsochronousEngine * /* AudioIsochronousEngine */,
-    WDFDEVICE    Device,
-    ACXCIRCUIT   Circuit,
-    ACXELEMENT & Element,
-    UCHAR        UnitID
+    AudioIsochronousEngine * AudioIsochronousEngine,
+    WDFDEVICE                Device,
+    ACXCIRCUIT               Circuit,
+    ACXELEMENT &             Element,
+    UCHAR                    UnitID
 )
 {
     NTSTATUS              status = STATUS_SUCCESS;
+    UCHAR                 numOfChannels = 0;
     ACXELEMENT            agcElement = nullptr;
     WDF_OBJECT_ATTRIBUTES attributes{};
     ACX_ELEMENT_CONFIG    config{};
@@ -731,6 +766,8 @@ NTSTATUS Codec_CreateAgcElement(
     ASSERT(Circuit != nullptr);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForAgcElement(UnitID, numOfChannels));
 
     ACX_ELEMENT_CONFIG_INIT(&config);
     config.Type = &KSNODETYPE_AGC;
@@ -749,9 +786,11 @@ NTSTATUS Codec_CreateAgcElement(
     RtlZeroMemory(agcContext, sizeof(AGC_ELEMENT_CONTEXT));
     agcContext->Device = Device;
     agcContext->EntityID = UnitID;
-    agcContext->NumberOfChannels = 1; // TBD
+    agcContext->NumberOfChannels = numOfChannels;
 
     Element = agcElement;
+
+    RETURN_NTSTATUS_IF_FAILED(AllocateElementContext(Element, AudioNodeKind::AgcElement, UnitID, (ULONG)-1));
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
 
@@ -864,6 +903,8 @@ NTSTATUS Codec_CreateSuperMixElement(
     superMixContext->NumberOfOutputChannels = numOfOutputChannels;
 
     Element = superMixElement;
+
+    RETURN_NTSTATUS_IF_FAILED(AllocateElementContext(Element, AudioNodeKind::SuperMixElement, UnitID, (ULONG)-1));
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
 
@@ -1262,7 +1303,7 @@ NTSTATUS Codec_CreateRenderHostPin(
     WDFDEVICE                Device,
     ACXCIRCUIT               Circuit,
     ULONG                    PinID,
-    ACXELEMENT &             Element,
+    ACXPIN &                 Pin,
     UCHAR                    UnitID
 )
 {
@@ -1270,7 +1311,6 @@ NTSTATUS Codec_CreateRenderHostPin(
     ACXPIN                pin = nullptr;
     ACX_PIN_CONFIG        pinCfg{};
     CODEC_PIN_CONTEXT *   pinContext = nullptr;
-    ELEMENT_CONTEXT *     elementContext = nullptr;
     WDF_OBJECT_ATTRIBUTES attributes{};
 
     PAGED_CODE();
@@ -1297,7 +1337,7 @@ NTSTATUS Codec_CreateRenderHostPin(
     //
     RETURN_NTSTATUS_IF_FAILED(AcxPinCreate(Circuit, &attributes, &pinCfg, &pin));
     ASSERT(pin != nullptr);
-    Element = (ACXELEMENT)pin;
+    Pin = pin;
 
     pinContext = GetCodecPinContext(pin);
     ASSERT(pinContext);
@@ -1310,13 +1350,7 @@ NTSTATUS Codec_CreateRenderHostPin(
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
-    PVOID context = nullptr;
-    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, ELEMENT_CONTEXT);
-    RETURN_NTSTATUS_IF_FAILED(WdfObjectAllocateContext(Element, &attributes, &context));
-    ASSERT(context);
-    elementContext = (ELEMENT_CONTEXT *)context;
-    elementContext->AudioNodeKind = toULONG(AudioNodeKind::RenderHostPin);
-    elementContext->UnitID = UnitID;
+    RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::RenderHostPin, UnitID, PinID));
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 
@@ -1330,7 +1364,7 @@ NTSTATUS Codec_CreateRenderBridgePin(
     WDFDEVICE                Device,
     ACXCIRCUIT               Circuit,
     ULONG                    PinID,
-    ACXELEMENT &             Element,
+    ACXPIN &                 Pin,
     UCHAR                    UnitID
 )
 {
@@ -1339,7 +1373,6 @@ NTSTATUS Codec_CreateRenderBridgePin(
     ACX_PIN_CONFIG                                pinCfg{};
     ACX_PIN_CALLBACKS                             pinCallbacks{};
     CODEC_PIN_CONTEXT *                           pinContext = nullptr;
-    ELEMENT_CONTEXT *                             elementContext = nullptr;
     WDF_OBJECT_ATTRIBUTES                         attributes{};
     USHORT                                        terminalType = 0;
     UCHAR                                         numOfChannels = 0;
@@ -1394,7 +1427,7 @@ NTSTATUS Codec_CreateRenderBridgePin(
     //
     RETURN_NTSTATUS_IF_FAILED(AcxPinCreate(Circuit, &attributes, &pinCfg, &pin));
     ASSERT(pinContext);
-    Element = (ACXELEMENT)pin;
+    Pin = pin;
 
     pinContext = GetCodecPinContext(pin);
     pinContext->IsInput = true;
@@ -1406,13 +1439,7 @@ NTSTATUS Codec_CreateRenderBridgePin(
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
     pinContext->TerminalID = 0;             //  TerminalID;
 
-    PVOID context = nullptr;
-    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, ELEMENT_CONTEXT);
-    RETURN_NTSTATUS_IF_FAILED(WdfObjectAllocateContext(Element, &attributes, &context));
-    ASSERT(context);
-    elementContext = (ELEMENT_CONTEXT *)context;
-    elementContext->AudioNodeKind = toULONG(AudioNodeKind::RenderBridgePin);
-    elementContext->UnitID = UnitID;
+    RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::RenderBridgePin, UnitID, PinID));
 
     RETURN_NTSTATUS_IF_FAILED(AddAudioJackToBridgePin(pin, ConverSpeakerPositions(connectorState.bmChannelConfig)));
 
@@ -1428,7 +1455,7 @@ NTSTATUS Codec_CreateCaptureHostPin(
     WDFDEVICE                Device,
     ACXCIRCUIT               Circuit,
     ULONG                    PinID,
-    ACXELEMENT &             Element,
+    ACXPIN &                 Pin,
     UCHAR                    UnitID
 )
 {
@@ -1436,7 +1463,6 @@ NTSTATUS Codec_CreateCaptureHostPin(
     ACXPIN                pin = nullptr;
     ACX_PIN_CONFIG        pinCfg{};
     CODEC_PIN_CONTEXT *   pinContext = nullptr;
-    ELEMENT_CONTEXT *     elementContext = nullptr;
     WDF_OBJECT_ATTRIBUTES attributes{};
 
     PAGED_CODE();
@@ -1462,7 +1488,7 @@ NTSTATUS Codec_CreateCaptureHostPin(
     //
     RETURN_NTSTATUS_IF_FAILED(AcxPinCreate(Circuit, &attributes, &pinCfg, &pin));
     ASSERT(pin != nullptr);
-    Element = (ACXELEMENT)pin;
+    Pin = pin;
 
     pinContext = GetCodecPinContext(pin);
     ASSERT(pinContext);
@@ -1474,13 +1500,7 @@ NTSTATUS Codec_CreateCaptureHostPin(
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
-    PVOID context = nullptr;
-    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, ELEMENT_CONTEXT);
-    RETURN_NTSTATUS_IF_FAILED(WdfObjectAllocateContext(Element, &attributes, &context));
-    ASSERT(context);
-    elementContext = (ELEMENT_CONTEXT *)context;
-    elementContext->AudioNodeKind = toULONG(AudioNodeKind::CaptureHostPin);
-    elementContext->UnitID = UnitID;
+    RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::CaptureHostPin, UnitID, PinID));
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 
@@ -1494,7 +1514,7 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     WDFDEVICE                Device,
     ACXCIRCUIT               Circuit,
     ULONG                    PinID,
-    ACXELEMENT &             Element,
+    ACXPIN &                 Pin,
     UCHAR                    UnitID
 )
 {
@@ -1503,7 +1523,6 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     ACX_PIN_CONFIG                                pinCfg{};
     ACX_PIN_CALLBACKS                             pinCallbacks{};
     CODEC_PIN_CONTEXT *                           pinContext = nullptr;
-    ELEMENT_CONTEXT *                             elementContext = nullptr;
     WDF_OBJECT_ATTRIBUTES                         attributes{};
     USHORT                                        terminalType = 0;
     UCHAR                                         numOfChannels = 0;
@@ -1542,7 +1561,7 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     //
     RETURN_NTSTATUS_IF_FAILED(AcxPinCreate(Circuit, &attributes, &pinCfg, &pin));
     ASSERT(pin != nullptr);
-    Element = (ACXELEMENT)pin;
+    Pin = pin;
 
     pinContext = GetCodecPinContext(pin);
     ASSERT(pinContext);
@@ -1554,17 +1573,57 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
     pinContext->TerminalID = UnitID;
 
-    PVOID context = nullptr;
-    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, ELEMENT_CONTEXT);
-    RETURN_NTSTATUS_IF_FAILED(WdfObjectAllocateContext(Element, &attributes, &context));
-    ASSERT(context);
-    elementContext = (ELEMENT_CONTEXT *)context;
-    elementContext->AudioNodeKind = toULONG(AudioNodeKind::CaptureBridgePin);
-    elementContext->UnitID = UnitID;
+    RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::CaptureBridgePin, UnitID, PinID));
 
     RETURN_NTSTATUS_IF_FAILED(AddAudioJackToBridgePin(pin, ConverSpeakerPositions(connectorState.bmChannelConfig)));
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS Codec_ConnectElement(
+    ACXCIRCUIT       Circuit,
+    ACX_CONNECTION & Connection,
+    ACXELEMENT &     FromElement,
+    ACXELEMENT &     ToElement
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    PAGED_CODE();
+
+    ELEMENT_CONTEXT * fromElementContext = GetElementContext(FromElement);
+    ELEMENT_CONTEXT * toElementContext = GetElementContext(ToElement);
+
+    if (fromElementContext->PinID != (ULONG)-1)
+    {
+        if (toElementContext->PinID != (ULONG)-1)
+        {
+            ACX_CONNECTION_INIT(&Connection, Circuit, Circuit);
+            Connection.FromPin.Id = fromElementContext->PinID;
+            Connection.ToPin.Id = toElementContext->PinID;
+        }
+        else
+        {
+            ACX_CONNECTION_INIT(&Connection, Circuit, ToElement);
+            Connection.FromPin.Id = fromElementContext->PinID;
+        }
+    }
+    else
+    {
+        if (toElementContext->PinID != (ULONG)-1)
+        {
+            ACX_CONNECTION_INIT(&Connection, FromElement, Circuit);
+            Connection.ToPin.Id = toElementContext->PinID;
+        }
+        else
+        {
+            ACX_CONNECTION_INIT(&Connection, FromElement, ToElement);
+        }
+    }
 
     return status;
 }
@@ -1581,32 +1640,57 @@ Codec_AllocateElements(
 {
     NTSTATUS              status = STATUS_SUCCESS;
     WDF_OBJECT_ATTRIBUTES attributes{};
-    WDFMEMORY             elementsMemory = nullptr;
-    ACXELEMENT *          elements = nullptr;
-    const ULONG           sizeOfElements = 0x100 * 3; // unitID max + 1 * (volume + mute + agc)
-    ULONG                 elementIndex = 0;
-    ULONG                 numOfElement = 0;
-    bool                  hasMoreData = true;
-    TraversalDirection    traversalDirection = TraversalDirection::Forward;
-    AudioNodeKind         audioNodeKind = AudioNodeKind::Invalid;
-    UCHAR                 unitID = USBAudioConfiguration::InvalidID;
-    UCHAR                 nextUnitID = USBAudioConfiguration::InvalidID;
-    ULONG                 controlBitmap = 0;
-    ULONGLONG             unvisitedUnitMap[4] = {};
-    ULONGLONG             idMap[4] = {};
-    ULONG                 counter = 0;
-    ACXELEMENT            prevElement{};
-    ULONG                 pinID = 0;
+    const ULONG           sizeOfPins = 0x100;
+    const ULONG           sizeOfElements = 0x100 * 3; // unitID max * 3 (volume + mute + agc)
+    const ULONG           sizeOfConnections = sizeOfElements;
+
+    WDFMEMORY    pinsMemory = nullptr;
+    ACXPIN *     pins = nullptr;
+    ULONG        pinIndex = 0;
+    WDFMEMORY    elementsMemory = nullptr;
+    ACXELEMENT * elements = nullptr;
+    ULONG        elementIndex = 0;
+
+    WDFMEMORY        connectionsMemory = nullptr;
+    ACX_CONNECTION * connections = nullptr;
+    ULONG            connectionIndex = 0;
+
+    bool               hasMoreData = true;
+    TraversalDirection traversalDirection = TraversalDirection::Forward;
+    AudioNodeKind      audioNodeKind = AudioNodeKind::Invalid;
+    UCHAR              unitID = USBAudioConfiguration::InvalidID;
+    UCHAR              nextUnitID = USBAudioConfiguration::InvalidID;
+    ULONG              controlBitmap = 0;
+    ULONGLONG          unvisitedUnitMap[4] = {};
+    ULONGLONG          idMap[4] = {};
+    ULONG              counter = 0;
+    ACXELEMENT         currentElement{};
+    ACXELEMENT         prevElement{};
+    ULONG              pinID = 0;
 
     PAGED_CODE();
 
     auto allocateElementsScope = wil::scope_exit([&]() {
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " IsInput = %!bool!, numOfElement = %u", IsInput, numOfElement);
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " IsInput = %!bool!, %u pins, %u elements, %u connections", IsInput, pinIndex, elementIndex, connectionIndex);
+        if (pinsMemory != nullptr)
+        {
+            WdfObjectDelete(pinsMemory);
+            pinsMemory = nullptr;
+            pins = nullptr;
+        }
+
         if (elementsMemory != nullptr)
         {
             WdfObjectDelete(elementsMemory);
             elementsMemory = nullptr;
             elements = nullptr;
+        }
+
+        if (connectionsMemory != nullptr)
+        {
+            WdfObjectDelete(connectionsMemory);
+            connectionsMemory = nullptr;
+            connections = nullptr;
         }
     });
 
@@ -1623,9 +1707,21 @@ Codec_AllocateElements(
 
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
     attributes.ParentObject = Device;
+    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXPIN) * sizeOfPins, &pinsMemory, nullptr));
+    pins = (ACXPIN *)WdfMemoryGetBuffer(pinsMemory, nullptr);
+    RtlZeroMemory(pins, sizeof(ACXPIN) * sizeOfPins);
+
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+    attributes.ParentObject = Device;
     RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXELEMENT) * sizeOfElements, &elementsMemory, nullptr));
     elements = (ACXELEMENT *)WdfMemoryGetBuffer(elementsMemory, nullptr);
     RtlZeroMemory(elements, sizeof(ACXELEMENT) * sizeOfElements);
+
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+    attributes.ParentObject = Device;
+    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACX_CONNECTION) * sizeOfConnections, &connectionsMemory, nullptr));
+    connections = (ACX_CONNECTION *)WdfMemoryGetBuffer(connectionsMemory, nullptr);
+    RtlZeroMemory(connections, sizeof(ACX_CONNECTION) * sizeOfConnections);
 
     if ((IsInput && AudioIsochronousEngine->HasInputIsochronousInterface()) || (!IsInput && AudioIsochronousEngine->HasOutputIsochronousInterface()))
     {
@@ -1634,93 +1730,105 @@ Codec_AllocateElements(
             RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->WalkNextUnit(IsInput, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData));
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - IsInput = %!bool!, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, %s, 0x%02x, 0x%08x, 0x%02x, %s, hasMoreData = %!bool!", IsInput, idMap[0], idMap[1], idMap[2], idMap[3], unvisitedUnitMap[0], unvisitedUnitMap[1], unvisitedUnitMap[2], unvisitedUnitMap[3], GetAudioNodeKindString(audioNodeKind), unitID, controlBitmap, nextUnitID, GetTraversalDirectionString(traversalDirection), hasMoreData);
 
-            prevElement = elements[elementIndex];
-
+            // prevElement = elements[elementIndex];
             switch (audioNodeKind)
             {
             case AudioNodeKind::RenderHostPin:
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderHostPin(AudioIsochronousEngine, Device, Circuit, pinID, elements[elementIndex], unitID));
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderHostPin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID));
+                currentElement = (ACXELEMENT)pins[pinIndex];
                 pinID++;
-                elementIndex++;
+                pinIndex++;
                 break;
             case AudioNodeKind::RenderBridgePin:
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderBridgePin(AudioIsochronousEngine, Device, Circuit, pinID, elements[elementIndex], unitID));
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderBridgePin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID));
+                currentElement = (ACXELEMENT)pins[pinIndex];
                 pinID++;
-                elementIndex++;
+                pinIndex++;
                 break;
             case AudioNodeKind::CaptureHostPin:
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateCaptureHostPin(AudioIsochronousEngine, Device, Circuit, pinID, elements[elementIndex], unitID));
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateCaptureHostPin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID));
+                currentElement = (ACXELEMENT)pins[pinIndex];
                 pinID++;
-                elementIndex++;
+                pinIndex++;
                 break;
             case AudioNodeKind::CaptureBridgePin:
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateCaptureBridgePin(AudioIsochronousEngine, Device, Circuit, pinID, elements[elementIndex], unitID));
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateCaptureBridgePin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID));
+                currentElement = (ACXELEMENT)pins[pinIndex];
                 pinID++;
-                elementIndex++;
+                pinIndex++;
                 break;
             case AudioNodeKind::VolumeElement: // Feature Unit (FU_VOLUME_CONTROL) : KSNODETYPE_VOLUME
                 RETURN_NTSTATUS_IF_FAILED(Codec_CreateVolumeElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
+                currentElement = elements[elementIndex];
                 elementIndex++;
                 break;
             case AudioNodeKind::MuteElement: // Feature Unit (FU_MUTE_CONTROL) : KSNODETYPE_MUTE
                 RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuteElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
+                currentElement = elements[elementIndex];
                 elementIndex++;
                 break;
             case AudioNodeKind::AgcElement: // Feature Unit (FU_AUTOMATIC_GAIN_CONTROL) : KSNODETYPE_AGC
                 RETURN_NTSTATUS_IF_FAILED(Codec_CreateAgcElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
+                currentElement = elements[elementIndex];
                 elementIndex++;
-                // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForAutomaticGainElement(unitID));
-                // createAgcElement(unitID);
                 break;
             case AudioNodeKind::SuperMixElement: // Mixer Unit : KSNODETYPE_SUPERMIX
                 RETURN_NTSTATUS_IF_FAILED(Codec_CreateSuperMixElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
+                currentElement = elements[elementIndex];
                 elementIndex++;
-                // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForSuperMix(unitID));
-                // createSuperMix(unitID);
                 break;
             case AudioNodeKind::MuxElement: // Selector Unit : KSNODETYPE_MUX
                 RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuxElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
+                currentElement = elements[elementIndex];
                 elementIndex++;
-                // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForSuperMux(unitID));
-                // createMuxElement(unitID);
                 break;
             case AudioNodeKind::SrcElement: // Sampling Rate Converter Unit : KSNODETYPE_SRC
                 // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForSRC(unitID));
-                // createSRCElement(unitID);
+                // currentElement = elements[elementIndex];
+                // elementIndex++;
                 break;
             case AudioNodeKind::EffectElement: // Effect Unit : KSNODETYPE_3D_EFFECTS
                 // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForEffect(unitID));
-                // createEffectElement(unitID);
+                // currentElement = elements[elementIndex];
+                // elementIndex++;
                 break;
             case AudioNodeKind::ProcessingElement: // Processing Unit : KSNODETYPE_MICROPHONE_ARRAY_PROCESSOR ?
                 // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForProcessing(unitID));
-                // createProcessingElement(unitID);
+                // currentElement = elements[elementIndex];
+                // elementIndex++;
                 break;
             default:
                 break;
             }
             unitID = nextUnitID;
-#if 0
-            if (traversalDirection == TraversalDirection::Forward)
+            if (counter != 0)
             {
-                connect(prevElement, element);
+                if (traversalDirection == TraversalDirection::Forward)
+                {
+                    Codec_ConnectElement(Circuit, connections[connectionIndex], prevElement, currentElement);
+                }
+                else
+                {
+                    Codec_ConnectElement(Circuit, connections[connectionIndex], currentElement, prevElement);
+                }
+                connectionIndex++;
             }
-            else
-            {
-                connect(element, prevElement);
-            }
-#endif
             counter++;
             if (counter > 0xff)
             {
                 TraceEvents(TRACE_LEVEL_ERROR, TRACE_INTERRUPTTRANSFER, "%!FUNC! counter overflow.");
                 break;
             }
+            prevElement = currentElement;
         }
+
+        RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddElements(Circuit, elements, elementIndex));
+        RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddPins(Circuit, pins, pinIndex));
+        RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddConnections(Circuit, connections, connectionIndex));
     }
     else
     {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_INTERRUPTTRANSFER, "%!FUNC! do nothing");
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_INTERRUPTTRANSFER, "%!FUNC! do nothing");
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit %!STATUS!", status);

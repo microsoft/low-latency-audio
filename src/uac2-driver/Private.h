@@ -208,6 +208,7 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(RENDER_DEVICE_CONTEXT, GetRenderDeviceContext
 typedef struct _ELEMENT_CONTEXT
 {
     ULONG AudioNodeKind;
+    ULONG PinID;
     UCHAR UnitID;
 } ELEMENT_CONTEXT, *PELEMENT_CONTEXT;
 
@@ -786,7 +787,7 @@ NTSTATUS Codec_CreateRenderHostPin(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _In_ ULONG                    PinID,
-    _Inout_ ACXELEMENT &          Element,
+    _Inout_ ACXPIN &              Pin,
     _In_ UCHAR                    UnitID
 );
 
@@ -797,7 +798,7 @@ NTSTATUS Codec_CreateRenderBridgePin(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _In_ ULONG                    PinID,
-    _Inout_ ACXELEMENT &          Element,
+    _Inout_ ACXPIN &              Pin,
     _In_ UCHAR                    UnitID
 );
 
@@ -808,7 +809,7 @@ NTSTATUS Codec_CreateCaptureHostPin(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _In_ ULONG                    PinID,
-    _Inout_ ACXELEMENT &          Element,
+    _Inout_ ACXPIN &              Pin,
     _In_ UCHAR                    UnitID
 );
 
@@ -819,8 +820,17 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _In_ ULONG                    PinID,
-    _Inout_ ACXELEMENT &          Element,
+    _Inout_ ACXPIN &              Pin,
     _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_ConnectElement(
+    _In_ ACXCIRCUIT          Circuit,
+    _Inout_ ACX_CONNECTION & Connection,
+    _In_ ACXELEMENT &        FromElement,
+    _In_ ACXELEMENT &        ToElement
 );
 
 PAGED_CODE_SEG

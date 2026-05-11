@@ -2663,6 +2663,32 @@ AudioIsochronousEngine::GetInformationForSuperMixElement(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
+AudioIsochronousEngine::GetInformationForMuxElement(
+    UCHAR   unitID,
+    UCHAR & numOfChannels
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioStreamInterfaceGroup->GetInformationForMuxElement(unitID, numOfChannels);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
+AudioIsochronousEngine::GetInformationForAgcElement(
+    UCHAR   unitID,
+    UCHAR & numOfChannels
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioStreamInterfaceGroup->GetInformationForAgcElement(unitID, numOfChannels);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
 AudioIsochronousEngine::AddStaticRender(
     WDFDEVICE              device,
     const GUID *           componentGuid,

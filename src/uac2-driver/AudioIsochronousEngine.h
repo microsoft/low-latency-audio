@@ -285,6 +285,24 @@ class AudioIsochronousEngine
         _Out_ UCHAR & numOfOutputChannels
     );
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForMuxElement(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForAgcElement(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfChannels
+    );
+
     // Render Circuit
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG

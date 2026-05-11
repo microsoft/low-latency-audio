@@ -1504,6 +1504,32 @@ NTSTATUS USBAudio1ControlInterface::GetInformationForSuperMixElement(
     return STATUS_NOT_SUPPORTED;
 }
 
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio1ControlInterface::GetInformationForMuxElement(
+    _In_ PDEVICE_CONTEXT /* deviceContext */,
+    _In_ UCHAR /* unitID */,
+    _Out_ UCHAR & /* numOfChannels */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio1ControlInterface::GetInformationForAgcElement(
+    _In_ PDEVICE_CONTEXT /* deviceContext */,
+    _In_ UCHAR /* unitID */,
+    _Out_ UCHAR & /* numOfChannels */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS USBAudio1ControlInterface::SearchOutputTerminalFromInputTerminal(
@@ -2353,8 +2379,8 @@ NTSTATUS USBAudio2ControlInterface::SetMixerUnit(const NS_USBAudio::PCS_GENERIC_
 
     if ((descriptor->bLength >= sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)) && (descriptor->bDescriptorSubtype == NS_USBAudio0200::MIXER_UNIT))
     {
-        ULONG descriptorSize = sizeof(NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + mixerUnitDescriptor->bNrInPins + 1 /* bNrChannels */ + 4 /* bmChannelConfig[4] */ + 1 /* iChannelNames */ + 1 /* bmControls */ + 1 /* iMixer */;
-        ULONG mixerControlsSize = 1; // minimux
+        ULONG descriptorSize = sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + mixerUnitDescriptor->bNrInPins + 1 /* bNrChannels */ + 4 /* bmChannelConfig[4] */ + 1 /* iChannelNames */ + 1 /* bmControls */ + 1 /* iMixer */;
+        ULONG mixerControlsSize = 1; // minimum
         descriptorSize += mixerControlsSize;
 
                                      // Do not evaluate the size based on the number of input/output channels here.
@@ -2371,6 +2397,7 @@ NTSTATUS USBAudio2ControlInterface::SetMixerUnit(const NS_USBAudio::PCS_GENERIC_
         }
         else
         {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - bLength = %d, descriptor size = %d", mixerUnitDescriptor->bLength, descriptorSize);
             status = STATUS_DEVICE_DATA_ERROR;
         }
     }
@@ -3607,6 +3634,8 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
 {
     PAGED_CODE();
 
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
     channelNames = USBAudioConfiguration::InvalidString;
     for (auto & outputTerminalDescriptor : m_acOutputTerminalInfo)
     {
@@ -3629,6 +3658,7 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
                 connectorState.bmChannelConfig = (numOfChannels == 1 ? NS_USBAudio0200::FRONT_CENTER : NS_USBAudio0200::FRONT_LEFT | NS_USBAudio0200::FRONT_RIGHT);
             }
             ValidateChannelNamesStringDescriptor(deviceContext, channelNames);
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", STATUS_SUCCESS);
 
             return STATUS_SUCCESS;
         }
@@ -3655,9 +3685,13 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
                 connectorState.bmChannelConfig = ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] | ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] << 8) | ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] << 16) | ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] << 24));
             }
             ValidateChannelNamesStringDescriptor(deviceContext, channelNames);
+
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", STATUS_SUCCESS);
             return STATUS_SUCCESS;
         }
     }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", STATUS_INVALID_PARAMETER);
 
     return STATUS_INVALID_PARAMETER;
 }
@@ -3665,30 +3699,52 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudio2ControlInterface::GetInformationForVolumeElement(
-    PDEVICE_CONTEXT /* deviceContext */,
-    UCHAR /* unitID */,
-    UCHAR & /* numOfChannels */,
-    LONG & /* minimum */,
-    LONG & /* maximum */,
-    ULONG & /* steppingDelta */
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           unitID,
+    UCHAR &         numOfChannels,
+    LONG &          minimum,
+    LONG &          maximum,
+    ULONG &         steppingDelta
 )
 {
+    NTSTATUS status = STATUS_SUCCESS;
+
     PAGED_CODE();
 
-    return STATUS_NOT_SUPPORTED;
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    numOfChannels = (UCHAR)GetUnitOutputChannelCount(unitID);
+
+    status = GetVolumeConfiguration(deviceContext, unitID, minimum, maximum, steppingDelta);
+
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - unit id 0x%02x, volume minimum %ld (0x%lx), maximum %ld (0x%lx), stepping delta %ld (0x%lx), %u channels", unitID, minimum, minimum, maximum, maximum, steppingDelta, steppingDelta, numOfChannels);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
+
+    return status;
 }
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudio2ControlInterface::GetInformationForMuteElement(
-    _In_ PDEVICE_CONTEXT /* deviceContext */,
-    _In_ UCHAR /* unitID */,
-    _Out_ UCHAR & /* numOfChannels */
+    _In_          PDEVICE_CONTEXT /* deviceContext */,
+    _In_ UCHAR    unitID,
+    _Out_ UCHAR & numOfChannels
 )
 {
+    NTSTATUS status = STATUS_SUCCESS;
+
     PAGED_CODE();
 
-    return STATUS_NOT_SUPPORTED;
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    numOfChannels = (UCHAR)GetUnitOutputChannelCount(unitID);
+
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - unit id 0x%02x, %u channels", unitID, numOfChannels);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
+
+    return status;
 }
 
 PAGED_CODE_SEG
@@ -3704,21 +3760,73 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForSuperMixElement(
 
     PAGED_CODE();
 
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    numOfInputChannels = numOfOutputChannels = 0;
+
     for (auto & mixerUnitDescriptor : m_acMixerUnitInfo)
     {
         if (mixerUnitDescriptor->bUnitID == unitID)
         {
-            numOfInputChannels = 0;
             for (UCHAR pin = 0; pin < mixerUnitDescriptor->bNrInPins; ++pin)
             {
-                // UCHAR baSourceID = *(((UCHAR *)mixerUnitDescriptor) + sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + pin);
+                UCHAR baSourceID = *(((UCHAR *)mixerUnitDescriptor) + sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + pin);
 
-                numOfInputChannels += 1 /* GetChannels(baSourceID) */; // ZANTEI
+                numOfInputChannels += (UCHAR)GetUnitOutputChannelCount(baSourceID);
             }
             numOfOutputChannels = ((UCHAR *)mixerUnitDescriptor)[sizeof(NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + mixerUnitDescriptor->bNrInPins];
-            return STATUS_SUCCESS;
+            status = STATUS_SUCCESS;
+            break;
         }
     }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!, %u input channels, %u output channels", status, numOfInputChannels, numOfOutputChannels);
+
+    return status;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio2ControlInterface::GetInformationForMuxElement(
+    _In_          PDEVICE_CONTEXT /* deviceContext */,
+    _In_ UCHAR    unitID,
+    _Out_ UCHAR & numOfChannels
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    numOfChannels = (UCHAR)GetUnitOutputChannelCount(unitID);
+
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - unit id 0x%02x, %u channels", unitID, numOfChannels);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
+
+    return status;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio2ControlInterface::GetInformationForAgcElement(
+    _In_          PDEVICE_CONTEXT /* deviceContext */,
+    _In_ UCHAR    unitID,
+    _Out_ UCHAR & numOfChannels
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    numOfChannels = (UCHAR)GetUnitOutputChannelCount(unitID);
+
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - unit id 0x%02x, %u channels", unitID, numOfChannels);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
 }
@@ -7252,6 +7360,30 @@ NTSTATUS USBAudioStreamInterfaceGroup::GetInformationForSuperMixElement(
     PAGED_CODE();
 
     return m_usbAudioControlInterface->GetInformationForSuperMixElement(m_deviceContext, unitID, numOfInputChannels, numOfOutputChannels);
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudioStreamInterfaceGroup::GetInformationForMuxElement(
+    UCHAR   unitID,
+    UCHAR & numOfChannels
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioControlInterface->GetInformationForMuteElement(m_deviceContext, unitID, numOfChannels);
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudioStreamInterfaceGroup::GetInformationForAgcElement(
+    UCHAR   unitID,
+    UCHAR & numOfChannels
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioControlInterface->GetInformationForMuteElement(m_deviceContext, unitID, numOfChannels);
 }
 
 _Use_decl_annotations_
