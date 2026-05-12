@@ -246,6 +246,15 @@ class AudioIsochronousEngine
     PAGED_CODE_SEG
     NTSTATUS
     _Success_(NT_SUCCESS(return))
+    GetInformationForHostPin(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
     GetInformationForBridgePin(
         _In_ UCHAR     unitID,
         _Out_ UCHAR &  numOfChannels,

@@ -532,6 +532,13 @@ class USBAudioControlInterface : public USBAudioInterface
     ) = 0;
 
     _Success_(NT_SUCCESS(return))
+    virtual NTSTATUS GetInformationForHostPin(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
+    ) = 0;
+
+    _Success_(NT_SUCCESS(return))
     virtual NTSTATUS GetInformationForBridgePin(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           unitID,
@@ -1044,6 +1051,16 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           clockSourceID,
         _Out_ ULONG &        supportedSampleRate
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForHostPin(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1634,6 +1651,16 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           clockSourceID,
         _Out_ ULONG &        supportedSampleRate
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForHostPin(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ UCHAR &        numOfChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -2600,6 +2627,15 @@ class USBAudioStreamInterfaceGroup
         _In_ bool                              isInput,
         _In_ const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
         _Out_ UCHAR &                          numOfChannels
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    _Success_(NT_SUCCESS(return))
+    GetInformationForHostPin(
+        _In_ UCHAR    unitID,
+        _Out_ UCHAR & numOfChannels
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)

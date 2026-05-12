@@ -768,6 +768,17 @@ NTSTATUS Codec_CreateCaptureEndpointPin(
 //
 // Codec Capture/Render common definitions
 //
+typedef struct _CODEC_CIRCUIT_CONTEXT
+{
+    ULONG       NumOfVolumeElements;
+    WDFMEMORY   VolumeElementsMemory;
+    ACXVOLUME * VolumeElements;
+    ULONG       NumOfMuteElements;
+    WDFMEMORY   MuteElementsMemory;
+    ACXMUTE *   MuteElements;
+} CODEC_CIRCUIT_CONTEXT, *PCODEC_CIRCUIT_CONTEXT;
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_CIRCUIT_CONTEXT, GetCircuitContext)
+
 PAGED_CODE_SEG
 EVT_ACX_PIN_RETRIEVE_NAME Codec_EvtAcxPinRetrieveName;
 
@@ -788,7 +799,8 @@ NTSTATUS Codec_CreateRenderHostPin(
     _In_ ACXCIRCUIT               Circuit,
     _In_ ULONG                    PinID,
     _Inout_ ACXPIN &              Pin,
-    _In_ UCHAR                    UnitID
+    _In_ UCHAR                    UnitID,
+    _In_ const ULONG              SupportedSampleRate
 );
 
 PAGED_CODE_SEG
@@ -810,7 +822,8 @@ NTSTATUS Codec_CreateCaptureHostPin(
     _In_ ACXCIRCUIT               Circuit,
     _In_ ULONG                    PinID,
     _Inout_ ACXPIN &              Pin,
-    _In_ UCHAR                    UnitID
+    _In_ UCHAR                    UnitID,
+    _In_ const ULONG              SupportedSampleRate
 );
 
 PAGED_CODE_SEG
@@ -839,7 +852,8 @@ NTSTATUS Codec_AllocateElements(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _In_ bool                     IsInput,
-    _In_ AudioIsochronousEngine * AudioIsochronousEngine
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ const ULONG              SupportedSampleRate
 );
 
 /* make internal prototypes usable from C++ */

@@ -1447,6 +1447,19 @@ NTSTATUS USBAudio1ControlInterface::GetRangeSampleFrequency(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
+NTSTATUS USBAudio1ControlInterface::GetInformationForHostPin(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* unitID */,
+    UCHAR & /* numOfChannels */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
 NTSTATUS USBAudio1ControlInterface::GetInformationForBridgePin(
     PDEVICE_CONTEXT /* deviceContext */,
     UCHAR /* unitID */,
@@ -3619,6 +3632,25 @@ bool USBAudio2ControlInterface::InterlockedTestEntityBit(
 )
 {
     return (InterlockedCompareExchange((volatile LONG *)&(bitmap[entityId / 32]), 0, 0) & (1 << (entityId % 32))) ? true : false;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS USBAudio2ControlInterface::GetInformationForHostPin(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR   unitID,
+    UCHAR & numOfChannels
+)
+{
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    numOfChannels = (UCHAR)GetUnitOutputChannelCount(unitID);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!, %u channels", STATUS_SUCCESS, numOfChannels);
+
+    return STATUS_SUCCESS;
 }
 
 PAGED_CODE_SEG
@@ -7304,6 +7336,19 @@ USBAudioStreamInterfaceGroup::GetStreamChannels(
     RETURN_NTSTATUS_IF_FAILED(GetStreamChannelInfo(isInput, audioStreamPropertySet, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID));
 
     return STATUS_SUCCESS;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
+USBAudioStreamInterfaceGroup::GetInformationForHostPin(
+    UCHAR   unitID,
+    UCHAR & numOfChannels
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioControlInterface->GetInformationForHostPin(m_deviceContext, unitID, numOfChannels);
 }
 
 PAGED_CODE_SEG

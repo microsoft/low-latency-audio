@@ -2604,6 +2604,19 @@ AudioIsochronousEngine::GetStreamChannelInfoAdjusted(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
+AudioIsochronousEngine::GetInformationForHostPin(
+    UCHAR   unitID,
+    UCHAR & numOfChannels
+)
+{
+    PAGED_CODE();
+
+    return m_usbAudioStreamInterfaceGroup->GetInformationForHostPin(unitID, numOfChannels);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
 AudioIsochronousEngine::GetInformationForBridgePin(
     UCHAR                                           unitID,
     UCHAR &                                         numOfChannels,

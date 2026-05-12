@@ -1304,7 +1304,8 @@ NTSTATUS Codec_CreateRenderHostPin(
     ACXCIRCUIT               Circuit,
     ULONG                    PinID,
     ACXPIN &                 Pin,
-    UCHAR                    UnitID
+    UCHAR                    UnitID,
+    const ULONG              SupportedSampleRate
 )
 {
     NTSTATUS              status = STATUS_SUCCESS;
@@ -1312,10 +1313,16 @@ NTSTATUS Codec_CreateRenderHostPin(
     ACX_PIN_CONFIG        pinCfg{};
     CODEC_PIN_CONTEXT *   pinContext = nullptr;
     WDF_OBJECT_ATTRIBUTES attributes{};
+    UCHAR                 numOfChannels = 0;
 
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, unit id 0x%02x", UnitID);
+
+    USBAudioDataFormatManager * usbAudioDataFormatManager = AudioIsochronousEngine->GetUSBAudioDataFormatManager(false);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(usbAudioDataFormatManager == nullptr, status = STATUS_INVALID_PARAMETER, status);
+
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForHostPin(UnitID, numOfChannels));
 
     ///////////////////////////////////////////////////////////
     //
@@ -1351,6 +1358,11 @@ NTSTATUS Codec_CreateRenderHostPin(
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
     RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::RenderHostPin, UnitID, PinID));
+
+    if (AudioIsochronousEngine->HasOutputIsochronousInterface())
+    {
+        RETURN_NTSTATUS_IF_FAILED(Codec_AllocateSupportedFormats(Device, pin, Circuit, SupportedSampleRate, numOfChannels, usbAudioDataFormatManager));
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 
@@ -1433,11 +1445,11 @@ NTSTATUS Codec_CreateRenderBridgePin(
     pinContext->IsInput = true;
     pinContext->Device = Device;
     pinContext->CodecPinType = CodecPinTypeDevice;
-    pinContext->DeviceIndex = 0;            // DeviceIndex;
-    pinContext->Channel = 0;                // Channel;
-    pinContext->NumOfChannelsPerDevice = 0; // ChannelsCount;
+    pinContext->DeviceIndex = 0; // DeviceIndex;
+    pinContext->Channel = 0;     // Channel;
+    pinContext->NumOfChannelsPerDevice = numOfChannels;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
-    pinContext->TerminalID = 0;             //  TerminalID;
+    pinContext->TerminalID = 0;  //  TerminalID;
 
     RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::RenderBridgePin, UnitID, PinID));
 
@@ -1456,7 +1468,8 @@ NTSTATUS Codec_CreateCaptureHostPin(
     ACXCIRCUIT               Circuit,
     ULONG                    PinID,
     ACXPIN &                 Pin,
-    UCHAR                    UnitID
+    UCHAR                    UnitID,
+    const ULONG              SupportedSampleRate
 )
 {
     NTSTATUS              status = STATUS_SUCCESS;
@@ -1464,10 +1477,16 @@ NTSTATUS Codec_CreateCaptureHostPin(
     ACX_PIN_CONFIG        pinCfg{};
     CODEC_PIN_CONTEXT *   pinContext = nullptr;
     WDF_OBJECT_ATTRIBUTES attributes{};
+    UCHAR                 numOfChannels = 0;
 
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, unit id 0x%02x", UnitID);
+
+    USBAudioDataFormatManager * usbAudioDataFormatManager = AudioIsochronousEngine->GetUSBAudioDataFormatManager(true);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(usbAudioDataFormatManager == nullptr, status = STATUS_INVALID_PARAMETER, status);
+
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForHostPin(UnitID, numOfChannels));
 
     ///////////////////////////////////////////////////////////
     //
@@ -1501,6 +1520,8 @@ NTSTATUS Codec_CreateCaptureHostPin(
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
     RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::CaptureHostPin, UnitID, PinID));
+
+    RETURN_NTSTATUS_IF_FAILED(Codec_AllocateSupportedFormats(Device, pin, Circuit, SupportedSampleRate, numOfChannels, usbAudioDataFormatManager));
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 
@@ -1635,7 +1656,8 @@ Codec_AllocateElements(
     WDFDEVICE                Device,
     ACXCIRCUIT               Circuit,
     bool                     IsInput,
-    AudioIsochronousEngine * AudioIsochronousEngine
+    AudioIsochronousEngine * AudioIsochronousEngine,
+    const ULONG              SupportedSampleRate
 )
 {
     NTSTATUS              status = STATUS_SUCCESS;
@@ -1643,30 +1665,27 @@ Codec_AllocateElements(
     const ULONG           sizeOfPins = 0x100;
     const ULONG           sizeOfElements = 0x100 * 3; // unitID max * 3 (volume + mute + agc)
     const ULONG           sizeOfConnections = sizeOfElements;
-
-    WDFMEMORY    pinsMemory = nullptr;
-    ACXPIN *     pins = nullptr;
-    ULONG        pinIndex = 0;
-    WDFMEMORY    elementsMemory = nullptr;
-    ACXELEMENT * elements = nullptr;
-    ULONG        elementIndex = 0;
-
-    WDFMEMORY        connectionsMemory = nullptr;
-    ACX_CONNECTION * connections = nullptr;
-    ULONG            connectionIndex = 0;
-
-    bool               hasMoreData = true;
-    TraversalDirection traversalDirection = TraversalDirection::Forward;
-    AudioNodeKind      audioNodeKind = AudioNodeKind::Invalid;
-    UCHAR              unitID = USBAudioConfiguration::InvalidID;
-    UCHAR              nextUnitID = USBAudioConfiguration::InvalidID;
-    ULONG              controlBitmap = 0;
-    ULONGLONG          unvisitedUnitMap[4] = {};
-    ULONGLONG          idMap[4] = {};
-    ULONG              counter = 0;
-    ACXELEMENT         currentElement{};
-    ACXELEMENT         prevElement{};
-    ULONG              pinID = 0;
+    WDFMEMORY             pinsMemory = nullptr;
+    ACXPIN *              pins = nullptr;
+    ULONG                 pinIndex = 0;
+    WDFMEMORY             elementsMemory = nullptr;
+    ACXELEMENT *          elements = nullptr;
+    ULONG                 elementIndex = 0;
+    WDFMEMORY             connectionsMemory = nullptr;
+    ACX_CONNECTION *      connections = nullptr;
+    ULONG                 connectionIndex = 0;
+    bool                  hasMoreData = true;
+    TraversalDirection    traversalDirection = TraversalDirection::Forward;
+    AudioNodeKind         audioNodeKind = AudioNodeKind::Invalid;
+    UCHAR                 unitID = USBAudioConfiguration::InvalidID;
+    UCHAR                 nextUnitID = USBAudioConfiguration::InvalidID;
+    ULONG                 controlBitmap = 0;
+    ULONGLONG             unvisitedUnitMap[4] = {};
+    ULONGLONG             idMap[4] = {};
+    ULONG                 counter = 0;
+    ACXELEMENT            currentElement{};
+    ACXELEMENT            prevElement{};
+    ULONG                 pinID = 0;
 
     PAGED_CODE();
 
@@ -1705,6 +1724,12 @@ Codec_AllocateElements(
         traversalDirection = TraversalDirection::Forward;
     }
 
+    PCODEC_CIRCUIT_CONTEXT circuitContext = GetCircuitContext(Circuit);
+    ASSERT(circuitContext);
+
+    circuitContext->NumOfVolumeElements = 0;
+    circuitContext->NumOfMuteElements = 0;
+
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
     attributes.ParentObject = Device;
     RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXPIN) * sizeOfPins, &pinsMemory, nullptr));
@@ -1734,7 +1759,7 @@ Codec_AllocateElements(
             switch (audioNodeKind)
             {
             case AudioNodeKind::RenderHostPin:
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderHostPin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID));
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderHostPin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID, SupportedSampleRate));
                 currentElement = (ACXELEMENT)pins[pinIndex];
                 pinID++;
                 pinIndex++;
@@ -1746,7 +1771,7 @@ Codec_AllocateElements(
                 pinIndex++;
                 break;
             case AudioNodeKind::CaptureHostPin:
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateCaptureHostPin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID));
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateCaptureHostPin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID, SupportedSampleRate));
                 currentElement = (ACXELEMENT)pins[pinIndex];
                 pinID++;
                 pinIndex++;
@@ -1760,11 +1785,13 @@ Codec_AllocateElements(
             case AudioNodeKind::VolumeElement: // Feature Unit (FU_VOLUME_CONTROL) : KSNODETYPE_VOLUME
                 RETURN_NTSTATUS_IF_FAILED(Codec_CreateVolumeElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
                 currentElement = elements[elementIndex];
+                circuitContext->NumOfVolumeElements++;
                 elementIndex++;
                 break;
             case AudioNodeKind::MuteElement: // Feature Unit (FU_MUTE_CONTROL) : KSNODETYPE_MUTE
                 RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuteElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
                 currentElement = elements[elementIndex];
+                circuitContext->NumOfMuteElements++;
                 elementIndex++;
                 break;
             case AudioNodeKind::AgcElement: // Feature Unit (FU_AUTOMATIC_GAIN_CONTROL) : KSNODETYPE_AGC
@@ -1825,6 +1852,49 @@ Codec_AllocateElements(
         RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddElements(Circuit, elements, elementIndex));
         RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddPins(Circuit, pins, pinIndex));
         RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddConnections(Circuit, connections, connectionIndex));
+
+        if (circuitContext->NumOfVolumeElements != 0)
+        {
+            WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+            attributes.ParentObject = Device;
+            RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXVOLUME) * circuitContext->NumOfVolumeElements, &circuitContext->VolumeElementsMemory, nullptr));
+            circuitContext->VolumeElements = (ACXVOLUME *)WdfMemoryGetBuffer(circuitContext->VolumeElementsMemory, nullptr);
+        }
+
+        if (circuitContext->NumOfMuteElements != 0)
+        {
+            WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+            attributes.ParentObject = Device;
+            RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXMUTE) * circuitContext->NumOfMuteElements, &circuitContext->MuteElementsMemory, nullptr));
+            circuitContext->MuteElements = (ACXMUTE *)WdfMemoryGetBuffer(circuitContext->MuteElementsMemory, nullptr);
+        }
+
+        if ((circuitContext->NumOfVolumeElements != 0) || (circuitContext->NumOfMuteElements != 0))
+        {
+            ULONG volumeIndex = 0, muteIndex = 0;
+            for (ULONG index = 0; index < elementIndex; index++)
+            {
+                ELEMENT_CONTEXT * elementContext = GetElementContext(elements[index]);
+                ASSERT(elementContext);
+                switch (elementContext->AudioNodeKind)
+                {
+                case AudioNodeKind::VolumeElement:
+                    if (volumeIndex < circuitContext->NumOfVolumeElements)
+                    {
+                        circuitContext->VolumeElements[volumeIndex++] = (ACXVOLUME)elements[index];
+                    }
+                    break;
+                case AudioNodeKind::MuteElement:
+                    if (muteIndex < circuitContext->NumOfMuteElements)
+                    {
+                        circuitContext->MuteElements[muteIndex++] = (ACXMUTE)elements[index];
+                    }
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
     }
     else
     {
