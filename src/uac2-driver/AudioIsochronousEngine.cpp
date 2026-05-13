@@ -2848,11 +2848,11 @@ AudioIsochronousEngine::VolumeChangeLevelNotification(
 
     if (m_renderCircuit != nullptr)
     {
-        status = CodecR_VolumeChangeLevelNotification(m_renderCircuit, entityID);
+        status = Codec_VolumeChangeLevelNotification(m_renderCircuit, entityID);
     }
     if (m_captureCircuit != nullptr)
     {
-        status = CodecC_VolumeChangeLevelNotification(m_captureCircuit, entityID);
+        status = Codec_VolumeChangeLevelNotification(m_captureCircuit, entityID);
     }
 
     return status;
@@ -2870,11 +2870,11 @@ AudioIsochronousEngine::MuteChangeStateNotification(
 
     if (m_renderCircuit != nullptr)
     {
-        status = CodecR_MuteChangeStateNotification(m_renderCircuit, entityID);
+        status = Codec_MuteChangeStateNotification(m_renderCircuit, entityID);
     }
     if (m_captureCircuit != nullptr)
     {
-        status = CodecC_MuteChangeStateNotification(m_captureCircuit, entityID);
+        status = Codec_MuteChangeStateNotification(m_captureCircuit, entityID);
     }
 
     return status;
@@ -2892,11 +2892,11 @@ AudioIsochronousEngine::ConnectorChangeStateNotification(
 
     if (m_renderCircuit != nullptr)
     {
-        status = CodecR_ConnectorChangeStateNotification(m_renderCircuit, entityID);
+        status = Codec_ConnectorChangeStateNotification(m_renderCircuit, entityID);
     }
     if (m_captureCircuit != nullptr)
     {
-        status = CodecC_ConnectorChangeStateNotification(m_captureCircuit, entityID);
+        status = Codec_ConnectorChangeStateNotification(m_captureCircuit, entityID);
     }
 
     return status;

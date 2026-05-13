@@ -439,10 +439,6 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DSP_PIN_CONTEXT, GetDspPinContext)
 //
 typedef struct _CODEC_RENDER_CIRCUIT_CONTEXT
 {
-    WDFMEMORY                VolumeElementsMemory;
-    ACXVOLUME *              VolumeElements;
-    WDFMEMORY                MuteElementsMemory;
-    ACXMUTE *                MuteElements;
     ACXAUDIOENGINE           AudioEngineElement;
     ULONG                    NumOfDevices;
     AudioIsochronousEngine * AudioIsochronousEngine;
@@ -487,7 +483,8 @@ Codec_CreateVolumeElement(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _Inout_ ACXELEMENT &          Element,
-    _In_ UCHAR                    UnitID
+    _In_ UCHAR                    UnitID,
+    _In_ UCHAR                    NumOfChannelsPerDevice
 );
 
 PAGED_CODE_SEG
@@ -497,7 +494,8 @@ Codec_CreateMuteElement(
     _In_ WDFDEVICE                Device,
     _In_ ACXCIRCUIT               Circuit,
     _Inout_ ACXELEMENT &          Element,
-    _In_ UCHAR                    UnitID
+    _In_ UCHAR                    UnitID,
+    _In_ UCHAR                    NumOfChannelsPerDevice
 );
 
 PAGED_CODE_SEG
@@ -584,28 +582,6 @@ CodecR_CreateRenderCircuit(
     _In_ const ULONG              SupportedSampleRate,
     _Out_ ACXCIRCUIT *            Circuit
 );
-
-PAGED_CODE_SEG
-NTSTATUS
-CodecR_VolumeChangeLevelNotification(
-    _In_ ACXCIRCUIT Circuit,
-    _In_ UCHAR      EntityID
-);
-
-PAGED_CODE_SEG
-NTSTATUS
-CodecR_MuteChangeStateNotification(
-    _In_ ACXCIRCUIT Circuit,
-    _In_ UCHAR      EntityID
-);
-
-PAGED_CODE_SEG
-NTSTATUS
-CodecR_ConnectorChangeStateNotification(
-    _In_ ACXCIRCUIT Circuit,
-    _In_ UCHAR      EntityID
-);
-
 /////////////////////////////////////////////////////////
 //
 // Codec Capture (microphone) definitions
@@ -616,15 +592,7 @@ CodecR_ConnectorChangeStateNotification(
 //
 typedef struct _CODEC_CAPTURE_CIRCUIT_CONTEXT
 {
-    WDFMEMORY    VolumeElementsMemory;
-    ACXVOLUME *  VolumeElements;
-    WDFMEMORY    MuteElementsMemory;
-    ACXMUTE *    MuteElements;
-    WDFMEMORY    MuxElementsMemory;
-    ACXELEMENT * MuxElements;
-    WDFMEMORY    AgcElementsMemory;
-    ACXELEMENT * AgcElements;
-    ULONG        NumOfDevices;
+    ULONG NumOfDevices;
     // ACXKEYWORDSPOTTER KeywordSpotter;
     AudioIsochronousEngine * AudioIsochronousEngine;
 } CODEC_CAPTURE_CIRCUIT_CONTEXT, *PCODEC_CAPTURE_CIRCUIT_CONTEXT;
@@ -685,27 +653,6 @@ CodecC_CreateCaptureCircuit(
     _In_ AudioIsochronousEngine * AudioIsochronousEngine,
     _In_ const ULONG              SupportedSampleRate,
     _Out_ ACXCIRCUIT *            Circuit
-);
-
-PAGED_CODE_SEG
-NTSTATUS
-CodecC_VolumeChangeLevelNotification(
-    _In_ ACXCIRCUIT Circuit,
-    _In_ UCHAR      EntityID
-);
-
-PAGED_CODE_SEG
-NTSTATUS
-CodecC_MuteChangeStateNotification(
-    _In_ ACXCIRCUIT Circuit,
-    _In_ UCHAR      EntityID
-);
-
-PAGED_CODE_SEG
-NTSTATUS
-CodecC_ConnectorChangeStateNotification(
-    _In_ ACXCIRCUIT Circuit,
-    _In_ UCHAR      EntityID
 );
 
 PAGED_CODE_SEG
@@ -770,14 +717,45 @@ NTSTATUS Codec_CreateCaptureEndpointPin(
 //
 typedef struct _CODEC_CIRCUIT_CONTEXT
 {
-    ULONG       NumOfVolumeElements;
-    WDFMEMORY   VolumeElementsMemory;
-    ACXVOLUME * VolumeElements;
-    ULONG       NumOfMuteElements;
-    WDFMEMORY   MuteElementsMemory;
-    ACXMUTE *   MuteElements;
+    ULONG        NumOfVolumeElements;
+    WDFMEMORY    VolumeElementsMemory;
+    ACXVOLUME *  VolumeElements;
+    ULONG        NumOfMuteElements;
+    WDFMEMORY    MuteElementsMemory;
+    ACXMUTE *    MuteElements;
+    ULONG        NumOfAgcElements;
+    WDFMEMORY    AgcElementsMemory;
+    ACXELEMENT * AgcElements;
 } CODEC_CIRCUIT_CONTEXT, *PCODEC_CIRCUIT_CONTEXT;
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_CIRCUIT_CONTEXT, GetCircuitContext)
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_AddAudioJackToBridgePin(
+    _In_ ACXPIN Pin,
+    _In_ ULONG  SpeakerPositions
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_VolumeChangeLevelNotification(
+    _In_ ACXCIRCUIT Circuit,
+    _In_ UCHAR      EntityID
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_MuteChangeStateNotification(
+    _In_ ACXCIRCUIT Circuit,
+    _In_ UCHAR      EntityID
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_ConnectorChangeStateNotification(
+    _In_ ACXCIRCUIT Circuit,
+    _In_ UCHAR      EntityID
+);
 
 PAGED_CODE_SEG
 EVT_ACX_PIN_RETRIEVE_NAME Codec_EvtAcxPinRetrieveName;
