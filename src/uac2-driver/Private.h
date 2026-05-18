@@ -157,7 +157,6 @@ typedef int BOOL;
 #endif
 
 #define ALL_CHANNELS_ID UINT32_MAX
-#define MAX_CHANNELS    32
 
 class USBAudioDataFormatManager;
 class AudioIsochronousEngine;
@@ -220,7 +219,8 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ELEMENT_CONTEXT, GetElementContext)
 typedef struct _MUTE_ELEMENT_CONTEXT
 {
     WDFDEVICE Device;
-    bool      MuteState[MAX_CHANNELS];
+    WDFMEMORY MuteStatesMemory;
+    bool *    MuteStates;
     UCHAR     EntityID;
     ULONG     NumberOfChannels;
 } MUTE_ELEMENT_CONTEXT, *PMUTE_ELEMENT_CONTEXT;
@@ -233,7 +233,8 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(MUTE_ELEMENT_CONTEXT, GetMuteElementContext)
 typedef struct _VOLUME_ELEMENT_CONTEXT
 {
     WDFDEVICE Device;
-    LONG      VolumeLevel[MAX_CHANNELS];
+    WDFMEMORY VolumeLevelsMemory;
+    LONG *    VolumeLevels;
     UCHAR     EntityID;
     ULONG     NumberOfChannels;
 } VOLUME_ELEMENT_CONTEXT, *PVOLUME_ELEMENT_CONTEXT;
@@ -471,10 +472,16 @@ PAGED_CODE_SEG
 EVT_ACX_MUTE_RETRIEVE_STATE Codec_EvtMuteRetrieveState;
 
 PAGED_CODE_SEG
+EVT_WDF_DEVICE_CONTEXT_CLEANUP Codec_EvtMuteElementContextCleanup;
+
+PAGED_CODE_SEG
 EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL Codec_EvtRampedVolumeAssignLevel;
 
 PAGED_CODE_SEG
 EVT_ACX_VOLUME_RETRIEVE_LEVEL Codec_EvtVolumeRetrieveLevel;
+
+PAGED_CODE_SEG
+EVT_WDF_DEVICE_CONTEXT_CLEANUP Codec_EvtVolumeElementContextCleanup;
 
 PAGED_CODE_SEG
 NTSTATUS

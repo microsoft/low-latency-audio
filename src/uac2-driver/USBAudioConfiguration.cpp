@@ -1745,6 +1745,18 @@ bool USBAudio1ControlInterface::GetUpdatedOutputConnectorEntity(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+NTSTATUS USBAudio1ControlInterface::ValidateVolumeControl(
+    _In_ UCHAR /* entityID */,
+    _In_ UCHAR /* channel */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 NTSTATUS USBAudio1ControlInterface::SetCurrentVolume(
     PDEVICE_CONTEXT /* deviceContext */,
     UCHAR /* entityID */,
@@ -1764,6 +1776,18 @@ NTSTATUS USBAudio1ControlInterface::GetCurrentVolume(
     UCHAR /* entityID */,
     UCHAR /* channel */,
     LONG & /* volume */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio1ControlInterface::ValidateMuteControl(
+    _In_ UCHAR /* entityID */,
+    _In_ UCHAR /* channel */
 )
 {
     PAGED_CODE();
@@ -3969,6 +3993,7 @@ ULONG USBAudio2ControlInterface::GetUnitOutputChannelCount(
             {
                 NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR featureUnitDescriptor = (NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR)descriptor;
                 UCHAR                                           numOfChannels = (featureUnitDescriptor->bLength - offsetof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR, ch)) / (sizeof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR::ch[0]));
+                numOfChannels = (numOfChannels == 0) ? 0 : (numOfChannels - 1);
                 return numOfChannels;
             }
             break;
@@ -4369,10 +4394,10 @@ USBAudio2ControlInterface::WalkNextUnitTowardForward(
                     }
                     controlBitmap &= (NS_USBAudio0200::FEATURE_UNIT_BMA_MUTE_CONTROL_MASK | NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK | NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK);
                 }
-                if (controlBitmap & NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK)
+                if (controlBitmap & NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK)
                 {
-                    controlBitmap &= ~NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK;
-                    audioNodeKind = AudioNodeKind::VolumeElement;
+                    controlBitmap &= ~NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK;
+                    audioNodeKind = AudioNodeKind::AgcElement;
                     if (controlBitmap == 0)
                     {
                         SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
@@ -4393,10 +4418,10 @@ USBAudio2ControlInterface::WalkNextUnitTowardForward(
                     nextUnitID = featureUnitDescriptor->bUnitID;
                     return STATUS_SUCCESS;
                 }
-                else if (controlBitmap & NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK)
+                else if (controlBitmap & NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK)
                 {
-                    controlBitmap &= ~NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK;
-                    audioNodeKind = AudioNodeKind::AgcElement;
+                    controlBitmap &= ~NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK;
+                    audioNodeKind = AudioNodeKind::VolumeElement;
                     if (controlBitmap == 0)
                     {
                         SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
@@ -4553,10 +4578,10 @@ USBAudio2ControlInterface::WalkNextUnitTowardReverse(
                     }
                     controlBitmap &= (NS_USBAudio0200::FEATURE_UNIT_BMA_MUTE_CONTROL_MASK | NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK | NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK);
                 }
-                if (controlBitmap & NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK)
+                if (controlBitmap & NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK)
                 {
-                    controlBitmap &= ~NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK;
-                    audioNodeKind = AudioNodeKind::AgcElement;
+                    controlBitmap &= ~NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK;
+                    audioNodeKind = AudioNodeKind::VolumeElement;
                     if (controlBitmap == 0)
                     {
                         SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
@@ -4577,10 +4602,10 @@ USBAudio2ControlInterface::WalkNextUnitTowardReverse(
                     nextUnitID = featureUnitDescriptor->bUnitID;
                     return STATUS_SUCCESS;
                 }
-                else if (controlBitmap & NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK)
+                else if (controlBitmap & NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK)
                 {
-                    controlBitmap &= ~NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK;
-                    audioNodeKind = AudioNodeKind::VolumeElement;
+                    controlBitmap &= ~NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK;
+                    audioNodeKind = AudioNodeKind::AgcElement;
                     if (controlBitmap == 0)
                     {
                         SetEntityBit(idMap, featureUnitDescriptor->bUnitID);
@@ -5071,6 +5096,47 @@ NTSTATUS USBAudio2ControlInterface::ValidateChannelNamesStringDescriptor(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+NTSTATUS USBAudio2ControlInterface::ValidateFeatureUnitControl(
+    _In_ UCHAR entityID,
+    _In_ UCHAR channel,
+    _In_ ULONG controlMap
+)
+{
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    for (auto & featureUnitDescriptor : m_acFeatureUnitInfo)
+    {
+        if (featureUnitDescriptor->bUnitID == entityID)
+        {
+            UCHAR numOfChannels = (featureUnitDescriptor->bLength - offsetof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR, ch)) / (sizeof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR::ch[0]));
+            if (channel < numOfChannels)
+            {
+                if (ConvertBmaControls(featureUnitDescriptor->ch[channel].bmaControls) & controlMap)
+                {
+                    status = STATUS_SUCCESS;
+                }
+                else
+                {
+                    status = STATUS_NOT_SUPPORTED;
+                }
+            }
+            else
+            {
+                status = STATUS_INVALID_PARAMETER;
+            }
+            break;
+        }
+    }
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 bool USBAudio2ControlInterface::GetUpdatedVolumeEntity(
     UCHAR & entityID
 )
@@ -5115,6 +5181,18 @@ bool USBAudio2ControlInterface::GetUpdatedOutputConnectorEntity(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+NTSTATUS USBAudio2ControlInterface::ValidateVolumeControl(
+    _In_ UCHAR entityID,
+    _In_ UCHAR channel
+)
+{
+    PAGED_CODE();
+
+    return ValidateFeatureUnitControl(entityID, channel, NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 NTSTATUS USBAudio2ControlInterface::SetCurrentVolume(
     PDEVICE_CONTEXT deviceContext,
     UCHAR           entityID,
@@ -5122,14 +5200,17 @@ NTSTATUS USBAudio2ControlInterface::SetCurrentVolume(
     LONG            volume
 )
 {
-    NTSTATUS status = STATUS_SUCCESS;
-
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
-    volume >>= 8;
-    status = ControlRequestSetVolume(deviceContext, GetInterfaceNumber(), entityID, channel, (SHORT)volume);
+    NTSTATUS status = ValidateVolumeControl(entityID, channel);
+
+    if (NT_SUCCESS(status))
+    {
+        volume >>= 8;
+        status = ControlRequestSetVolume(deviceContext, GetInterfaceNumber(), entityID, channel, (SHORT)volume);
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
 
@@ -5145,30 +5226,44 @@ NTSTATUS USBAudio2ControlInterface::GetCurrentVolume(
     LONG &          volume
 )
 {
-    NTSTATUS status = STATUS_SUCCESS;
-    USHORT   currentVolume = 0;
-
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
-    status = ControlRequestGetVolume(deviceContext, GetInterfaceNumber(), entityID, channel, currentVolume);
+    NTSTATUS status = ValidateVolumeControl(entityID, channel);
 
     if (NT_SUCCESS(status))
     {
-        if ((ULONG)currentVolume == 0x8000)
+        USHORT currentVolume = 0;
+        status = ControlRequestGetVolume(deviceContext, GetInterfaceNumber(), entityID, channel, currentVolume);
+
+        if (NT_SUCCESS(status))
         {
-            volume = LONG_MIN;
-        }
-        else
-        {
-            volume = ((LONG)((SHORT)currentVolume) * 0x10000) >> 8;
+            if ((ULONG)currentVolume == 0x8000)
+            {
+                volume = LONG_MIN;
+            }
+            else
+            {
+                volume = ((LONG)((SHORT)currentVolume) * 0x10000) >> 8;
+            }
         }
     }
-
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
 
     return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio2ControlInterface::ValidateMuteControl(
+    _In_ UCHAR entityID,
+    _In_ UCHAR channel
+)
+{
+    PAGED_CODE();
+
+    return ValidateFeatureUnitControl(entityID, channel, NS_USBAudio0200::FEATURE_UNIT_BMA_MUTE_CONTROL_MASK);
 }
 
 _Use_decl_annotations_
@@ -5180,13 +5275,16 @@ NTSTATUS USBAudio2ControlInterface::SetCurrentMute(
     bool            mute
 )
 {
-    NTSTATUS status = STATUS_SUCCESS;
-
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
-    status = ControlRequestSetMute(deviceContext, GetInterfaceNumber(), entityID, channel, mute);
+    NTSTATUS status = ValidateMuteControl(entityID, channel);
+
+    if (NT_SUCCESS(status))
+    {
+        status = ControlRequestSetMute(deviceContext, GetInterfaceNumber(), entityID, channel, mute);
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
 
@@ -5202,13 +5300,16 @@ NTSTATUS USBAudio2ControlInterface::GetCurrentMute(
     bool &          mute
 )
 {
-    NTSTATUS status = STATUS_SUCCESS;
-
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
-    status = ControlRequestGetMute(deviceContext, GetInterfaceNumber(), entityID, channel, mute);
+    NTSTATUS status = ValidateMuteControl(entityID, channel);
+
+    if (NT_SUCCESS(status))
+    {
+        status = ControlRequestGetMute(deviceContext, GetInterfaceNumber(), entityID, channel, mute);
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
 
@@ -9281,13 +9382,12 @@ USBAudioConfiguration::GetVolumeConfiguration(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
-NTSTATUS USBAudioConfiguration::SetCurrentVolume(
-    PDEVICE_CONTEXT deviceContext,
-    UCHAR           entityID,
-    UCHAR           channel,
-    LONG            volume
+NTSTATUS USBAudioConfiguration::ValidateVolumeControl(
+    UCHAR entityID,
+    UCHAR channel
 )
 {
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
@@ -9295,12 +9395,37 @@ NTSTATUS USBAudioConfiguration::SetCurrentVolume(
     ASSERT(m_usbAudioControlInterface != nullptr);
     if (m_usbAudioControlInterface != nullptr)
     {
-        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->SetCurrentVolume(deviceContext, entityID, channel, volume));
+        status = m_usbAudioControlInterface->ValidateVolumeControl(entityID, channel);
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
 
-    return STATUS_SUCCESS;
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudioConfiguration::SetCurrentVolume(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           entityID,
+    UCHAR           channel,
+    LONG            volume
+)
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    ASSERT(m_usbAudioControlInterface != nullptr);
+    if (m_usbAudioControlInterface != nullptr)
+    {
+        status = m_usbAudioControlInterface->SetCurrentVolume(deviceContext, entityID, channel, volume);
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
 }
 
 _Use_decl_annotations_
@@ -9312,6 +9437,7 @@ NTSTATUS USBAudioConfiguration::GetCurrentVolume(
     LONG &          volume
 )
 {
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
@@ -9321,12 +9447,35 @@ NTSTATUS USBAudioConfiguration::GetCurrentVolume(
     ASSERT(m_usbAudioControlInterface != nullptr);
     if (m_usbAudioControlInterface != nullptr)
     {
-        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetCurrentVolume(deviceContext, entityID, channel, volume));
+        status = m_usbAudioControlInterface->GetCurrentVolume(deviceContext, entityID, channel, volume);
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
 
-    return STATUS_SUCCESS;
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudioConfiguration::ValidateMuteControl(
+    UCHAR entityID,
+    UCHAR channel
+)
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    ASSERT(m_usbAudioControlInterface != nullptr);
+    if (m_usbAudioControlInterface != nullptr)
+    {
+        status = m_usbAudioControlInterface->ValidateMuteControl(entityID, channel);
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
 }
 
 _Use_decl_annotations_
@@ -9338,6 +9487,7 @@ NTSTATUS USBAudioConfiguration::SetCurrentMute(
     bool            mute
 )
 {
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
@@ -9345,12 +9495,12 @@ NTSTATUS USBAudioConfiguration::SetCurrentMute(
     ASSERT(m_usbAudioControlInterface != nullptr);
     if (m_usbAudioControlInterface != nullptr)
     {
-        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->SetCurrentMute(deviceContext, entityID, channel, mute));
+        status = m_usbAudioControlInterface->SetCurrentMute(deviceContext, entityID, channel, mute);
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
 
-    return STATUS_SUCCESS;
+    return status;
 }
 
 _Use_decl_annotations_
@@ -9362,6 +9512,7 @@ NTSTATUS USBAudioConfiguration::GetCurrentMute(
     bool &          mute
 )
 {
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
@@ -9371,12 +9522,12 @@ NTSTATUS USBAudioConfiguration::GetCurrentMute(
     ASSERT(m_usbAudioControlInterface != nullptr);
     if (m_usbAudioControlInterface != nullptr)
     {
-        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetCurrentMute(deviceContext, entityID, channel, mute));
+        status = m_usbAudioControlInterface->GetCurrentMute(deviceContext, entityID, channel, mute);
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
 
-    return STATUS_SUCCESS;
+    return status;
 }
 
 _Use_decl_annotations_
@@ -9388,6 +9539,7 @@ USBAudioConfiguration::GetCurrentConnectorState(
     NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
 )
 {
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
@@ -9397,12 +9549,12 @@ USBAudioConfiguration::GetCurrentConnectorState(
     ASSERT(m_usbAudioControlInterface != nullptr);
     if (m_usbAudioControlInterface != nullptr)
     {
-        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->GetCurrentConnectorState(deviceContext, entityID, connectorState));
+        status = m_usbAudioControlInterface->GetCurrentConnectorState(deviceContext, entityID, connectorState);
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
 
-    return STATUS_SUCCESS;
+    return status;
 }
 
 PAGED_CODE_SEG

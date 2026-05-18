@@ -157,6 +157,32 @@ static NTSTATUS AllocateElementContext(
 }
 
 PAGED_CODE_SEG
+_Success_(return)
+static bool FindElement(
+    _In_ ULONG                                   UnitID,
+    _In_ AudioNodeKind                           AudioNodeKind,
+    _In_reads_(NumOfElements) const ACXELEMENT * Elements,
+    _In_ ULONG                                   NumOfElements,
+    _Out_ ACXELEMENT &                           Element
+)
+{
+	PAGED_CODE();
+
+    for (ULONG elementIndex = 0; elementIndex < NumOfElements; elementIndex++)
+    {
+        ELEMENT_CONTEXT * elementContext = GetElementContext(Elements[elementIndex]);
+        ASSERT(elementContext);
+        if ((elementContext->UnitID == UnitID) && (elementContext->AudioNodeKind == toULONG(AudioNodeKind)))
+        {
+            Element = Elements[elementIndex];
+            return true;
+        }
+    }
+
+    return false;
+}
+
+PAGED_CODE_SEG
 NTSTATUS
 Codec_EvtAcxPinRetrieveName(
     _In_ ACXPIN           Pin,
@@ -251,51 +277,65 @@ Codec_EvtMuteAssignState(
     ULONG   State
 )
 {
-    NTSTATUS              status = STATUS_SUCCESS;
-    PDEVICE_CONTEXT       deviceContext;
-    PMUTE_ELEMENT_CONTEXT muteContext;
-    bool                  muteState = (State != 0) ? true : false;
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+    bool     muteState = (State != 0) ? true : false;
 
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
-    muteContext = GetMuteElementContext(Mute);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry, channel %u, mute %!bool!", Channel, muteState);
+    PMUTE_ELEMENT_CONTEXT muteContext = GetMuteElementContext(Mute);
     ASSERT(muteContext);
 
-    deviceContext = GetDeviceContext(muteContext->Device);
+    PDEVICE_CONTEXT deviceContext = GetDeviceContext(muteContext->Device);
     ASSERT(deviceContext != nullptr);
 
-    // If the device is designed to support mute control,
-    // the implementation should be added here.
-
-    //
-    // Use first channel for all channels setting.
-    //
     if ((Channel != ALL_CHANNELS_ID) && (Channel < muteContext->NumberOfChannels))
     {
-        if (muteContext->MuteState[Channel] != muteState)
+        status = deviceContext->UsbAudioConfiguration->SetCurrentMute(deviceContext, muteContext->EntityID, (UCHAR)(Channel + 1), muteState);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current mute %!bool!, entity ID 0x%02x, channel(USB) %d, %!STATUS!", (muteState != 0) ? true : false, muteContext->EntityID, Channel + 1, status);
+        if (NT_SUCCESS(status))
         {
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current mute %!bool!, entity ID 0x%02x, channel %d", (muteState != 0) ? true : false, muteContext->EntityID, Channel);
-            status = deviceContext->UsbAudioConfiguration->SetCurrentMute(deviceContext, muteContext->EntityID, (UCHAR)Channel, muteState);
+            muteContext->MuteStates[Channel + 1] = muteState;
         }
-        muteContext->MuteState[Channel] = muteState;
+        else if (status == STATUS_NOT_SUPPORTED)
+        {
+            status = deviceContext->UsbAudioConfiguration->ValidateMuteControl(muteContext->EntityID, 0);
+            if (NT_SUCCESS(status))
+            {
+                status = deviceContext->UsbAudioConfiguration->SetCurrentMute(deviceContext, muteContext->EntityID, 0, muteState);
+                if (NT_SUCCESS(status))
+                {
+                    muteContext->MuteStates[0] = muteState;
+                }
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current mute %!bool!, entity ID 0x%02x, channel(USB) %d, %!STATUS!", (muteState != 0) ? true : false, muteContext->EntityID, 0, status);
+            }
+        }
     }
     else if (Channel == ALL_CHANNELS_ID)
     {
-        for (ULONG i = 0; i < muteContext->NumberOfChannels; ++i)
+        status = deviceContext->UsbAudioConfiguration->SetCurrentMute(deviceContext, muteContext->EntityID, 0, muteState);
+        if (NT_SUCCESS(status))
         {
-            if (muteContext->MuteState[i] != muteState)
+            muteContext->MuteStates[0] = muteState;
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current mute %!bool!, entity ID 0x%02x, channel(USB) %d, %!STATUS!", (muteState != 0) ? true : false, muteContext->EntityID, 0, status);
+        }
+        else if (status == STATUS_NOT_SUPPORTED)
+        {
+            for (ULONG i = 0; i < muteContext->NumberOfChannels; ++i)
             {
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current mute %!bool!, entity ID 0x%02x, channel %d", (muteState != 0) ? true : false, muteContext->EntityID, Channel);
-                status = deviceContext->UsbAudioConfiguration->SetCurrentMute(deviceContext, muteContext->EntityID, (UCHAR)i, muteState);
+                status = deviceContext->UsbAudioConfiguration->SetCurrentMute(deviceContext, muteContext->EntityID, (UCHAR)(i + 1), muteState);
+                if (NT_SUCCESS(status))
+                {
+                    muteContext->MuteStates[i + 1] = muteState;
+                }
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current mute %!bool!, entity ID 0x%02x, channel(USB) %d, %!STATUS!", (muteState != 0) ? true : false, muteContext->EntityID, i + 1, status);
             }
-            muteContext->MuteState[i] = muteState;
         }
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit, %!STATUS!", status);
 
-    return STATUS_SUCCESS;
+    return status;
 }
 
 _Use_decl_annotations_
@@ -308,33 +348,88 @@ Codec_EvtMuteRetrieveState(
     ULONG * State
 )
 {
-    PMUTE_ELEMENT_CONTEXT muteContext;
-
+    NTSTATUS status = STATUS_SUCCESS;
     PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry!");
 
-    muteContext = GetMuteElementContext(Mute);
+    bool                  mute = true;
+    PMUTE_ELEMENT_CONTEXT muteContext = GetMuteElementContext(Mute);
     ASSERT(muteContext);
 
-    // If the device is designed to support mute control,
-    // the implementation should be added here.
+    PDEVICE_CONTEXT deviceContext = GetDeviceContext(muteContext->Device);
+    ASSERT(deviceContext != nullptr);
 
     *State = 0;
+
     //
     // Use first channel for all channels setting.
     //
     if ((Channel != ALL_CHANNELS_ID) && (Channel < muteContext->NumberOfChannels))
     {
-        *State = muteContext->MuteState[Channel];
+        status = deviceContext->UsbAudioConfiguration->ValidateMuteControl(muteContext->EntityID, (UCHAR)(Channel + 1));
+        if (NT_SUCCESS(status))
+        {
+            *State = muteContext->MuteStates[Channel + 1];
+        }
+        else if (status == STATUS_NOT_SUPPORTED)
+        {
+            status = deviceContext->UsbAudioConfiguration->ValidateMuteControl(muteContext->EntityID, 0);
+            if (NT_SUCCESS(status))
+            {
+                *State = muteContext->MuteStates[0];
+            }
+        }
     }
     else if (Channel == ALL_CHANNELS_ID)
     {
-        *State = muteContext->MuteState[0];
+        status = deviceContext->UsbAudioConfiguration->ValidateMuteControl(muteContext->EntityID, 0);
+        if (NT_SUCCESS(status))
+        {
+            *State = muteContext->MuteStates[0];
+        }
+        else if (status == STATUS_NOT_SUPPORTED)
+        {
+            for (ULONG i = 0; i < muteContext->NumberOfChannels; ++i)
+            {
+                status = deviceContext->UsbAudioConfiguration->ValidateMuteControl(muteContext->EntityID, (UCHAR)(i + 1));
+                if (NT_SUCCESS(status))
+                {
+                    *State = muteContext->MuteStates[i + 1];
+                    break;
+                }
+            }
+        }
+    }
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - get current mute %!bool!, entity ID 0x%02x, channel %d, %!STATUS!", (mute != 0) ? true : false, muteContext->EntityID, Channel, status);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+VOID Codec_EvtMuteElementContextCleanup(
+    WDFOBJECT Object
+)
+{
+    PAGED_CODE();
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
+
+    ACXMUTE muteElement = (ACXMUTE)Object;
+
+    PMUTE_ELEMENT_CONTEXT muteContext = GetMuteElementContext(muteElement);
+    ASSERT(muteContext);
+
+    if ((muteContext != nullptr) && (muteContext->MuteStatesMemory != nullptr))
+    {
+        WdfObjectDelete(muteContext->MuteStatesMemory);
+        muteContext->MuteStatesMemory = nullptr;
+        muteContext->MuteStates = nullptr;
+        muteContext->NumberOfChannels = 0;
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit, state = %d", *State);
-
-    return STATUS_SUCCESS;
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 }
 
 ///////////////////////////////////////////////////////////
@@ -353,53 +448,64 @@ Codec_EvtRampedVolumeAssignLevel(
     ULONGLONG /* CurveDuration */
 )
 {
-    NTSTATUS                status = STATUS_SUCCESS;
-    PDEVICE_CONTEXT         deviceContext;
-    PVOLUME_ELEMENT_CONTEXT volumeContext;
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry, channel %u, volume level %ld", Channel, VolumeLevel);
 
-    volumeContext = GetVolumeElementContext(Volume);
+    PVOLUME_ELEMENT_CONTEXT volumeContext = GetVolumeElementContext(Volume);
     ASSERT(volumeContext);
 
-    deviceContext = GetDeviceContext(volumeContext->Device);
+    PDEVICE_CONTEXT deviceContext = GetDeviceContext(volumeContext->Device);
     ASSERT(deviceContext != nullptr);
-
-    // If the device is designed to support volume control,
-    // the implementation should be added here.
 
     if ((Channel != ALL_CHANNELS_ID) && (Channel < volumeContext->NumberOfChannels))
     {
-        if (volumeContext->VolumeLevel[Channel] != VolumeLevel)
+        status = deviceContext->UsbAudioConfiguration->SetCurrentVolume(deviceContext, volumeContext->EntityID, (UCHAR)(Channel + 1), VolumeLevel);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current volume %ld, entity ID 0x%02x, channel(USB) %d, %!STATUS!", VolumeLevel, volumeContext->EntityID, Channel + 1, status);
+        if (NT_SUCCESS(status))
         {
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current volume %ld, entity ID 0x%02x, channel %d", VolumeLevel, volumeContext->EntityID, Channel);
-            status = deviceContext->UsbAudioConfiguration->SetCurrentVolume(deviceContext, volumeContext->EntityID, (UCHAR)Channel, VolumeLevel);
+            volumeContext->VolumeLevels[Channel + 1] = VolumeLevel;
+        }
+        else if (status == STATUS_NOT_SUPPORTED)
+        {
+            status = deviceContext->UsbAudioConfiguration->ValidateVolumeControl(volumeContext->EntityID, 0);
             if (NT_SUCCESS(status))
             {
-                volumeContext->VolumeLevel[Channel] = VolumeLevel;
+                status = deviceContext->UsbAudioConfiguration->SetCurrentVolume(deviceContext, volumeContext->EntityID, 0, VolumeLevel);
+                if (NT_SUCCESS(status))
+                {
+                    volumeContext->VolumeLevels[0] = VolumeLevel;
+                }
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current volume %ld, entity ID 0x%02x, channel(USB) %d, %!STATUS!", VolumeLevel, volumeContext->EntityID, 0, status);
             }
         }
     }
     else if (Channel == ALL_CHANNELS_ID)
     {
-        for (ULONG i = 0; i < volumeContext->NumberOfChannels; ++i)
+        status = deviceContext->UsbAudioConfiguration->SetCurrentVolume(deviceContext, volumeContext->EntityID, 0, VolumeLevel);
+        if (NT_SUCCESS(status))
         {
-            if (volumeContext->VolumeLevel[i] != VolumeLevel)
+            volumeContext->VolumeLevels[0] = VolumeLevel;
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current volume %ld, entity ID 0x%02x, channel(USB) %d, %!STATUS!", VolumeLevel, volumeContext->EntityID, 0, status);
+        }
+        else if (status == STATUS_NOT_SUPPORTED)
+        {
+            for (ULONG i = 0; i < volumeContext->NumberOfChannels; ++i)
             {
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current volume %ld, entity ID 0x%02x, channel %d", VolumeLevel, volumeContext->EntityID, i);
-                status = deviceContext->UsbAudioConfiguration->SetCurrentVolume(deviceContext, volumeContext->EntityID, (UCHAR)i, VolumeLevel);
+                status = deviceContext->UsbAudioConfiguration->SetCurrentVolume(deviceContext, volumeContext->EntityID, (UCHAR)(i + 1), VolumeLevel);
                 if (NT_SUCCESS(status))
                 {
-                    volumeContext->VolumeLevel[i] = VolumeLevel;
+                    volumeContext->VolumeLevels[i + 1] = VolumeLevel;
                 }
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current volume %ld, entity ID 0x%02x, channel(USB) %d, %!STATUS!", VolumeLevel, volumeContext->EntityID, i + 1, status);
             }
         }
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit, %!STATUS!", status);
 
-    return STATUS_SUCCESS;
+    return status;
 }
 
 _Use_decl_annotations_
@@ -412,31 +518,84 @@ Codec_EvtVolumeRetrieveLevel(
     LONG *    VolumeLevel
 )
 {
-    PVOLUME_ELEMENT_CONTEXT volumeContext;
-
+    NTSTATUS status = STATUS_SUCCESS;
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry, channel %u", Channel);
 
-    volumeContext = GetVolumeElementContext(Volume);
+    PVOLUME_ELEMENT_CONTEXT volumeContext = GetVolumeElementContext(Volume);
     ASSERT(volumeContext);
 
-    // If the device is designed to support volume control,
-    // the implementation should be added here.
+    PDEVICE_CONTEXT deviceContext = GetDeviceContext(volumeContext->Device);
+    ASSERT(deviceContext != nullptr);
 
     *VolumeLevel = 0;
 
     if ((Channel != ALL_CHANNELS_ID) && (Channel < volumeContext->NumberOfChannels))
     {
-        *VolumeLevel = volumeContext->VolumeLevel[Channel];
+        status = deviceContext->UsbAudioConfiguration->ValidateVolumeControl(volumeContext->EntityID, (UCHAR)(Channel + 1));
+        if (NT_SUCCESS(status))
+        {
+            *VolumeLevel = volumeContext->VolumeLevels[Channel + 1];
+        }
+        else if (status == STATUS_NOT_SUPPORTED)
+        {
+            status = deviceContext->UsbAudioConfiguration->ValidateVolumeControl(volumeContext->EntityID, 0);
+            if (NT_SUCCESS(status))
+            {
+                *VolumeLevel = volumeContext->VolumeLevels[0];
+            }
+        }
     }
     else if (Channel == ALL_CHANNELS_ID)
     {
-        *VolumeLevel = volumeContext->VolumeLevel[0];
+        status = deviceContext->UsbAudioConfiguration->ValidateVolumeControl(volumeContext->EntityID, 0);
+        if (NT_SUCCESS(status))
+        {
+            *VolumeLevel = volumeContext->VolumeLevels[0];
+        }
+        else if (status == STATUS_NOT_SUPPORTED)
+        {
+            for (ULONG i = 0; i < volumeContext->NumberOfChannels; ++i)
+            {
+                status = deviceContext->UsbAudioConfiguration->ValidateVolumeControl(volumeContext->EntityID, (UCHAR)(i + 1));
+                if (NT_SUCCESS(status))
+                {
+                    *VolumeLevel = volumeContext->VolumeLevels[i + 1];
+                    break;
+                }
+            }
+        }
+    }
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - get current volume %ld, entity ID 0x%02x, channel %d, %!STATUS!", *VolumeLevel, volumeContext->EntityID, Channel, status);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+VOID Codec_EvtVolumeElementContextCleanup(
+    WDFOBJECT Object
+)
+{
+    PAGED_CODE();
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
+
+    ACXVOLUME volumeElement = (ACXVOLUME)Object;
+
+    PVOLUME_ELEMENT_CONTEXT volumeContext = GetVolumeElementContext(volumeElement);
+    ASSERT(volumeContext);
+
+    if ((volumeContext != nullptr) && (volumeContext->VolumeLevelsMemory != nullptr))
+    {
+        WdfObjectDelete(volumeContext->VolumeLevelsMemory);
+        volumeContext->VolumeLevelsMemory = nullptr;
+        volumeContext->VolumeLevels = nullptr;
+        volumeContext->NumberOfChannels = 0;
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit, channel %u, volume level %ld", Channel, *VolumeLevel);
-
-    return STATUS_SUCCESS;
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 }
 
 _Use_decl_annotations_
@@ -489,6 +648,7 @@ Codec_CreateVolumeElement(
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, VOLUME_ELEMENT_CONTEXT);
     attributes.ParentObject = Circuit;
+    attributes.EvtCleanupCallback = Codec_EvtVolumeElementContextCleanup;
 
     RETURN_NTSTATUS_IF_FAILED(AcxVolumeCreate(Circuit, &attributes, &volumeCfg, (ACXVOLUME *)&volumeElement));
 
@@ -498,7 +658,28 @@ Codec_CreateVolumeElement(
     RtlZeroMemory(volumeContext, sizeof(VOLUME_ELEMENT_CONTEXT));
     volumeContext->Device = Device;
     volumeContext->EntityID = UnitID;
-    volumeContext->NumberOfChannels = min(numOfChannels, MAX_CHANNELS);
+    volumeContext->VolumeLevelsMemory = nullptr;
+    volumeContext->VolumeLevels = nullptr;
+
+    attributes.ParentObject = volumeElement;
+    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(LONG) * (numOfChannels + 1), &volumeContext->VolumeLevelsMemory, nullptr));
+    volumeContext->VolumeLevels = (LONG *)WdfMemoryGetBuffer(volumeContext->VolumeLevelsMemory, nullptr);
+    RtlZeroMemory(volumeContext->VolumeLevels, sizeof(LONG) * (numOfChannels + 1));
+    volumeContext->NumberOfChannels = numOfChannels;
+
+    PDEVICE_CONTEXT deviceContext = GetDeviceContext(Device);
+    ASSERT(deviceContext);
+
+    for (ULONG i = 0; i < volumeContext->NumberOfChannels; ++i)
+    {
+        LONG     volume = 0;
+        NTSTATUS status = deviceContext->UsbAudioConfiguration->GetCurrentVolume(deviceContext, volumeContext->EntityID, (UCHAR)i, volume);
+        if (NT_SUCCESS(status))
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - get current volume %ld, entity ID 0x%02x, channel(USB) %d", volume, volumeContext->EntityID, i);
+            volumeContext->VolumeLevels[i] = volume;
+        }
+    }
 
     Element = volumeElement;
 
@@ -559,6 +740,7 @@ Codec_CreateMuteElement(
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, MUTE_ELEMENT_CONTEXT);
     attributes.ParentObject = Circuit;
+    attributes.EvtCleanupCallback = Codec_EvtVolumeElementContextCleanup;
 
     RETURN_NTSTATUS_IF_FAILED(AcxMuteCreate(Circuit, &attributes, &muteCfg, (ACXMUTE *)&muteElement));
 
@@ -568,7 +750,28 @@ Codec_CreateMuteElement(
     RtlZeroMemory(muteContext, sizeof(MUTE_ELEMENT_CONTEXT));
     muteContext->Device = Device;
     muteContext->EntityID = UnitID;
-    muteContext->NumberOfChannels = min(numOfChannels, MAX_CHANNELS);
+    muteContext->MuteStatesMemory = nullptr;
+    muteContext->MuteStates = nullptr;
+
+    attributes.ParentObject = muteElement;
+    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(bool) * (numOfChannels + 1), &muteContext->MuteStatesMemory, nullptr));
+    muteContext->MuteStates = (bool *)WdfMemoryGetBuffer(muteContext->MuteStatesMemory, nullptr);
+    RtlZeroMemory(muteContext->MuteStates, sizeof(bool) * (numOfChannels + 1));
+    muteContext->NumberOfChannels = numOfChannels;
+
+    PDEVICE_CONTEXT deviceContext = GetDeviceContext(Device);
+    ASSERT(deviceContext);
+
+    for (ULONG i = 0; i < (muteContext->NumberOfChannels + 1); ++i)
+    {
+        bool     mute = false;
+        NTSTATUS status = deviceContext->UsbAudioConfiguration->GetCurrentMute(deviceContext, muteContext->EntityID, (UCHAR)i, mute);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - get current mute %!bool!, entity ID 0x%02x, channel(USB) %d", (mute != 0) ? true : false, muteContext->EntityID, i);
+        if (NT_SUCCESS(status))
+        {
+            muteContext->MuteStates[i] = mute;
+        }
+    }
 
     Element = muteElement;
 
@@ -1363,9 +1566,9 @@ NTSTATUS Codec_CreateRenderHostPin(
     pinContext->IsInput = false;
     pinContext->Device = Device;
     pinContext->CodecPinType = CodecPinTypeHost;
-    pinContext->DeviceIndex = 0;            // DeviceIndex;
-    pinContext->Channel = 0;                // Channel;
-    pinContext->NumOfChannelsPerDevice = 0; // ChannelsCount;
+    pinContext->DeviceIndex = 0;                        // DeviceIndex;
+    pinContext->Channel = 0;                            // Channel;
+    pinContext->NumOfChannelsPerDevice = numOfChannels; // ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
@@ -1525,9 +1728,9 @@ NTSTATUS Codec_CreateCaptureHostPin(
     ASSERT(pinContext);
     pinContext->Device = Device;
     pinContext->CodecPinType = CodecPinTypeHost;
-    pinContext->DeviceIndex = 0;            // DeviceIndex;
-    pinContext->Channel = 0;                // Channel;
-    pinContext->NumOfChannelsPerDevice = 0; // ChannelsCount;
+    pinContext->DeviceIndex = 0;                        // DeviceIndex;
+    pinContext->Channel = 0;                            // Channel;
+    pinContext->NumOfChannelsPerDevice = numOfChannels; // ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
@@ -1764,6 +1967,7 @@ Codec_AllocateElements(
     {
         while (hasMoreData)
         {
+            bool shouldConnect = true;
             RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->WalkNextUnit(IsInput, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData));
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - IsInput = %!bool!, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, %s, 0x%02x, 0x%08x, 0x%02x, %s, hasMoreData = %!bool!", IsInput, idMap[0], idMap[1], idMap[2], idMap[3], unvisitedUnitMap[0], unvisitedUnitMap[1], unvisitedUnitMap[2], unvisitedUnitMap[3], GetAudioNodeKindString(audioNodeKind), unitID, controlBitmap, nextUnitID, GetTraversalDirectionString(traversalDirection), hasMoreData);
 
@@ -1812,14 +2016,28 @@ Codec_AllocateElements(
                 elementIndex++;
                 break;
             case AudioNodeKind::SuperMixElement: // Mixer Unit : KSNODETYPE_SUPERMIX
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateSuperMixElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
-                currentElement = elements[elementIndex];
-                elementIndex++;
+                if (!FindElement(unitID, AudioNodeKind::SuperMixElement, elements, elementIndex, currentElement))
+                {
+                    RETURN_NTSTATUS_IF_FAILED(Codec_CreateSuperMixElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
+                    currentElement = elements[elementIndex];
+                    elementIndex++;
+                }
+                else
+                {
+                    shouldConnect = false;
+                }
                 break;
             case AudioNodeKind::MuxElement: // Selector Unit : KSNODETYPE_MUX
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuxElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
-                currentElement = elements[elementIndex];
-                elementIndex++;
+                if (!FindElement(unitID, AudioNodeKind::MuxElement, elements, elementIndex, currentElement))
+                {
+                    RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuxElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
+                    currentElement = elements[elementIndex];
+                    elementIndex++;
+                }
+                else
+                {
+                    shouldConnect = false;
+                }
                 break;
             case AudioNodeKind::SrcElement: // Sampling Rate Converter Unit : KSNODETYPE_SRC
                 // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForSRC(unitID));
@@ -1840,7 +2058,7 @@ Codec_AllocateElements(
                 break;
             }
             unitID = nextUnitID;
-            if (counter != 0)
+            if ((counter != 0) && shouldConnect)
             {
                 if (traversalDirection == TraversalDirection::Forward)
                 {
@@ -1944,7 +2162,7 @@ Codec_VolumeChangeLevelNotification(
 
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
 
     CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext(Circuit);
     ASSERT(circuitContext);
@@ -1956,7 +2174,7 @@ Codec_VolumeChangeLevelNotification(
             PVOLUME_ELEMENT_CONTEXT volumeContext = GetVolumeElementContext(circuitContext->VolumeElements[index]);
             ASSERT(volumeContext);
 
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - volume context entity ID 0x%02x, entity ID 0x%02x", volumeContext->EntityID, EntityID);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - volume context entity ID 0x%02x, entity ID 0x%02x", volumeContext->EntityID, EntityID);
             if (volumeContext->EntityID == EntityID)
             {
                 bool            notify = false;
@@ -1964,16 +2182,16 @@ Codec_VolumeChangeLevelNotification(
                 PDEVICE_CONTEXT deviceContext = GetDeviceContext(volumeContext->Device);
                 ASSERT(deviceContext != nullptr);
 
-                for (ULONG i = 0; i < volumeContext->NumberOfChannels; ++i)
+                for (ULONG i = 0; i < (volumeContext->NumberOfChannels + 1); ++i)
                 {
                     status = deviceContext->UsbAudioConfiguration->GetCurrentVolume(deviceContext, volumeContext->EntityID, (UCHAR)i, volume);
                     if (NT_SUCCESS(status))
                     {
-                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - get current volume %ld, entity ID 0x%02x, channel %d", volume, volumeContext->EntityID, i);
-                        if (volumeContext->VolumeLevel[i] != volume)
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - get current volume %ld, entity ID 0x%02x, channel(USB) %d", volume, volumeContext->EntityID, i);
+                        if (volumeContext->VolumeLevels[i] != volume)
                         {
-                            volumeContext->VolumeLevel[i] = volume;
-                            notify = true;
+                            volumeContext->VolumeLevels[i] = volume;
+                            notify |= true;
                         }
                     }
                 }
@@ -1986,7 +2204,7 @@ Codec_VolumeChangeLevelNotification(
         }
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit %!STATUS!", status);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
 }
@@ -2003,7 +2221,7 @@ Codec_MuteChangeStateNotification(
 
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
 
     CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext(Circuit);
     ASSERT(circuitContext);
@@ -2015,7 +2233,7 @@ Codec_MuteChangeStateNotification(
             PMUTE_ELEMENT_CONTEXT muteContext = GetMuteElementContext(circuitContext->MuteElements[index]);
             ASSERT(muteContext);
 
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - mute context entity ID 0x%02x, entity ID 0x%02x", muteContext->EntityID, EntityID);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - mute context entity ID 0x%02x, entity ID 0x%02x", muteContext->EntityID, EntityID);
             if (muteContext->EntityID == EntityID)
             {
                 bool            notify = false;
@@ -2023,16 +2241,16 @@ Codec_MuteChangeStateNotification(
                 PDEVICE_CONTEXT deviceContext = GetDeviceContext(muteContext->Device);
                 ASSERT(deviceContext != nullptr);
 
-                for (ULONG i = 0; i < muteContext->NumberOfChannels; ++i)
+                for (ULONG i = 0; i < (muteContext->NumberOfChannels + 1); ++i)
                 {
                     status = deviceContext->UsbAudioConfiguration->GetCurrentMute(deviceContext, muteContext->EntityID, (UCHAR)i, mute);
-                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - get current mute %!bool!, entity ID 0x%02x, channel %d", (mute != 0) ? true : false, muteContext->EntityID, i);
+                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - get current mute %!bool!, entity ID 0x%02x, channel(USB) %d", (mute != 0) ? true : false, muteContext->EntityID, i);
                     if (NT_SUCCESS(status))
                     {
-                        if (muteContext->MuteState[i] != mute)
+                        if (muteContext->MuteStates[i] != mute)
                         {
-                            muteContext->MuteState[i] = mute;
-                            notify = true;
+                            muteContext->MuteStates[i] = mute;
+                            notify |= true;
                         }
                     }
                 }
@@ -2045,7 +2263,7 @@ Codec_MuteChangeStateNotification(
         }
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit %!STATUS!", status);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
 }
@@ -2062,7 +2280,7 @@ Codec_ConnectorChangeStateNotification(
 
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
 
     ULONG pinCount = AcxCircuitGetPinsCount(Circuit);
 
@@ -2070,12 +2288,12 @@ Codec_ConnectorChangeStateNotification(
     {
         ACXPIN pin = AcxCircuitGetPinById(Circuit, pinID);
 
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - pinID %u, pin %p", pinID, pin);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - pinID %u, pin %p", pinID, pin);
 
         if (pin != nullptr)
         {
             PCODEC_PIN_CONTEXT pinContext = GetCodecPinContext(pin);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - pinContext %p, terminal ID 0x%02x, entity ID 0x%02x", pinContext, pinContext != nullptr ? pinContext->TerminalID : USBAudioConfiguration::InvalidID, EntityID);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - pinContext %p, terminal ID 0x%02x, entity ID 0x%02x", pinContext, pinContext != nullptr ? pinContext->TerminalID : USBAudioConfiguration::InvalidID, EntityID);
             if ((pinContext != nullptr) && (pinContext->jack != nullptr) && (pinContext->TerminalID == EntityID))
             {
                 PDEVICE_CONTEXT deviceContext = GetDeviceContext(pinContext->Device);
@@ -2096,14 +2314,14 @@ Codec_ConnectorChangeStateNotification(
                     {
                         jackContext->IsConnected = isConnected;
                         AcxJackChangeStateNotification(pinContext->jack);
-                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " call AcxJackChangeStateNotification");
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " call AcxJackChangeStateNotification");
                     }
                 }
             }
         }
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit %!STATUS!", status);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
 }

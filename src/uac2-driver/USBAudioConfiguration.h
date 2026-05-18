@@ -685,6 +685,11 @@ class USBAudioControlInterface : public USBAudioInterface
         _Out_ ULONG &        steppingDelta
     ) = 0;
 
+    virtual NTSTATUS ValidateVolumeControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
+    ) = 0;
+
     virtual NTSTATUS SetCurrentVolume(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           entityID,
@@ -697,6 +702,11 @@ class USBAudioControlInterface : public USBAudioInterface
         _In_ UCHAR           entityID,
         _In_ UCHAR           channel,
         _Out_ LONG &         volume
+    ) = 0;
+
+    virtual NTSTATUS ValidateMuteControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
     ) = 0;
 
     virtual NTSTATUS SetCurrentMute(
@@ -1260,6 +1270,13 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    virtual NTSTATUS ValidateVolumeControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     virtual NTSTATUS SetCurrentVolume(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           entityID,
@@ -1275,6 +1292,13 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
         _In_ UCHAR           entityID,
         _In_ UCHAR           channel,
         _Out_ LONG &         volume
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS ValidateMuteControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1860,6 +1884,13 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    virtual NTSTATUS ValidateVolumeControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     virtual NTSTATUS SetCurrentVolume(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           entityID,
@@ -1875,6 +1906,13 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _In_ UCHAR           entityID,
         _In_ UCHAR           channel,
         _Out_ LONG &         volume
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS ValidateMuteControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -2137,6 +2175,14 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     NTSTATUS ValidateChannelNamesStringDescriptor(
         _In_ PDEVICE_CONTEXT deviceContext,
         _Inout_ UCHAR &      index
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS ValidateFeatureUnitControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel,
+        _In_ ULONG controlMap
     );
 
     enum
@@ -2882,6 +2928,13 @@ class USBAudioConfiguration
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS ValidateVolumeControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     NTSTATUS SetCurrentVolume(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           entityID,
@@ -2897,6 +2950,13 @@ class USBAudioConfiguration
         _In_ UCHAR           entityID,
         _In_ UCHAR           channel,
         _Out_ LONG &         volume
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS ValidateMuteControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
