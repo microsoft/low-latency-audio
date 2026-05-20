@@ -300,7 +300,8 @@ class AudioIsochronousEngine
     _Success_(NT_SUCCESS(return))
     GetInformationForMuxElement(
         _In_ UCHAR    unitID,
-        _Out_ UCHAR & numOfChannels
+        _Out_ UCHAR & numOfChannels,
+        _Out_ UCHAR & numOfInputPins
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)

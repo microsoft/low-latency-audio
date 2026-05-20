@@ -1493,9 +1493,9 @@ NTSTATUS USBAudio1ControlInterface::GetInformationForVolumeElement(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudio1ControlInterface::GetInformationForMuteElement(
-    _In_ PDEVICE_CONTEXT /* deviceContext */,
-    _In_ UCHAR /* unitID */,
-    _Out_ UCHAR & /* numOfChannels */
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* unitID */,
+    UCHAR & /* numOfChannels */
 )
 {
     PAGED_CODE();
@@ -1506,10 +1506,10 @@ NTSTATUS USBAudio1ControlInterface::GetInformationForMuteElement(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudio1ControlInterface::GetInformationForSuperMixElement(
-    _In_ PDEVICE_CONTEXT /* deviceContext */,
-    _In_ UCHAR /* unitID */,
-    _Out_ UCHAR & /* numOfInputChannels */,
-    _Out_ UCHAR & /* numOfOutputChannels */
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* unitID */,
+    UCHAR & /* numOfInputChannels */,
+    UCHAR & /* numOfOutputChannels */
 )
 {
     PAGED_CODE();
@@ -1520,9 +1520,10 @@ NTSTATUS USBAudio1ControlInterface::GetInformationForSuperMixElement(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudio1ControlInterface::GetInformationForMuxElement(
-    _In_ PDEVICE_CONTEXT /* deviceContext */,
-    _In_ UCHAR /* unitID */,
-    _Out_ UCHAR & /* numOfChannels */
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* unitID */,
+    UCHAR & /* numOfChannels */,
+    UCHAR & /* numOfInputPins */
 )
 {
     PAGED_CODE();
@@ -1533,9 +1534,9 @@ NTSTATUS USBAudio1ControlInterface::GetInformationForMuxElement(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudio1ControlInterface::GetInformationForAgcElement(
-    _In_ PDEVICE_CONTEXT /* deviceContext */,
-    _In_ UCHAR /* unitID */,
-    _Out_ UCHAR & /* numOfChannels */
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* unitID */,
+    UCHAR & /* numOfChannels */
 )
 {
     PAGED_CODE();
@@ -1816,6 +1817,46 @@ NTSTATUS USBAudio1ControlInterface::GetCurrentMute(
     UCHAR /* entityID */,
     UCHAR /* channel */,
     bool & /* mute */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio1ControlInterface::ValidateAutoGainControl(
+    _In_ UCHAR /* entityID */,
+    _In_ UCHAR /* channel */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio1ControlInterface::SetCurrentAutoGain(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* entityID */,
+    UCHAR /* channel */,
+    bool /* autoGain */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio1ControlInterface::GetCurrentAutoGain(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* entityID */,
+    UCHAR /* channel */,
+    bool & /* autoGain */
 )
 {
     PAGED_CODE();
@@ -3783,9 +3824,9 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForVolumeElement(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudio2ControlInterface::GetInformationForMuteElement(
-    _In_          PDEVICE_CONTEXT /* deviceContext */,
-    _In_ UCHAR    unitID,
-    _Out_ UCHAR & numOfChannels
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR   unitID,
+    UCHAR & numOfChannels
 )
 {
     NTSTATUS status = STATUS_SUCCESS;
@@ -3806,10 +3847,10 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForMuteElement(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudio2ControlInterface::GetInformationForSuperMixElement(
-    _In_          PDEVICE_CONTEXT /* deviceContext */,
-    _In_ UCHAR    unitID,
-    _Out_ UCHAR & numOfInputChannels,
-    _Out_ UCHAR & numOfOutputChannels
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR   unitID,
+    UCHAR & numOfInputChannels,
+    UCHAR & numOfOutputChannels
 )
 {
     NTSTATUS status = STATUS_UNSUCCESSFUL;
@@ -3844,22 +3885,34 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForSuperMixElement(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudio2ControlInterface::GetInformationForMuxElement(
-    _In_          PDEVICE_CONTEXT /* deviceContext */,
-    _In_ UCHAR    unitID,
-    _Out_ UCHAR & numOfChannels
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR   unitID,
+    UCHAR & numOfChannels,
+    UCHAR & numOfInputPins
 )
 {
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
 
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
     numOfChannels = (UCHAR)GetUnitOutputChannelCount(unitID);
+    numOfInputPins = 0;
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - unit id 0x%02x, %u channels", unitID, numOfChannels);
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
+    for (auto & selectorUnitDescriptor : m_acSelectorUnitInfo)
+    {
+        if (selectorUnitDescriptor->bUnitID == unitID)
+        {
+            numOfInputPins = selectorUnitDescriptor->bNrInPins;
+            status = STATUS_SUCCESS;
+            break;
+        }
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!, %u channels, %u input pins", status, numOfChannels, numOfInputPins);
 
     return status;
 }
@@ -3867,9 +3920,9 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForMuxElement(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudio2ControlInterface::GetInformationForAgcElement(
-    _In_          PDEVICE_CONTEXT /* deviceContext */,
-    _In_ UCHAR    unitID,
-    _Out_ UCHAR & numOfChannels
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR   unitID,
+    UCHAR & numOfChannels
 )
 {
     NTSTATUS status = STATUS_SUCCESS;
@@ -5309,6 +5362,68 @@ NTSTATUS USBAudio2ControlInterface::GetCurrentMute(
     if (NT_SUCCESS(status))
     {
         status = ControlRequestGetMute(deviceContext, GetInterfaceNumber(), entityID, channel, mute);
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio2ControlInterface::ValidateAutoGainControl(
+    _In_ UCHAR entityID,
+    _In_ UCHAR channel
+)
+{
+    PAGED_CODE();
+
+    return ValidateFeatureUnitControl(entityID, channel, NS_USBAudio0200::FEATURE_UNIT_BMA_AUTOMATIC_GAIN_CONTROL_MASK);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio2ControlInterface::SetCurrentAutoGain(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           entityID,
+    UCHAR           channel,
+    bool            autoGain
+)
+{
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    NTSTATUS status = ValidateAutoGainControl(entityID, channel);
+
+    if (NT_SUCCESS(status))
+    {
+        status = ControlRequestSetAutoGainControl(deviceContext, GetInterfaceNumber(), entityID, channel, autoGain);
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudio2ControlInterface::GetCurrentAutoGain(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           entityID,
+    UCHAR           channel,
+    bool &          autoGain
+)
+{
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    NTSTATUS status = ValidateAutoGainControl(entityID, channel);
+
+    if (NT_SUCCESS(status))
+    {
+        status = ControlRequestGetAutoGainControl(deviceContext, GetInterfaceNumber(), entityID, channel, autoGain);
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
@@ -7512,12 +7627,13 @@ PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS USBAudioStreamInterfaceGroup::GetInformationForMuxElement(
     UCHAR   unitID,
-    UCHAR & numOfChannels
+    UCHAR & numOfChannels,
+    UCHAR & numOfInputPins
 )
 {
     PAGED_CODE();
 
-    return m_usbAudioControlInterface->GetInformationForMuteElement(m_deviceContext, unitID, numOfChannels);
+    return m_usbAudioControlInterface->GetInformationForMuxElement(m_deviceContext, unitID, numOfChannels, numOfInputPins);
 }
 
 PAGED_CODE_SEG
@@ -9523,6 +9639,81 @@ NTSTATUS USBAudioConfiguration::GetCurrentMute(
     if (m_usbAudioControlInterface != nullptr)
     {
         status = m_usbAudioControlInterface->GetCurrentMute(deviceContext, entityID, channel, mute);
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudioConfiguration::ValidateAutoGainControl(
+    UCHAR entityID,
+    UCHAR channel
+)
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    ASSERT(m_usbAudioControlInterface != nullptr);
+    if (m_usbAudioControlInterface != nullptr)
+    {
+        status = m_usbAudioControlInterface->ValidateAutoGainControl(entityID, channel);
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudioConfiguration::SetCurrentAutoGain(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           entityID,
+    UCHAR           channel,
+    bool            autoGain
+)
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    ASSERT(m_usbAudioControlInterface != nullptr);
+    if (m_usbAudioControlInterface != nullptr)
+    {
+        status = m_usbAudioControlInterface->SetCurrentAutoGain(deviceContext, entityID, channel, autoGain);
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS USBAudioConfiguration::GetCurrentAutoGain(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           entityID,
+    UCHAR           channel,
+    bool &          autoGain
+)
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    autoGain = true;
+
+    ASSERT(m_usbAudioControlInterface != nullptr);
+    if (m_usbAudioControlInterface != nullptr)
+    {
+        status = m_usbAudioControlInterface->GetCurrentAutoGain(deviceContext, entityID, channel, autoGain);
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit, %!STATUS!", status);

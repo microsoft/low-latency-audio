@@ -577,7 +577,8 @@ class USBAudioControlInterface : public USBAudioInterface
     virtual NTSTATUS GetInformationForMuxElement(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           unitID,
-        _Out_ UCHAR &        numOfChannels
+        _Out_ UCHAR &        numOfChannels,
+        _Out_ UCHAR &        numOfInputPins
     ) = 0;
 
     _Success_(NT_SUCCESS(return))
@@ -721,6 +722,25 @@ class USBAudioControlInterface : public USBAudioInterface
         _In_ UCHAR           entityID,
         _In_ UCHAR           channel,
         _Out_ bool &         mute
+    ) = 0;
+
+    virtual NTSTATUS ValidateAutoGainControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
+    ) = 0;
+
+    virtual NTSTATUS SetCurrentAutoGain(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           channel,
+        _In_ bool            autoGain
+    ) = 0;
+
+    virtual NTSTATUS GetCurrentAutoGain(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           channel,
+        _Out_ bool &         autoGain
     ) = 0;
 
     virtual NTSTATUS GetCurrentConnectorState(
@@ -1127,7 +1147,8 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
     GetInformationForMuxElement(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           unitID,
-        _Out_ UCHAR &        numOfChannels
+        _Out_ UCHAR &        numOfChannels,
+        _Out_ UCHAR &        numOfInputPins
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1296,7 +1317,7 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    NTSTATUS ValidateMuteControl(
+    virtual NTSTATUS ValidateMuteControl(
         _In_ UCHAR entityID,
         _In_ UCHAR channel
     );
@@ -1318,6 +1339,32 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
         _In_ UCHAR           entityID,
         _In_ UCHAR           channel,
         _Out_ bool &         mute
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual NTSTATUS ValidateAutoGainControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual NTSTATUS SetCurrentAutoGain(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           channel,
+        _In_ bool            autoGain
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    _Success_(NT_SUCCESS(return))
+    virtual NTSTATUS GetCurrentAutoGain(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           channel,
+        _Out_ bool &         autoGain
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1741,7 +1788,8 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     GetInformationForMuxElement(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           unitID,
-        _Out_ UCHAR &        numOfChannels
+        _Out_ UCHAR &        numOfChannels,
+        _Out_ UCHAR &        numOfInputPins
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1910,7 +1958,7 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    NTSTATUS ValidateMuteControl(
+    virtual NTSTATUS ValidateMuteControl(
         _In_ UCHAR entityID,
         _In_ UCHAR channel
     );
@@ -1932,6 +1980,32 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _In_ UCHAR           entityID,
         _In_ UCHAR           channel,
         _Out_ bool &         mute
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual NTSTATUS ValidateAutoGainControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual NTSTATUS SetCurrentAutoGain(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           channel,
+        _In_ bool            autoGain
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    _Success_(NT_SUCCESS(return))
+    virtual NTSTATUS GetCurrentAutoGain(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           channel,
+        _Out_ bool &         autoGain
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -2733,7 +2807,8 @@ class USBAudioStreamInterfaceGroup
     _Success_(NT_SUCCESS(return))
     GetInformationForMuxElement(
         _In_ UCHAR    unitID,
-        _Out_ UCHAR & numOfChannels
+        _Out_ UCHAR & numOfChannels,
+        _Out_ UCHAR & numOfInputPins
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -2976,6 +3051,32 @@ class USBAudioConfiguration
         _In_ UCHAR           entityID,
         _In_ UCHAR           channel,
         _Out_ bool &         mute
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS ValidateAutoGainControl(
+        _In_ UCHAR entityID,
+        _In_ UCHAR channel
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS SetCurrentAutoGain(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           channel,
+        _In_ bool            autoGain
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    _Success_(NT_SUCCESS(return))
+    NTSTATUS GetCurrentAutoGain(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           entityID,
+        _In_ UCHAR           channel,
+        _Out_ bool &         autoGain
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)

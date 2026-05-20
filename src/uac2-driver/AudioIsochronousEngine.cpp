@@ -2678,12 +2678,13 @@ PAGED_CODE_SEG
 NTSTATUS
 AudioIsochronousEngine::GetInformationForMuxElement(
     UCHAR   unitID,
-    UCHAR & numOfChannels
+    UCHAR & numOfChannels,
+    UCHAR & numOfInputPins
 )
 {
     PAGED_CODE();
 
-    return m_usbAudioStreamInterfaceGroup->GetInformationForMuxElement(unitID, numOfChannels);
+    return m_usbAudioStreamInterfaceGroup->GetInformationForMuxElement(unitID, numOfChannels, numOfInputPins);
 }
 
 _Use_decl_annotations_

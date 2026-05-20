@@ -252,8 +252,8 @@ typedef struct _MUX_ELEMENT_CONTEXT
 {
     WDFDEVICE Device;
     UCHAR     EntityID;
-    ULONG     SelectedPinId;
     ULONG     NumberOfChannels;
+    ULONG     NumberOfInputPins;
 } MUX_ELEMENT_CONTEXT, *PMUX_ELEMENT_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(MUX_ELEMENT_CONTEXT, GetMuxElementContext)

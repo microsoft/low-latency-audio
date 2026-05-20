@@ -66,7 +66,7 @@ static ACX_PROPERTY_ITEM s_PropertyItems[] = {
         ACX_PROPERTY_ITEM_FLAG_GET | ACX_PROPERTY_ITEM_FLAG_SET | ACX_PROPERTY_ITEM_FLAG_BASICSUPPORT, // ULONG Flags;
         Codec_EvtUSBAudioAcxDriverAgcProcessRequest,                                                   // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
         0,                                                                                             // PVOID Reserved;
-        0,                                                                                             // ULONG ControlCb;
+        sizeof(LONG) + sizeof(ULONG),                                                                  // ULONG ControlCb; KSNODEPROPERTY_AUDIO_CHANNEL::Channel, KSNODEPROPERTY_AUDIO_CHANNEL::Reserved
         sizeof(BOOL),                                                                                  // ULONG ValueCb;
         VT_BOOL                                                                                        // ULONG ValueType;
     },
@@ -166,7 +166,7 @@ static bool FindElement(
     _Out_ ACXELEMENT &                           Element
 )
 {
-	PAGED_CODE();
+    PAGED_CODE();
 
     for (ULONG elementIndex = 0; elementIndex < NumOfElements; elementIndex++)
     {
@@ -798,6 +798,13 @@ VOID Codec_EvtUSBAudioAcxDriverMuxProcessRequest(
     ACX_REQUEST_PARAMETERS_INIT(&params);
     AcxRequestGetParameters(Request, &params);
 
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Size = 0x%x, MajorFunction = 0x%x, MinorFunction = 0x%x, Type = 0x%x", params.Size, params.MajorFunction, params.MinorFunction, params.Type);
+    if (params.Type == AcxRequestTypeProperty)
+    {
+        // GUID              Set;
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Id = 0x%x, Verb = 0x%x, ItemType = 0x%x, ItemId = 0x%x, Control = %p, ControlCb = 0x%x, Value = 0x%p, ValueCb = 0x%x", params.Parameters.Property.Id, params.Parameters.Property.Verb, params.Parameters.Property.ItemType, params.Parameters.Property.ItemId, params.Parameters.Property.Control, params.Parameters.Property.ControlCb, params.Parameters.Property.Value, params.Parameters.Property.ValueCb);
+    }
+
     ASSERT(params.Type == AcxRequestTypeProperty);
 
     IF_TRUE_ACTION_JUMP((params.Type != AcxRequestTypeProperty) ||
@@ -813,11 +820,20 @@ VOID Codec_EvtUSBAudioAcxDriverMuxProcessRequest(
     PMUX_ELEMENT_CONTEXT muxContext = GetMuxElementContext((ACXELEMENT)Object);
     ASSERT(muxContext);
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, " - muxContext %p", muxContext);
+    PDEVICE_CONTEXT deviceContext = GetDeviceContext(muxContext->Device);
+    ASSERT(deviceContext != nullptr);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, " - muxContext %p, entity ID 0x%02x, %d input pins", muxContext, muxContext->EntityID, muxContext->NumberOfInputPins);
 
     if (params.Parameters.Property.Verb == AcxPropertyVerbGet)
     {
-        *(PULONG(params.Parameters.Property.Value)) = muxContext->SelectedPinId;
+        UCHAR selectorIndex = 0;
+        *(PULONG(params.Parameters.Property.Value)) = 0;
+        status = deviceContext->UsbAudioConfiguration->GetCurrentSelector(deviceContext, muxContext->EntityID, selectorIndex);
+        if (NT_SUCCESS(status))
+        {
+            *(PULONG(params.Parameters.Property.Value)) = selectorIndex;
+        }
         params.Parameters.Property.ValueCb = sizeof(ULONG);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbGet ");
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(params.Parameters.Property.Value));
@@ -829,8 +845,7 @@ VOID Codec_EvtUSBAudioAcxDriverMuxProcessRequest(
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbSet ");
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(params.Parameters.Property.Value));
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
-        muxContext->SelectedPinId = *(PULONG)(params.Parameters.Property.Value);
-        status = STATUS_SUCCESS;
+        status = deviceContext->UsbAudioConfiguration->SetCurrentSelector(deviceContext, muxContext->EntityID, (UCHAR) * (PULONG)(params.Parameters.Property.Value));
     }
     else if (params.Parameters.Property.Verb == AcxPropertyVerbBasicSupport)
     {
@@ -857,6 +872,7 @@ NTSTATUS Codec_CreateMuxElement(
 {
     NTSTATUS              status = STATUS_SUCCESS;
     UCHAR                 numOfChannels = 0;
+    UCHAR                 numOfInputPins = 0;
     ACXELEMENT            muxElement = nullptr;
     WDF_OBJECT_ATTRIBUTES attributes{};
     ACX_ELEMENT_CONFIG    config{};
@@ -867,7 +883,8 @@ NTSTATUS Codec_CreateMuxElement(
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
 
-    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForMuxElement(UnitID, numOfChannels));
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForMuxElement(UnitID, numOfChannels, numOfInputPins));
+    ASSERT(numOfInputPins != 0);
 
     ACX_ELEMENT_CONFIG_INIT(&config);
     config.Type = &KSNODETYPE_MUX;
@@ -886,8 +903,8 @@ NTSTATUS Codec_CreateMuxElement(
     RtlZeroMemory(muxContext, sizeof(MUX_ELEMENT_CONTEXT));
     muxContext->Device = Device;
     muxContext->EntityID = UnitID;
-    muxContext->SelectedPinId = 0; // TBD
     muxContext->NumberOfChannels = numOfChannels;
+    muxContext->NumberOfInputPins = numOfInputPins;
 
     Element = muxElement;
 
@@ -901,7 +918,7 @@ NTSTATUS Codec_CreateMuxElement(
 PAGED_CODE_SEG
 _Use_decl_annotations_
 VOID Codec_EvtUSBAudioAcxDriverAgcProcessRequest(
-    WDFOBJECT /* Object */,
+    WDFOBJECT  Object,
     WDFREQUEST Request
 )
 {
@@ -914,45 +931,119 @@ VOID Codec_EvtUSBAudioAcxDriverAgcProcessRequest(
     ACX_REQUEST_PARAMETERS_INIT(&params);
     AcxRequestGetParameters(Request, &params);
 
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Size = 0x%x, MajorFunction = 0x%x, MinorFunction = 0x%x, Type = 0x%x", params.Size, params.MajorFunction, params.MinorFunction, params.Type);
+    if (params.Type == AcxRequestTypeProperty)
+    {
+        // GUID              Set;
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Id = 0x%x, Verb = 0x%x, ItemType = 0x%x, ItemId = 0x%x, Control = %p, ControlCb = 0x%x, Value = 0x%p, ValueCb = 0x%x", params.Parameters.Property.Id, params.Parameters.Property.Verb, params.Parameters.Property.ItemType, params.Parameters.Property.ItemId, params.Parameters.Property.Control, params.Parameters.Property.ControlCb, params.Parameters.Property.Value, params.Parameters.Property.ValueCb);
+    }
+
+    ULONG Channel = ALL_CHANNELS_ID;
+    if (params.Parameters.Property.ControlCb == (sizeof(LONG) + sizeof(ULONG)))
+    {
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Control[0] = %d (0x%x), Control[1] = 0x%x", ((LONG *)params.Parameters.Property.Control)[0], ((ULONG *)params.Parameters.Property.Control)[0], ((ULONG *)params.Parameters.Property.Control)[1]);
+        if (params.Parameters.Property.Control != nullptr)
+        {
+            ((ULONG *)params.Parameters.Property.Control)[0];
+        }
+    }
+
     ASSERT(params.Type == AcxRequestTypeProperty);
 
-    IF_TRUE_ACTION_JUMP((params.Type != AcxRequestTypeProperty) ||
-                            (!IsEqualGUID(params.Parameters.Property.Set, KSPROPSETID_Audio) ||
-                             (params.Parameters.Property.Id != KSPROPERTY_AUDIO_AGC)),
+    IF_TRUE_ACTION_JUMP((params.Type != AcxRequestTypeProperty) || (!IsEqualGUID(params.Parameters.Property.Set, KSPROPSETID_Audio) || (params.Parameters.Property.Id != KSPROPERTY_AUDIO_AGC)),
                         ASSERT(FALSE);
                         status = STATUS_INVALID_PARAMETER;,
                                                           Exit);
 
-#if 0
-//	ACXCIRCUIT circuit = AcxElementGetContainer((ACXELEMENT)Object);
-//    ASSERT(circuit != nullptr);
+    PAGC_ELEMENT_CONTEXT agcContext = GetAgcElementContext((ACXELEMENT)Object);
+    ASSERT(agcContext);
 
-//    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)circuit);
-//    ASSERT(device != nullptr);
-#else
-//    WDFDEVICE       device = AcxCircuitGetWdfDevice((ACXCIRCUIT)Object);
-#endif
+    PDEVICE_CONTEXT deviceContext = GetDeviceContext(agcContext->Device);
+    ASSERT(deviceContext != nullptr);
 
-    //    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
-    //    ASSERT(deviceContext != nullptr);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, " - agcContext %p, entity ID 0x%02x", agcContext, agcContext->EntityID);
 
     if (params.Parameters.Property.Verb == AcxPropertyVerbGet)
     {
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbGet ");
+        bool autoGain = false;
         // Returns the ON/OFF status of Auto Gain Control.
-        status = STATUS_SUCCESS;
+        if ((Channel != ALL_CHANNELS_ID) && (Channel < agcContext->NumberOfChannels))
+        {
+            status = deviceContext->UsbAudioConfiguration->GetCurrentAutoGain(deviceContext, agcContext->EntityID, (UCHAR)(Channel + 1), autoGain);
+            if (NT_SUCCESS(status))
+            {
+                *(BOOL *)(params.Parameters.Property.Value) = autoGain ? TRUE : FALSE;
+            }
+            else if (status == STATUS_NOT_SUPPORTED)
+            {
+                status = deviceContext->UsbAudioConfiguration->GetCurrentAutoGain(deviceContext, agcContext->EntityID, 0, autoGain);
+                if (NT_SUCCESS(status))
+                {
+                    *(BOOL *)(params.Parameters.Property.Value) = autoGain ? TRUE : FALSE;
+                }
+            }
+        }
+        else if (Channel == ALL_CHANNELS_ID)
+        {
+            status = deviceContext->UsbAudioConfiguration->GetCurrentAutoGain(deviceContext, agcContext->EntityID, 0, autoGain);
+            if (NT_SUCCESS(status))
+            {
+                *(BOOL *)(params.Parameters.Property.Value) = autoGain ? TRUE : FALSE;
+            }
+            else if (status == STATUS_NOT_SUPPORTED)
+            {
+                for (ULONG i = 0; i < agcContext->NumberOfChannels; ++i)
+                {
+                    status = deviceContext->UsbAudioConfiguration->GetCurrentAutoGain(deviceContext, agcContext->EntityID, (UCHAR)(i + 1), autoGain);
+                    if (NT_SUCCESS(status))
+                    {
+                        *(BOOL *)(params.Parameters.Property.Value) = autoGain ? TRUE : FALSE;
+                        break;
+                    }
+                }
+            }
+        }
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbGet ");
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Value   = %d", *(BOOL *)(params.Parameters.Property.Value));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
     }
     else if (params.Parameters.Property.Verb == AcxPropertyVerbSet)
     {
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbSet ");
-        // Set Auto Gain Control to ON/OFF.
-        status = STATUS_SUCCESS;
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Value   = %d", *(BOOL *)(params.Parameters.Property.Value));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
+
+        bool autoGain = *(BOOL *)(params.Parameters.Property.Value) ? true : false;
+
+        if ((Channel != ALL_CHANNELS_ID) && (Channel < agcContext->NumberOfChannels))
+        {
+            status = deviceContext->UsbAudioConfiguration->SetCurrentAutoGain(deviceContext, agcContext->EntityID, (UCHAR)(Channel + 1), autoGain);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current agc %!bool!, entity ID 0x%02x, channel(USB) %d, %!STATUS!", (autoGain != 0) ? true : false, agcContext->EntityID, Channel + 1, status);
+            if (status == STATUS_NOT_SUPPORTED)
+            {
+                status = deviceContext->UsbAudioConfiguration->SetCurrentAutoGain(deviceContext, agcContext->EntityID, 0, autoGain);
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current agc %!bool!, entity ID 0x%02x, channel(USB) %d, %!STATUS!", (autoGain != 0) ? true : false, agcContext->EntityID, 0, status);
+            }
+        }
+        else if (Channel == ALL_CHANNELS_ID)
+        {
+            // Set Auto Gain Control to ON/OFF.
+            status = deviceContext->UsbAudioConfiguration->SetCurrentAutoGain(deviceContext, agcContext->EntityID, 0, autoGain);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current agc %!bool!, entity ID 0x%02x, channel(USB) %d, %!STATUS!", autoGain, agcContext->EntityID, 0, status);
+            if (status == STATUS_NOT_SUPPORTED)
+            {
+                for (ULONG i = 0; i < agcContext->NumberOfChannels; ++i)
+                {
+                    status = deviceContext->UsbAudioConfiguration->SetCurrentAutoGain(deviceContext, agcContext->EntityID, (UCHAR)(i + 1), autoGain);
+                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current agc %!bool!, entity ID 0x%02x, channel(USB) %d, %!STATUS!", autoGain, agcContext->EntityID, i + 1, status);
+                }
+            }
+        }
     }
     else if (params.Parameters.Property.Verb == AcxPropertyVerbBasicSupport)
     {
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbBasicSupport ");
         status = ProcessRequestHandler_BasicSupport(&params, KSPROPERTY_TYPE_ALL, VT_BOOL);
-        status = STATUS_SUCCESS;
     }
 
 Exit:
@@ -1027,6 +1118,13 @@ VOID Codec_EvtUSBAudioAcxDriverMixLevelCapsProcessRequest(
 
     ACX_REQUEST_PARAMETERS_INIT(&params);
     AcxRequestGetParameters(Request, &params);
+
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Size = 0x%x, MajorFunction = 0x%x, MinorFunction = 0x%x, Type = 0x%x", params.Size, params.MajorFunction, params.MinorFunction, params.Type);
+    if (params.Type == AcxRequestTypeProperty)
+    {
+        // GUID              Set;
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Id = 0x%x, Verb = 0x%x, ItemType = 0x%x, ItemId = 0x%x, Control = %p, ControlCb = 0x%x, Value = 0x%p, ValueCb = 0x%x", params.Parameters.Property.Id, params.Parameters.Property.Verb, params.Parameters.Property.ItemType, params.Parameters.Property.ItemId, params.Parameters.Property.Control, params.Parameters.Property.ControlCb, params.Parameters.Property.Value, params.Parameters.Property.ValueCb);
+    }
 
     ASSERT(params.Type == AcxRequestTypeProperty);
 
@@ -1860,6 +1958,7 @@ NTSTATUS Codec_ConnectElement(
             ACX_CONNECTION_INIT(&Connection, FromElement, ToElement);
         }
     }
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - connect %s PinID 0x%02x, UnitID 0x%02x -> %s PinID 0x%02x, UnitID 0x%02x", GetAudioNodeKindString(AudioNodeKind((AudioNodeKind)fromElementContext->AudioNodeKind)), fromElementContext->PinID, fromElementContext->UnitID, GetAudioNodeKindString(AudioNodeKind((AudioNodeKind)toElementContext->AudioNodeKind)), toElementContext->PinID, toElementContext->UnitID);
 
     return status;
 }
@@ -2079,7 +2178,10 @@ Codec_AllocateElements(
             prevElement = currentElement;
         }
 
-        RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddElements(Circuit, elements, elementIndex));
+        if (elementIndex != 0)
+        {
+            RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddElements(Circuit, elements, elementIndex));
+        }
         RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddPins(Circuit, pins, pinIndex));
         RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddConnections(Circuit, connections, connectionIndex));
 
