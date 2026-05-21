@@ -384,6 +384,7 @@ typedef struct _CODEC_PIN_CONTEXT
     ULONG                    DeviceIndex;
     ULONG                    Channel;
     ULONG                    NumOfChannelsPerDevice;
+    UCHAR                    ChannelNames;
     UCHAR                    TerminalID;
     ACXJACK                  jack;
     AudioIsochronousEngine * AudioIsochronousEngine;
@@ -641,9 +642,6 @@ PAGED_CODE_SEG
 EVT_ACX_PIN_RETRIEVE_NAME CodecC_EvtAcxPinRetrieveName;
 
 // EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecC_EvtVolumeAssignLevel;
-
-PAGED_CODE_SEG
-EVT_ACX_PIN_RETRIEVE_NAME CodecR_EvtAcxPinRetrieveName;
 
 // EVT_ACX_KEYWORDSPOTTER_RETRIEVE_ARM     CodecC_EvtAcxKeywordSpotterRetrieveArm;
 // EVT_ACX_KEYWORDSPOTTER_ASSIGN_ARM       CodecC_EvtAcxKeywordSpotterAssignArm;

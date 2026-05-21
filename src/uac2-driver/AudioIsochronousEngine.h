@@ -179,8 +179,26 @@ class AudioIsochronousEngine
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS GetChannelName(
+        _In_ UCHAR        channelNames,
+        _In_ ULONG        channel,
+        _Out_ WDFMEMORY & memory,
+        _Out_ PWSTR &     channelName
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     NTSTATUS GetStereoChannelName(
         _In_ bool         isInput,
+        _In_ ULONG        channel,
+        _Out_ WDFMEMORY & memory,
+        _Out_ PWSTR &     channelName
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS GetStereoChannelName(
+        _In_ UCHAR        channelNames,
         _In_ ULONG        channel,
         _Out_ WDFMEMORY & memory,
         _Out_ PWSTR &     channelName

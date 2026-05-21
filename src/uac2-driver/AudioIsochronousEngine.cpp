@@ -2436,6 +2436,28 @@ AudioIsochronousEngine::GetChannelName(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
+AudioIsochronousEngine::GetChannelName(
+    UCHAR       channelNames,
+    ULONG       channel,
+    WDFMEMORY & memory,
+    PWSTR &     channelName
+)
+{
+    NTSTATUS status = STATUS_NOT_SUPPORTED;
+
+    PAGED_CODE();
+
+    if (channelNames != USBAudioConfiguration::InvalidString)
+    {
+        status = m_deviceContext->UsbAudioConfiguration->GetChannelName(channelNames, channel, memory, channelName);
+    }
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
 AudioIsochronousEngine::GetStereoChannelName(
     bool        isInput,
     ULONG       channel,
@@ -2443,17 +2465,47 @@ AudioIsochronousEngine::GetStereoChannelName(
     PWSTR &     channelName
 )
 {
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS status = STATUS_NOT_SUPPORTED;
+    UCHAR    channelNames = USBAudioConfiguration::InvalidString;
+
     PAGED_CODE();
 
     if (isInput)
     {
-        status = m_deviceContext->UsbAudioConfiguration->GetStereoChannelName(m_audioStreamPropertySet.InputProperty.ChannelNames, channel, memory, channelName);
+        channelNames = m_audioStreamPropertySet.InputProperty.ChannelNames;
     }
     else
     {
-        status = m_deviceContext->UsbAudioConfiguration->GetStereoChannelName(m_audioStreamPropertySet.OutputProperty.ChannelNames, channel, memory, channelName);
+        channelNames = m_audioStreamPropertySet.OutputProperty.ChannelNames;
     }
+
+    if (channelNames != USBAudioConfiguration::InvalidString)
+    {
+        status = m_deviceContext->UsbAudioConfiguration->GetStereoChannelName(channelNames, channel, memory, channelName);
+    }
+
+    return status;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
+AudioIsochronousEngine::GetStereoChannelName(
+    UCHAR       channelNames,
+    ULONG       channel,
+    WDFMEMORY & memory,
+    PWSTR &     channelName
+)
+{
+    NTSTATUS status = STATUS_NOT_SUPPORTED;
+
+    PAGED_CODE();
+
+    if (channelNames != USBAudioConfiguration::InvalidString)
+    {
+        status = m_deviceContext->UsbAudioConfiguration->GetStereoChannelName(channelNames, channel, memory, channelName);
+    }
+
     return status;
 }
 

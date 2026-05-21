@@ -48,6 +48,18 @@ Environment:
 //  Local function prototypes
 //
 
+enum class PropertyItemIndex
+{
+    MuxProperty = 0,
+    AgcProperty = 1,
+    MixLevelCaps = 2
+};
+
+constexpr ULONG toULONG(PropertyItemIndex index)
+{
+    return static_cast<ULONG>(index);
+}
+
 static ACX_PROPERTY_ITEM s_PropertyItems[] = {
     {
         &KSPROPSETID_Audio,                                                                            // const GUID * Set;
@@ -213,14 +225,7 @@ Return Value:
     ASSERT(pinContext != nullptr);
     ASSERT(pinContext->AudioIsochronousEngine != nullptr);
 
-    if (pinContext->NumOfChannelsPerDevice == 1)
-    {
-        RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetChannelName(pinContext->IsInput, pinContext->Channel, memory, channelName));
-    }
-    else
-    {
-        RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetStereoChannelName(pinContext->IsInput, pinContext->Channel, memory, channelName));
-    }
+    RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetChannelName(pinContext->ChannelNames, pinContext->Channel, memory, channelName));
     RtlInitUnicodeString(&retrievedName, channelName);
 
     *Name = retrievedName;
@@ -299,16 +304,12 @@ Codec_EvtMuteAssignState(
         }
         else if (status == STATUS_NOT_SUPPORTED)
         {
-            status = deviceContext->UsbAudioConfiguration->ValidateMuteControl(muteContext->EntityID, 0);
+            status = deviceContext->UsbAudioConfiguration->SetCurrentMute(deviceContext, muteContext->EntityID, 0, muteState);
             if (NT_SUCCESS(status))
             {
-                status = deviceContext->UsbAudioConfiguration->SetCurrentMute(deviceContext, muteContext->EntityID, 0, muteState);
-                if (NT_SUCCESS(status))
-                {
-                    muteContext->MuteStates[0] = muteState;
-                }
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current mute %!bool!, entity ID 0x%02x, channel(USB) %d, %!STATUS!", (muteState != 0) ? true : false, muteContext->EntityID, 0, status);
+                muteContext->MuteStates[0] = muteState;
             }
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current mute %!bool!, entity ID 0x%02x, channel(USB) %d, %!STATUS!", (muteState != 0) ? true : false, muteContext->EntityID, 0, status);
         }
     }
     else if (Channel == ALL_CHANNELS_ID)
@@ -469,16 +470,12 @@ Codec_EvtRampedVolumeAssignLevel(
         }
         else if (status == STATUS_NOT_SUPPORTED)
         {
-            status = deviceContext->UsbAudioConfiguration->ValidateVolumeControl(volumeContext->EntityID, 0);
+            status = deviceContext->UsbAudioConfiguration->SetCurrentVolume(deviceContext, volumeContext->EntityID, 0, VolumeLevel);
             if (NT_SUCCESS(status))
             {
-                status = deviceContext->UsbAudioConfiguration->SetCurrentVolume(deviceContext, volumeContext->EntityID, 0, VolumeLevel);
-                if (NT_SUCCESS(status))
-                {
-                    volumeContext->VolumeLevels[0] = VolumeLevel;
-                }
-                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current volume %ld, entity ID 0x%02x, channel(USB) %d, %!STATUS!", VolumeLevel, volumeContext->EntityID, 0, status);
+                volumeContext->VolumeLevels[0] = VolumeLevel;
             }
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - set current volume %ld, entity ID 0x%02x, channel(USB) %d, %!STATUS!", VolumeLevel, volumeContext->EntityID, 0, status);
         }
     }
     else if (Channel == ALL_CHANNELS_ID)
@@ -889,7 +886,7 @@ NTSTATUS Codec_CreateMuxElement(
     ACX_ELEMENT_CONFIG_INIT(&config);
     config.Type = &KSNODETYPE_MUX;
     config.Name = &KSNODETYPE_MUX;
-    config.Properties = &(s_PropertyItems[0]);
+    config.Properties = &(s_PropertyItems[toULONG(PropertyItemIndex::MuxProperty)]);
     config.PropertiesCount = 1;
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, MUX_ELEMENT_CONTEXT);
@@ -1078,7 +1075,7 @@ NTSTATUS Codec_CreateAgcElement(
     ACX_ELEMENT_CONFIG_INIT(&config);
     config.Type = &KSNODETYPE_AGC;
     config.Name = &KSNODETYPE_AGC;
-    config.Properties = &(s_PropertyItems[1]);
+    config.Properties = &(s_PropertyItems[toULONG(PropertyItemIndex::AgcProperty)]);
     config.PropertiesCount = 1;
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, AGC_ELEMENT_CONTEXT);
@@ -1198,7 +1195,7 @@ NTSTATUS Codec_CreateSuperMixElement(
     ACX_ELEMENT_CONFIG_INIT(&config);
     config.Type = &KSNODETYPE_SUPERMIX;
     config.Name = &KSNODETYPE_SUPERMIX;
-    config.Properties = &(s_PropertyItems[2]);
+    config.Properties = &(s_PropertyItems[toULONG(PropertyItemIndex::MixLevelCaps)]);
     config.PropertiesCount = 1;
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, SUPERMIX_ELEMENT_CONTEXT);
@@ -1423,6 +1420,7 @@ NTSTATUS Codec_CreateBridgePin(
     CODEC_PIN_CONTEXT *   pinContext = nullptr;
     ACX_PIN_CALLBACKS     pinCallbacks{};
     NTSTATUS              status = STATUS_SUCCESS;
+    UCHAR                 channelNames = 0;
     WDF_OBJECT_ATTRIBUTES attributes{};
 
     PAGED_CODE();
@@ -1434,7 +1432,8 @@ NTSTATUS Codec_CreateBridgePin(
     // Create Device Bridge Pin.
     //
     ACX_PIN_CALLBACKS_INIT(&pinCallbacks);
-    if (AudioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ChannelNames != USBAudioConfiguration::InvalidString)
+    channelNames = AudioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ChannelNames;
+    if (channelNames != USBAudioConfiguration::InvalidString)
     {
         pinCallbacks.EvtAcxPinRetrieveName = CodecR_EvtAcxPinRetrieveName;
     }
@@ -1452,7 +1451,7 @@ NTSTATUS Codec_CreateBridgePin(
     // the name of EvtAcxPinRetrieveName is valid, change it to
     // KSNODETYPE_LINE_CONNECTOR.
     //
-    if (IsEqualGUID(*ConvertTerminalType(TerminalType), KSNODETYPE_SPEAKER) && (AudioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ChannelNames != USBAudioConfiguration::InvalidString))
+    if (IsEqualGUID(*ConvertTerminalType(TerminalType), KSNODETYPE_SPEAKER) && (channelNames != USBAudioConfiguration::InvalidString))
     {
         pinCfg.Category = &KSNODETYPE_LINE_CONNECTOR;
     }
@@ -1480,6 +1479,7 @@ NTSTATUS Codec_CreateBridgePin(
     pinContext->Channel = Channel;
     pinContext->NumOfChannelsPerDevice = ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->ChannelNames = channelNames;
     pinContext->TerminalID = TerminalID;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
@@ -1562,6 +1562,7 @@ NTSTATUS Codec_CreateCaptureEndpointPin(
     CODEC_PIN_CONTEXT *   pinContext = nullptr;
     ACX_PIN_CALLBACKS     pinCallbacks{};
     NTSTATUS              status = STATUS_SUCCESS;
+    UCHAR                 channelNames = 0;
     WDF_OBJECT_ATTRIBUTES attributes{};
 
     PAGED_CODE();
@@ -1573,7 +1574,8 @@ NTSTATUS Codec_CreateCaptureEndpointPin(
     // Create capture endpoint pin.
     //
     ACX_PIN_CALLBACKS_INIT(&pinCallbacks);
-    if (AudioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.ChannelNames != USBAudioConfiguration::InvalidString)
+    channelNames = AudioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.ChannelNames;
+    if (channelNames != USBAudioConfiguration::InvalidString)
     {
         pinCallbacks.EvtAcxPinRetrieveName = CodecC_EvtAcxPinRetrieveName;
     }
@@ -1602,6 +1604,7 @@ NTSTATUS Codec_CreateCaptureEndpointPin(
     pinContext->Channel = Channel;
     pinContext->NumOfChannelsPerDevice = ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->ChannelNames = channelNames;
     pinContext->TerminalID = TerminalID;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
@@ -1762,7 +1765,8 @@ NTSTATUS Codec_CreateRenderBridgePin(
     pinContext->Channel = 0;     // Channel;
     pinContext->NumOfChannelsPerDevice = numOfChannels;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
-    pinContext->TerminalID = 0;  //  TerminalID;
+    pinContext->ChannelNames = channelNames;
+    pinContext->TerminalID = UnitID;
 
     RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::RenderBridgePin, UnitID, PinID));
 
@@ -1905,6 +1909,7 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     pinContext->Channel = 0;     // Channel;
     pinContext->NumOfChannelsPerDevice = numOfChannels;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->ChannelNames = channelNames;
     pinContext->TerminalID = UnitID;
 
     RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::CaptureBridgePin, UnitID, PinID));
