@@ -52,7 +52,7 @@ enum class PropertyItemIndex
 {
     MuxProperty = 0,
     AgcProperty = 1,
-    MixLevelCaps = 2
+    MixLevelCapsProperty = 2
 };
 
 constexpr ULONG toULONG(PropertyItemIndex index)
@@ -829,20 +829,26 @@ VOID Codec_EvtUSBAudioAcxDriverMuxProcessRequest(
         status = deviceContext->UsbAudioConfiguration->GetCurrentSelector(deviceContext, muxContext->EntityID, selectorIndex);
         if (NT_SUCCESS(status))
         {
-            *(PULONG(params.Parameters.Property.Value)) = selectorIndex;
+            if (selectorIndex != 0)
+            {
+                *(PULONG(params.Parameters.Property.Value)) = selectorIndex - 1;
+            }
+            else
+            {
+                *(PULONG(params.Parameters.Property.Value)) = 0;
+            }
         }
         params.Parameters.Property.ValueCb = sizeof(ULONG);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbGet ");
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(params.Parameters.Property.Value));
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
-        status = STATUS_SUCCESS;
     }
     else if (params.Parameters.Property.Verb == AcxPropertyVerbSet)
     {
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbSet ");
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(params.Parameters.Property.Value));
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - ValueCb = 0x%08x", params.Parameters.Property.ValueCb);
-        status = deviceContext->UsbAudioConfiguration->SetCurrentSelector(deviceContext, muxContext->EntityID, (UCHAR) * (PULONG)(params.Parameters.Property.Value));
+        status = deviceContext->UsbAudioConfiguration->SetCurrentSelector(deviceContext, muxContext->EntityID, (UCHAR) * (PULONG)(params.Parameters.Property.Value) + 1);
     }
     else if (params.Parameters.Property.Verb == AcxPropertyVerbBasicSupport)
     {
@@ -902,6 +908,7 @@ NTSTATUS Codec_CreateMuxElement(
     muxContext->EntityID = UnitID;
     muxContext->NumberOfChannels = numOfChannels;
     muxContext->NumberOfInputPins = numOfInputPins;
+    muxContext->ConnectPinIndex = 0;
 
     Element = muxElement;
 
@@ -1195,7 +1202,7 @@ NTSTATUS Codec_CreateSuperMixElement(
     ACX_ELEMENT_CONFIG_INIT(&config);
     config.Type = &KSNODETYPE_SUPERMIX;
     config.Name = &KSNODETYPE_SUPERMIX;
-    config.Properties = &(s_PropertyItems[toULONG(PropertyItemIndex::MixLevelCaps)]);
+    config.Properties = &(s_PropertyItems[toULONG(PropertyItemIndex::MixLevelCapsProperty)]);
     config.PropertiesCount = 1;
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, SUPERMIX_ELEMENT_CONTEXT);
@@ -1949,6 +1956,11 @@ NTSTATUS Codec_ConnectElement(
         {
             ACX_CONNECTION_INIT(&Connection, Circuit, ToElement);
             Connection.FromPin.Id = fromElementContext->PinID;
+            if (toElementContext->AudioNodeKind == toULONG(AudioNodeKind::MuxElement))
+            {
+                PMUX_ELEMENT_CONTEXT muxContext = GetMuxElementContext(ToElement);
+                Connection.ToPin.Id = (muxContext->ConnectPinIndex)++;
+            }
         }
     }
     else
@@ -1961,9 +1973,15 @@ NTSTATUS Codec_ConnectElement(
         else
         {
             ACX_CONNECTION_INIT(&Connection, FromElement, ToElement);
+            if (toElementContext->AudioNodeKind == toULONG(AudioNodeKind::MuxElement))
+            {
+                PMUX_ELEMENT_CONTEXT muxContext = GetMuxElementContext(ToElement);
+                Connection.ToPin.Id = (muxContext->ConnectPinIndex)++;
+            }
         }
     }
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - connect %s PinID 0x%02x, UnitID 0x%02x -> %s PinID 0x%02x, UnitID 0x%02x", GetAudioNodeKindString(AudioNodeKind((AudioNodeKind)fromElementContext->AudioNodeKind)), fromElementContext->PinID, fromElementContext->UnitID, GetAudioNodeKindString(AudioNodeKind((AudioNodeKind)toElementContext->AudioNodeKind)), toElementContext->PinID, toElementContext->UnitID);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - FromObject %p, Object %p, Id 0x%x, -> ToObject %p, Object %p, Id 0x%x", Connection.FromObject, Connection.FromPin.Object, Connection.FromPin.Id, Connection.ToObject, Connection.ToPin.Object, Connection.ToPin.Id);
 
     return status;
 }
@@ -2188,6 +2206,17 @@ Codec_AllocateElements(
             RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddElements(Circuit, elements, elementIndex));
         }
         RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddPins(Circuit, pins, pinIndex));
+
+        for (ULONG index = 0; index < connectionIndex; index++)
+        {
+            ELEMENT_CONTEXT * elementContext = GetElementContext(connections[index].FromObject);
+            if ((elementContext != nullptr) && (elementContext->AudioNodeKind == toULONG(AudioNodeKind::MuxElement)))
+            {
+                PMUX_ELEMENT_CONTEXT muxContext = GetMuxElementContext(connections[index].FromObject);
+                connections[index].FromPin.Id = muxContext->ConnectPinIndex;
+            }
+        }
+
         RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddConnections(Circuit, connections, connectionIndex));
 
         if (circuitContext->NumOfVolumeElements != 0)

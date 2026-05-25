@@ -252,6 +252,7 @@ typedef struct _MUX_ELEMENT_CONTEXT
 {
     WDFDEVICE Device;
     UCHAR     EntityID;
+    UCHAR     ConnectPinIndex;
     ULONG     NumberOfChannels;
     ULONG     NumberOfInputPins;
 } MUX_ELEMENT_CONTEXT, *PMUX_ELEMENT_CONTEXT;
