@@ -771,14 +771,18 @@ PAGED_CODE_SEG
 NTSTATUS
 CodecR_EvtCircuitPowerUp(
     _In_ WDFDEVICE /* Device */,
-    _In_ ACXCIRCUIT /* Circuit */,
+    _In_ ACXCIRCUIT  Circuit,
     _In_ WDF_POWER_DEVICE_STATE /* PreviousState */
 )
 {
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
 
-    return STATUS_SUCCESS;
+    NTSTATUS status = AddPropertyToCircuitInterface(Circuit, ARRAYSIZE(c_InterfaceProperties), c_InterfaceProperties);
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit %!STATUS!", status);
+
+    return status;
 }
 
 _Use_decl_annotations_

@@ -1,6 +1,10 @@
+; Copyright (c) Microsoft Corporation.
 ; Copyright (c) Yamaha Corporation.
-; Licensed under the terms of the MIT license:
-; https://github.com/microsoft/low-latency-audio/blob/main/LICENSE
+; Licensed under the MIT License
+; ============================================================================
+; This is part of the Microsoft Low-Latency Audio driver project.
+; Further information: https://aka.ms/asio
+; ============================================================================
 ;
 ; USBAudio2-ACX.inf
 ;
