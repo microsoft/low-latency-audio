@@ -1218,6 +1218,7 @@ NTSTATUS Codec_CreateSuperMixElement(
     superMixContext->EntityID = UnitID;
     superMixContext->NumberOfInputChannels = numOfInputChannels;
     superMixContext->NumberOfOutputChannels = numOfOutputChannels;
+    superMixContext->ConnectPinIndex = 0;
 
     Element = superMixElement;
 
@@ -1961,6 +1962,11 @@ NTSTATUS Codec_ConnectElement(
                 PMUX_ELEMENT_CONTEXT muxContext = GetMuxElementContext(ToElement);
                 Connection.ToPin.Id = (muxContext->ConnectPinIndex)++;
             }
+            else if (toElementContext->AudioNodeKind == toULONG(AudioNodeKind::SuperMixElement))
+            {
+                PSUPERMIX_ELEMENT_CONTEXT superMixContext = GetSuperMixElementContext(ToElement);
+                Connection.ToPin.Id = (superMixContext->ConnectPinIndex)++;
+            }
         }
     }
     else
@@ -1977,6 +1983,11 @@ NTSTATUS Codec_ConnectElement(
             {
                 PMUX_ELEMENT_CONTEXT muxContext = GetMuxElementContext(ToElement);
                 Connection.ToPin.Id = (muxContext->ConnectPinIndex)++;
+            }
+            else if (toElementContext->AudioNodeKind == toULONG(AudioNodeKind::SuperMixElement))
+            {
+                PSUPERMIX_ELEMENT_CONTEXT superMixContext = GetSuperMixElementContext(ToElement);
+                Connection.ToPin.Id = (superMixContext->ConnectPinIndex)++;
             }
         }
     }

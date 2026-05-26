@@ -272,6 +272,7 @@ typedef struct _SUPERMIX_ELEMENT_CONTEXT
 {
     WDFDEVICE Device;
     UCHAR     EntityID;
+    UCHAR     ConnectPinIndex;
     ULONG     NumberOfInputChannels;
     ULONG     NumberOfOutputChannels;
 } SUPERMIX_ELEMENT_CONTEXT, *PSUPERMIX_ELEMENT_CONTEXT;
