@@ -4621,7 +4621,7 @@ NTSTATUS AudioIsochronousEngine::LoadInternalParametersFromDeviceRegistry()
 
         for (ULONG index = 0; index < internalParametersNameAndDataAddressTableSize; ++index)
         {
-            UNICODE_STRING valueName;
+            UNICODE_STRING valueName{};
             ULONG          resultLength = 0;
             DWORD          value;
 
@@ -4732,7 +4732,7 @@ NTSTATUS AudioIsochronousEngine::SaveInternalParametersToDeviceRegistry()
 
     for (ULONG index = 0; index < internalParametersNameAndDataAddressTableSize; ++index)
     {
-        UNICODE_STRING valueName;
+        UNICODE_STRING valueName{};
 
         RtlInitUnicodeString(&valueName, internalParametersNameAndDataAddressTable[index].name);
 
@@ -4773,7 +4773,7 @@ NTSTATUS AudioIsochronousEngine::SaveAsioDeviceToRegistry(
 
     RETURN_NTSTATUS_IF_FAILED(WdfRegistryOpenKey(nullptr, &g_RegistryPath, KEY_READ | KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
 
-    UNICODE_STRING valueName;
+    UNICODE_STRING valueName{};
     RtlInitUnicodeString(&valueName, c_AsioDeviceName);
 
     RETURN_NTSTATUS_IF_FAILED(WdfRegistryAssignString(registryKey, &valueName, asioDeviceString));
@@ -4808,7 +4808,7 @@ NTSTATUS AudioIsochronousEngine::LoadAsioDeviceFromRegistry(
 
     RETURN_NTSTATUS_IF_FAILED(WdfRegistryOpenKey(nullptr, &g_RegistryPath, KEY_READ | KEY_WRITE, WDF_NO_OBJECT_ATTRIBUTES, &registryKey));
 
-    UNICODE_STRING valueName;
+    UNICODE_STRING valueName{};
     RtlInitUnicodeString(&valueName, c_AsioDeviceName);
 
     return WdfRegistryQueryString(registryKey, &valueName, asioDeviceString);
@@ -4852,7 +4852,7 @@ NTSTATUS AudioIsochronousEngine::SaveSampleRateToRegistry(
 
     RETURN_NTSTATUS_IF_FAILED(OpenSubRegistryKey(registryKey, registrySubKey));
 
-    UNICODE_STRING valueName;
+    UNICODE_STRING valueName{};
     RtlInitUnicodeString(&valueName, c_SampleRateName);
 
     return WdfRegistryAssignValue(registrySubKey, &valueName, REG_DWORD, sizeof(sampleRate), &sampleRate);
@@ -4898,7 +4898,7 @@ NTSTATUS AudioIsochronousEngine::LoadSampleRateFromRegistry(
 
     RETURN_NTSTATUS_IF_FAILED(OpenSubRegistryKey(registryKey, registrySubKey));
 
-    UNICODE_STRING valueName;
+    UNICODE_STRING valueName{};
     RtlInitUnicodeString(&valueName, c_SampleRateName);
 
     ULONG value = 0;
@@ -4950,7 +4950,7 @@ AudioIsochronousEngine::OpenSubRegistryKey(
     WDFKEY & subRegistryKey
 )
 {
-    UNICODE_STRING subKeyName;
+    UNICODE_STRING subKeyName{};
     WCHAR          buffer[4]; // 000 ~ 999 + NULL
 
     PAGED_CODE();
@@ -4966,11 +4966,9 @@ PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS AudioIsochronousEngine::WalkNextUnit(
     bool                 isInput,
-    ULONGLONG            idMap[4],
-    ULONGLONG            unvisitedUnitMap[4],
+    ULONGLONG            pendingUnitMap[4],
     AudioNodeKind &      audioNodeKind,
     UCHAR &              unitID,
-    ULONG &              controlBitmap,
     UCHAR &              nextUnitID,
     TraversalDirection & traversalDirection,
     bool &               hasMoreData
@@ -4980,11 +4978,11 @@ NTSTATUS AudioIsochronousEngine::WalkNextUnit(
 
     if (isInput)
     {
-        return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardReverse(m_audioStreamPropertySet, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+        return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardReverse(m_audioStreamPropertySet, pendingUnitMap, audioNodeKind, unitID, nextUnitID, traversalDirection, hasMoreData);
     }
     else
     {
-        return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardForward(m_audioStreamPropertySet, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData);
+        return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardForward(m_audioStreamPropertySet, pendingUnitMap, audioNodeKind, unitID, nextUnitID, traversalDirection, hasMoreData);
     }
 }
 

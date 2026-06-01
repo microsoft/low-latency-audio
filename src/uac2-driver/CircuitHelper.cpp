@@ -678,8 +678,8 @@ ULONG ConverSpeakerPositions(
     ULONG channelConfig
 )
 {
-	PAGED_CODE();
-	
+    PAGED_CODE();
+
     if (channelConfig < NS_USBAudio0200::TOP_FRONT_LEFT_OF_CENTER)
     {
         // NS_USBAudio0200::FRONT_LEFT                 , = 0x00000001, SPEAKER_FRONT_LEFT               = 0x00000001
@@ -924,16 +924,15 @@ PAGED_CODE_SEG
 NTSTATUS AddPropertyToCircuitInterface(
     ACXCIRCUIT              Circuit,
     ULONG                   PropertyCount,
-    const DSP_DEVPROPERTY*  Properties
+    const DSP_DEVPROPERTY * Properties
 )
 {
     PAGED_CODE();
 
-    NTSTATUS        status = STATUS_UNSUCCESSFUL;
-    UNICODE_STRING  acxLink = { 0 };
-    UNICODE_STRING  audioLink = { 0 };
-    WDFSTRING       wdfLink = AcxCircuitGetSymbolicLinkName(Circuit);
-    bool            freeStr = false;
+    UNICODE_STRING acxLink{};
+    UNICODE_STRING audioLink{};
+    WDFSTRING      wdfLink = AcxCircuitGetSymbolicLinkName(Circuit);
+    bool           freeStr = false;
 
     auto exit = wil::scope_exit(
         [&]() {
@@ -951,23 +950,18 @@ NTSTATUS AddPropertyToCircuitInterface(
     // Make sure there is a string.
     if (!acxLink.Length || !acxLink.Buffer)
     {
-        status = STATUS_INVALID_DEVICE_STATE;
-        return status;
+        RETURN_NTSTATUS_IF_FAILED(STATUS_INVALID_DEVICE_STATE);
     }
 
     // Get the audio interface.
-    status = IoGetDeviceInterfaceAlias(&acxLink, &KSCATEGORY_AUDIO, &audioLink);
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
+    RETURN_NTSTATUS_IF_FAILED(IoGetDeviceInterfaceAlias(&acxLink, &KSCATEGORY_AUDIO, &audioLink));
 
     freeStr = true;
 
     // Set specified properties on the audio interface for the ACXCIRCUIT.
     for (ULONG i = 0; i < PropertyCount; ++i)
     {
-        status = IoSetDeviceInterfacePropertyData(
+        RETURN_NTSTATUS_IF_FAILED(IoSetDeviceInterfacePropertyData(
             &audioLink,
             Properties[i].PropertyKey,
             LOCALE_NEUTRAL,
@@ -975,15 +969,8 @@ NTSTATUS AddPropertyToCircuitInterface(
             Properties[i].Type,
             Properties[i].BufferSize,
             Properties[i].Buffer
-        );
-
-        if (!NT_SUCCESS(status))
-        {
-            return status;
-        }
+        ));
     }
 
-    status = STATUS_SUCCESS;
-
-    return status;
+    return STATUS_SUCCESS;
 }

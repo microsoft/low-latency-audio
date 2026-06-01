@@ -69,7 +69,7 @@ Return Value:
     NTSTATUS       status = STATUS_SUCCESS;
     WDFMEMORY      memory = nullptr;
     PWSTR          channelName = nullptr;
-    UNICODE_STRING retrievedName;
+    UNICODE_STRING retrievedName{};
 
     PAGED_CODE();
 
@@ -607,9 +607,9 @@ _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
 CodecC_EvtCircuitPowerUp(
-    _In_ WDFDEVICE /* Device */,
-    _In_ ACXCIRCUIT  Circuit ,
-    _In_ WDF_POWER_DEVICE_STATE /* PreviousState */
+    _In_            WDFDEVICE /* Device */,
+    _In_ ACXCIRCUIT Circuit,
+    _In_            WDF_POWER_DEVICE_STATE /* PreviousState */
 )
 {
     PAGED_CODE();

@@ -634,16 +634,6 @@ Return Value:
                 //
                 RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->AddCaptureCircuit(device));
 
-                // if (deviceContext->Render != nullptr)
-                // {
-                // 	RETURN_NTSTATUS_IF_FAILED(AcxDeviceAddCircuit(device, deviceContext->Render));
-                // }
-
-                // if (deviceContext->Capture != nullptr)
-                // {
-                // 	RETURN_NTSTATUS_IF_FAILED(AcxDeviceAddCircuit(device, deviceContext->Capture));
-                // }
-
                 deviceContext->AudioIsochronousEngines[index]->ReportInternalParameters();
             }
             index++;
@@ -2582,7 +2572,7 @@ VOID EvtUSBAudioAcxDriverSetAsioDevice(
     if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         WDFSTRING             asioDeviceString = nullptr;
-        UNICODE_STRING        asioDevice;
+        UNICODE_STRING        asioDevice{};
         WDFMEMORY             unicodeMemory = nullptr;
         PWCHAR                unicodeStrings = nullptr;
         size_t                unicodeStringsBytes = params.Parameters.Property.ValueCb + sizeof(WCHAR);
@@ -2662,7 +2652,7 @@ VOID EvtUSBAudioAcxDriverGetAsioDevice(
     if (circuitContext->AudioIsochronousEngine != nullptr)
     {
         WDFSTRING             asioDeviceString = nullptr;
-        UNICODE_STRING        asioDevice;
+        UNICODE_STRING        asioDevice{};
         WDF_OBJECT_ATTRIBUTES attributes{};
 
         WDF_OBJECT_ATTRIBUTES_INIT(&attributes);

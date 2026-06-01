@@ -215,7 +215,7 @@ Return Value:
     NTSTATUS       status = STATUS_SUCCESS;
     WDFMEMORY      memory = nullptr;
     PWSTR          channelName = nullptr;
-    UNICODE_STRING retrievedName;
+    UNICODE_STRING retrievedName{};
 
     PAGED_CODE();
 
@@ -2027,9 +2027,7 @@ Codec_AllocateElements(
     AudioNodeKind         audioNodeKind = AudioNodeKind::Invalid;
     UCHAR                 unitID = USBAudioConfiguration::InvalidID;
     UCHAR                 nextUnitID = USBAudioConfiguration::InvalidID;
-    ULONG                 controlBitmap = 0;
-    ULONGLONG             unvisitedUnitMap[4] = {};
-    ULONGLONG             idMap[4] = {};
+    ULONGLONG             pendingUnitMap[4] = {};
     ULONG                 counter = 0;
     ACXELEMENT            currentElement{};
     ACXELEMENT            prevElement{};
@@ -2038,7 +2036,7 @@ Codec_AllocateElements(
     PAGED_CODE();
 
     auto allocateElementsScope = wil::scope_exit([&]() {
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, " IsInput = %!bool!, %u pins, %u elements, %u connections", IsInput, pinIndex, elementIndex, connectionIndex);
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, " IsInput = %!bool!, %u pins, %u elements, %u connections", IsInput, pinIndex, elementIndex, connectionIndex);
         if (pinsMemory != nullptr)
         {
             WdfObjectDelete(pinsMemory);
@@ -2061,7 +2059,7 @@ Codec_AllocateElements(
         }
     });
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
 
     if (IsInput)
     {
@@ -2101,8 +2099,8 @@ Codec_AllocateElements(
         while (hasMoreData)
         {
             bool shouldConnect = true;
-            RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->WalkNextUnit(IsInput, idMap, unvisitedUnitMap, audioNodeKind, unitID, controlBitmap, nextUnitID, traversalDirection, hasMoreData));
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - IsInput = %!bool!, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, %s, 0x%02x, 0x%08x, 0x%02x, %s, hasMoreData = %!bool!", IsInput, idMap[0], idMap[1], idMap[2], idMap[3], unvisitedUnitMap[0], unvisitedUnitMap[1], unvisitedUnitMap[2], unvisitedUnitMap[3], GetAudioNodeKindString(audioNodeKind), unitID, controlBitmap, nextUnitID, GetTraversalDirectionString(traversalDirection), hasMoreData);
+            RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->WalkNextUnit(IsInput, pendingUnitMap, audioNodeKind, unitID, nextUnitID, traversalDirection, hasMoreData));
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - IsInput = %!bool!, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, %s, 0x%02x, 0x%02x, %s, hasMoreData = %!bool!", IsInput, pendingUnitMap[0], pendingUnitMap[1], pendingUnitMap[2], pendingUnitMap[3], GetAudioNodeKindString(audioNodeKind), unitID, nextUnitID, GetTraversalDirectionString(traversalDirection), hasMoreData);
 
             switch (audioNodeKind)
             {
@@ -2206,7 +2204,7 @@ Codec_AllocateElements(
             counter++;
             if (counter > 0xff)
             {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_INTERRUPTTRANSFER, "%!FUNC! counter overflow.");
+                TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, "%!FUNC! counter overflow.");
                 break;
             }
             prevElement = currentElement;
@@ -2289,10 +2287,10 @@ Codec_AllocateElements(
     }
     else
     {
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_INTERRUPTTRANSFER, "%!FUNC! do nothing");
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, "%!FUNC! do nothing");
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit %!STATUS!", status);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
 }

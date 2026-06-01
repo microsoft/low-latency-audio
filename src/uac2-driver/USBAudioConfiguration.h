@@ -93,14 +93,17 @@ typedef struct _CURRENT_SETTINGS
     ULONG MaxFramesPerPacket{0};
     ULONG MaxPacketSize{0};
     ULONG Interval{0};
-    // ULONG AltSupportedSampleRate{0};
     UCHAR TerminalLink{0};
-    // UCHAR SamplePerFrame{0};
-    // UCHAR ActiveAlternateSetting{0};
-    // ULONG ValidAlternateSettingMap{0};
-    bool IsDeviceAdaptive;
-    bool IsDeviceSynchronous;
+    bool  IsDeviceAdaptive;
+    bool  IsDeviceSynchronous;
 } CURRENT_SETTINGS, *PCURRENT_SETTINGS;
+
+typedef struct _GENERIC_AUDIO_DESCRIPTOR_INFO
+{
+    NS_USBAudio::PCS_GENERIC_AUDIO_DESCRIPTOR Descriptor{nullptr};
+    ULONGLONG                                 VisitedUnitMap[4]{};
+    ULONG                                     ControlBitmap{};
+} GENERIC_AUDIO_DESCRIPTOR_INFO, *PGENERIC_AUDIO_DESCRIPTOR_INFO;
 
 template <class T, ULONG I>
 class VariableArray
@@ -612,11 +615,9 @@ class USBAudioControlInterface : public USBAudioInterface
 
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS WalkNextUnitTowardForward(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -624,11 +625,9 @@ class USBAudioControlInterface : public USBAudioInterface
 
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS WalkNextUnitTowardReverse(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -636,11 +635,9 @@ class USBAudioControlInterface : public USBAudioInterface
 
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS WalkNextUnvisitedUnit(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -840,7 +837,7 @@ class USBAudioControlInterface : public USBAudioInterface
         MAX_AUDIO_DESCRIPTOR = 30
     };
 
-    VariableArray<NS_USBAudio::PCS_GENERIC_AUDIO_DESCRIPTOR, MAX_AUDIO_DESCRIPTOR> m_genericAudioDescriptorInfo;
+    VariableArray<GENERIC_AUDIO_DESCRIPTOR_INFO, MAX_AUDIO_DESCRIPTOR> m_genericAudioDescriptorInfo;
 };
 
 class USBAudioStreamInterface : public USBAudioInterface
@@ -1191,11 +1188,9 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS WalkNextUnitTowardForward(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -1205,11 +1200,9 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS WalkNextUnitTowardReverse(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -1219,11 +1212,9 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS WalkNextUnvisitedUnit(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -1832,11 +1823,9 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS WalkNextUnitTowardForward(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -1846,11 +1835,9 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS WalkNextUnitTowardReverse(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -1860,11 +1847,9 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS WalkNextUnvisitedUnit(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ AudioNodeKind &      audioNodeKind,
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -2183,10 +2168,8 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     NTSTATUS TraverseTowardForward(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -2195,10 +2178,8 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     NTSTATUS TraverseTowardReverse(
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
@@ -2259,6 +2240,16 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _In_ ULONG controlMap
     );
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    static void UpdatePendingUnitMap(
+        _In_ UCHAR                   unitID,
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
+        _Inout_updates_(4) ULONGLONG visitedUnitMap[4],
+        _In_ UCHAR *                 sourceIDs,
+        _In_ UCHAR                   numOfArray
+    );
+
     enum
     {
         MAX_CLOCK_SELECTOR = 10,
@@ -2269,13 +2260,13 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     };
 
     // NS_USBAudio0200::PCS_AC_INTERFACE_HEADER_DESCRIPTOR m_interfaceDescriptor{nullptr};
-    VariableArray<NS_USBAudio0200::PCS_AC_CLOCK_SELECTOR_DESCRIPTOR, MAX_CLOCK_SELECTOR> m_acClockSelectorInfo;
-    VariableArray<NS_USBAudio0200::PCS_AC_CLOCK_SOURCE_DESCRIPTOR, UAC_MAX_CLOCK_SOURCE> m_acClockSourceInfo;
-    VariableArray<NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR, MAX_TERMINAL>      m_acOutputTerminalInfo;
-    VariableArray<NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR, MAX_TERMINAL>       m_acInputTerminalInfo;
-    VariableArray<NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR, MAX_FEATURE_UNIT>     m_acFeatureUnitInfo;
-    VariableArray<NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR, MAX_SELECTOR_UNIT>   m_acSelectorUnitInfo;
-    VariableArray<NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON, MAX_MIXER_UNIT>  m_acMixerUnitInfo;
+    VariableArray<NS_USBAudio0200::PCS_AC_CLOCK_SELECTOR_DESCRIPTOR, MAX_CLOCK_SELECTOR> m_acClockSelectors;
+    VariableArray<NS_USBAudio0200::PCS_AC_CLOCK_SOURCE_DESCRIPTOR, UAC_MAX_CLOCK_SOURCE> m_acClockSources;
+    VariableArray<NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR, MAX_TERMINAL>      m_acOutputTerminals;
+    VariableArray<NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR, MAX_TERMINAL>       m_acInputTerminals;
+    VariableArray<NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR, MAX_FEATURE_UNIT>     m_acFeatureUnits;
+    VariableArray<NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR, MAX_SELECTOR_UNIT>   m_acSelectorUnits;
+    VariableArray<NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON, MAX_MIXER_UNIT>  m_acMixerUnits;
     ULONG                                                                                m_clockEntityBitmap[8]{};
     ULONG                                                                                m_clockEntityCount{0};
     ULONG                                                                                m_volumeUpdatedEntityBitmap[8]{};
@@ -2555,6 +2546,13 @@ class USBAudioInterfaceInfo
     _Success_(return == true)
     bool GetTerminalLink(
         _Out_ UCHAR & terminalLink
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    _Success_(return == true)
+    bool GetChannels(
+        _Out_ UCHAR & numOfChannels
     );
 
 #if 0
@@ -2865,11 +2863,9 @@ class USBAudioStreamInterfaceGroup
     PAGED_CODE_SEG
     NTSTATUS WalkNextUnitTowardForward(
         _In_ const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
-        _Inout_updates_(4) ULONGLONG           idMap[4],
-        _Inout_updates_(4) ULONGLONG           unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG           pendingUnitMap[4],
         _Inout_ AudioNodeKind &                audioNodeKind,
         _Inout_ UCHAR &                        unitID,
-        _Inout_ ULONG &                        controlBitmap,
         _Inout_ UCHAR &                        nextUnitID,
         _Inout_ TraversalDirection &           traversalDirection,
         _Inout_ bool &                         hasMoreData
@@ -2879,11 +2875,9 @@ class USBAudioStreamInterfaceGroup
     PAGED_CODE_SEG
     NTSTATUS WalkNextUnitTowardReverse(
         _In_ const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
-        _Inout_updates_(4) ULONGLONG           idMap[4],
-        _Inout_updates_(4) ULONGLONG           unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG           pendingUnitMap[4],
         _Inout_ AudioNodeKind &                audioNodeKind,
         _Inout_ UCHAR &                        unitID,
-        _Inout_ ULONG &                        controlBitmap,
         _Inout_ UCHAR &                        nextUnitID,
         _Inout_ TraversalDirection &           traversalDirection,
         _Inout_ bool &                         hasMoreData
@@ -2949,7 +2943,7 @@ class USBAudioStreamInterfaceGroup
     bool                                                                      m_isOutputIsochronousInterfaceExists{false};
     USBAudioDataFormatManager                                                 m_inputUsbAudioDataFormatManager;
     USBAudioDataFormatManager                                                 m_outputUsbAudioDataFormatManager;
-    VariableArray<USBAudioInterfaceInfo *, DEFAULT_SIZE_OF_STREAM_INTERFACES> m_usbAudioStreamInterfaceInfoes;
+    VariableArray<USBAudioInterfaceInfo *, DEFAULT_SIZE_OF_STREAM_INTERFACES> m_usbAudioStreamInterfaceInfo;
     ULONG                                                                     m_groupIndex{0};
     UCHAR                                                                     m_clockSourceID{0};
     UCHAR                                                                     m_targetClockSourceID{0};
@@ -3386,8 +3380,8 @@ class USBAudioConfiguration
     PUSB_DEVICE_DESCRIPTOR                                                                 m_usbDeviceDescriptor{nullptr};
     PUSB_CONFIGURATION_DESCRIPTOR                                                          m_usbConfigurationDescriptor{nullptr};
     USBAudioControlInterface *                                                             m_usbAudioControlInterface{nullptr};
-    USBAudioInterfaceInfo **                                                               m_usbAudioStreamInterfaceInfoes{nullptr};
-    WDFMEMORY                                                                              m_usbAudioStreamInterfaceInfoesMemory{nullptr};
+    USBAudioInterfaceInfo **                                                               m_usbAudioStreamInterfaceInfo{nullptr};
+    WDFMEMORY                                                                              m_usbAudioStreamInterfaceInfoMemory{nullptr};
     ULONG                                                                                  m_numOfUsbAudioStreamInterfaceInfo{0};
     bool                                                                                   m_isUSBAudio2{false};
     bool                                                                                   m_isInterruptDataMessageInterfaceExists{false};

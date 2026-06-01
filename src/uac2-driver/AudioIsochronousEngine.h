@@ -785,11 +785,9 @@ class AudioIsochronousEngine
     PAGED_CODE_SEG
     NTSTATUS WalkNextUnit(
         _In_ bool                    isInput,
-        _Inout_updates_(4) ULONGLONG idMap[4],
-        _Inout_updates_(4) ULONGLONG unvisitedUnitMap[4],
+        _Inout_updates_(4) ULONGLONG pendingUnitMap[4],
         _Out_ AudioNodeKind &        audioNodeKind,
         _Inout_ UCHAR &              unitID,
-        _Inout_ ULONG &              controlBitmap,
         _Inout_ UCHAR &              nextUnitID,
         _Inout_ TraversalDirection & traversalDirection,
         _Inout_ bool &               hasMoreData
