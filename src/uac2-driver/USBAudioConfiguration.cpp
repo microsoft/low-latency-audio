@@ -3551,64 +3551,63 @@ _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS USBAudio2ControlInterface::SearchOutputTerminal(
     UCHAR &  sourceID,
-    UCHAR &  numOfChannels,
     USHORT & terminalType,
     UCHAR &  terminalID,
     UCHAR &  volumeUnitID,
-    UCHAR &  muteUnitID,
-    SCHAR    recursionCount
+    UCHAR &  muteUnitID
 )
 {
     NTSTATUS status = STATUS_UNSUCCESSFUL;
 
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC!  recursionCount = %d", recursionCount);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC!");
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - sourceID id %02x", sourceID);
 
-    recursionCount--;
+    ULONG maxOfUnits = min(MAX_OF_UNITS, m_genericAudioDescriptorInfo.GetNumOfArray());
 
-    for (auto & genericAudioDescriptor : m_genericAudioDescriptorInfo)
+    for (ULONG units = 0; units < maxOfUnits; units++)
     {
-        switch (genericAudioDescriptor.Descriptor->bDescriptorSubtype)
+        UCHAR sourceIDBackup = sourceID;
+        for (auto & genericAudioDescriptor : m_genericAudioDescriptorInfo)
         {
-        case NS_USBAudio0200::OUTPUT_TERMINAL:
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - output terminal bTerminalID 0x%02x, bSourceID 0x%02x, bCSSourceID 0x%02x", ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bTerminalID, ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bSourceID, ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bCSourceID);
-            if (((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bSourceID == sourceID)
+            switch (genericAudioDescriptor.Descriptor->bDescriptorSubtype)
             {
-                terminalType = ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->wTerminalType;
-                terminalID = ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bTerminalID;
-                return STATUS_SUCCESS;
+            case NS_USBAudio0200::OUTPUT_TERMINAL:
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - output terminal bTerminalID 0x%02x, bSourceID 0x%02x, bCSSourceID 0x%02x", ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bTerminalID, ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bSourceID, ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bCSourceID);
+                if (((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bSourceID == sourceID)
+                {
+                    terminalType = ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->wTerminalType;
+                    terminalID = ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bTerminalID;
+                    return STATUS_SUCCESS;
+                }
+                break;
+
+            case NS_USBAudio0200::FEATURE_UNIT: {
+                NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR featureUnitDescriptor = (NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor;
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - feature unit bSourceID 0x%02x", featureUnitDescriptor->bSourceID);
+                if (featureUnitDescriptor->bSourceID == sourceID)
+                {
+                    UCHAR size = 4; // CS_AC_FEATURE_UNIT_DESCRIPTOR::bmaControls
+                    UCHAR channels = (featureUnitDescriptor->bLength - offsetof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR, ch)) / size;
+                    for (UCHAR ch = 0; ch < channels; ++ch)
+                    {
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - feature unit ch[%u] bmaControls %02x %02x %02x %02x", ch, featureUnitDescriptor->ch[ch].bmaControls[3], featureUnitDescriptor->ch[ch].bmaControls[2], featureUnitDescriptor->ch[ch].bmaControls[1], featureUnitDescriptor->ch[ch].bmaControls[0]);
+                        if (featureUnitDescriptor->ch[ch].bmaControls[0] & NS_USBAudio0200::FEATURE_UNIT_BMA_MUTE_CONTROL_MASK)
+                        {
+                            muteUnitID = featureUnitDescriptor->bUnitID;
+                        }
+                        if (featureUnitDescriptor->ch[ch].bmaControls[0] & NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK)
+                        {
+                            volumeUnitID = featureUnitDescriptor->bUnitID;
+                        }
+                    }
+                    sourceID = featureUnitDescriptor->bUnitID;
+                    break;
+                }
             }
             break;
-
-        case NS_USBAudio0200::FEATURE_UNIT: {
-            NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR featureUnitDescriptor = (NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor;
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - feature unit bSourceID 0x%02x", featureUnitDescriptor->bSourceID);
-            if (featureUnitDescriptor->bSourceID == sourceID)
-            {
-                UCHAR size = 4; // CS_AC_FEATURE_UNIT_DESCRIPTOR::bmaControls
-                UCHAR channels = (featureUnitDescriptor->bLength - offsetof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR, ch)) / size;
-                for (UCHAR ch = 0; ch < channels; ++ch)
-                {
-                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - feature unit ch[%u] bmaControls %02x %02x %02x %02x", ch, featureUnitDescriptor->ch[ch].bmaControls[3], featureUnitDescriptor->ch[ch].bmaControls[2], featureUnitDescriptor->ch[ch].bmaControls[1], featureUnitDescriptor->ch[ch].bmaControls[0]);
-                    if (featureUnitDescriptor->ch[ch].bmaControls[0] & NS_USBAudio0200::FEATURE_UNIT_BMA_MUTE_CONTROL_MASK)
-                    {
-                        muteUnitID = featureUnitDescriptor->bUnitID;
-                    }
-                    if (featureUnitDescriptor->ch[ch].bmaControls[0] & NS_USBAudio0200::FEATURE_UNIT_BMA_VOLUME_CONTROL_MASK)
-                    {
-                        volumeUnitID = featureUnitDescriptor->bUnitID;
-                    }
-                }
-                sourceID = featureUnitDescriptor->bUnitID;
-                break;
-            }
-        }
-        break;
-        case NS_USBAudio0200::MIXER_UNIT:
-            if (recursionCount >= 0)
-            {
+            case NS_USBAudio0200::MIXER_UNIT: {
                 NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON mixerUnitDescriptor = (NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor;
                 TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - mixer unit bUnitID 0x%02x", mixerUnitDescriptor->bUnitID);
                 if (mixerUnitDescriptor->bNrInPins != 0)
@@ -3619,29 +3618,54 @@ NTSTATUS USBAudio2ControlInterface::SearchOutputTerminal(
                         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - mixer unit pin[%u] baSourceID 0x%02x", pin, baSourceID);
                         if (baSourceID == sourceID)
                         {
-                            UCHAR sourceIDBackup = sourceID;
                             sourceID = mixerUnitDescriptor->bUnitID;
-                            status = SearchOutputTerminal(sourceID, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID, recursionCount);
-                            if (NT_SUCCESS(status))
-                            {
-                                return status;
-                            }
-                            sourceID = sourceIDBackup;
+                            break;
                         }
                     }
                 }
             }
             break;
-        default:
-        case NS_USBAudio0200::CLOCK_MULTIPLIER:
-        case NS_USBAudio0200::CLOCK_SELECTOR:
-        case NS_USBAudio0200::CLOCK_SOURCE:
-        case NS_USBAudio0200::EXTENSION_UNIT:
-        case NS_USBAudio0200::INPUT_TERMINAL:
-        case NS_USBAudio0200::PROCESSING_UNIT:
-        case NS_USBAudio0200::SAMPLE_RATE_CONVERTER:
-        case NS_USBAudio0200::SELECTOR_UNIT:
+            case NS_USBAudio0200::SELECTOR_UNIT: {
+                NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR selectorUnitDescriptor = (NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor;
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - selector unit unit id %02x", selectorUnitDescriptor->bUnitID);
+                for (UCHAR index = 0; index < selectorUnitDescriptor->bNrInPins; index++)
+                {
+                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - selector unit [%u] baSourceID 0x%02x", index, selectorUnitDescriptor->baSourceID[index]);
+                    if (selectorUnitDescriptor->baSourceID[index] == sourceID)
+                    {
+                        sourceID = selectorUnitDescriptor->bUnitID;
+                        break;
+                    }
+                }
+            }
             break;
+            case NS_USBAudio0200::EXTENSION_UNIT: {
+                NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR extensionUnitDescriptor = (NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor;
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - extension unit unit id %02x", extensionUnitDescriptor->bUnitID);
+                for (UCHAR index = 0; index < extensionUnitDescriptor->bNrInPins; index++)
+                {
+                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - extension unit [%u] baSourceID 0x%02x", index, extensionUnitDescriptor->baSourceID[index]);
+                    if (extensionUnitDescriptor->baSourceID[index] == sourceID)
+                    {
+                        sourceID = extensionUnitDescriptor->bUnitID;
+                        break;
+                    }
+                }
+            }
+            break;
+            default:
+            case NS_USBAudio0200::CLOCK_MULTIPLIER:
+            case NS_USBAudio0200::CLOCK_SELECTOR:
+            case NS_USBAudio0200::CLOCK_SOURCE:
+            case NS_USBAudio0200::INPUT_TERMINAL:
+            case NS_USBAudio0200::PROCESSING_UNIT:
+            case NS_USBAudio0200::SAMPLE_RATE_CONVERTER:
+                break;
+            }
+            if (sourceIDBackup != sourceID)
+            {
+                break;
+            }
         }
     }
 
@@ -3947,10 +3971,6 @@ NTSTATUS USBAudio2ControlInterface::SearchOutputTerminalFromInputTerminal(
 )
 {
     NTSTATUS status = STATUS_UNSUCCESSFUL;
-    enum
-    {
-        MAX_OF_UNITS = 10
-    };
 
     PAGED_CODE();
 
@@ -3975,15 +3995,10 @@ NTSTATUS USBAudio2ControlInterface::SearchOutputTerminalFromInputTerminal(
         }
     }
 
-    for (ULONG units = 0; units < MAX_OF_UNITS; units++)
     {
-        enum
-        {
-            MAX_CHAINED_MIXER_UNITS = 1
-        };
         UCHAR sourceIDBackup = sourceID;
 
-        status = SearchOutputTerminal(sourceID, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID, MAX_CHAINED_MIXER_UNITS);
+        status = SearchOutputTerminal(sourceID, terminalType, terminalID, volumeUnitID, muteUnitID);
         if (NT_SUCCESS(status))
         {
             return status;
@@ -3991,7 +4006,6 @@ NTSTATUS USBAudio2ControlInterface::SearchOutputTerminalFromInputTerminal(
         if (sourceIDBackup == sourceID)
         {
             TraceEvents(TRACE_LEVEL_WARNING, TRACE_DESCRIPTOR, "The topology link is broken or the topology could not be analyzed.");
-            break;
         }
     }
 
@@ -4006,60 +4020,71 @@ ULONG USBAudio2ControlInterface::GetUnitOutputChannelCount(
 {
     PAGED_CODE();
 
-    for (auto & genericAudioDescriptor : m_genericAudioDescriptorInfo)
+    ULONG maxOfUnits = min(MAX_OF_UNITS, m_genericAudioDescriptorInfo.GetNumOfArray());
+
+    for (ULONG units = 0; units < maxOfUnits; units++)
     {
-        switch (genericAudioDescriptor.Descriptor->bDescriptorSubtype)
+        UCHAR unitIDBackup = unitID;
+
+        for (auto & genericAudioDescriptor : m_genericAudioDescriptorInfo)
         {
-        case NS_USBAudio0200::INPUT_TERMINAL:
-            if (((NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bTerminalID == unitID)
+            switch (genericAudioDescriptor.Descriptor->bDescriptorSubtype)
             {
-                return ((NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bNrChannels;
+            case NS_USBAudio0200::INPUT_TERMINAL:
+                if (((NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bTerminalID == unitID)
+                {
+                    return ((NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bNrChannels;
+                }
+                break;
+            case NS_USBAudio0200::OUTPUT_TERMINAL:
+                if (((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bTerminalID == unitID)
+                {
+                    unitID = ((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bSourceID;
+                }
+                break;
+            case NS_USBAudio0200::MIXER_UNIT:
+                if (((NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor)->bUnitID == unitID)
+                {
+                    NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON mixerUnitDescriptor = (NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor;
+                    return ((UCHAR *)mixerUnitDescriptor)[sizeof(NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + mixerUnitDescriptor->bNrInPins];
+                }
+                break;
+            case NS_USBAudio0200::SELECTOR_UNIT:
+                if (((NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bUnitID == unitID)
+                {
+                    unitID = ((NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor)->baSourceID[0];
+                }
+                break;
+            case NS_USBAudio0200::FEATURE_UNIT:
+                if (((NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bUnitID == unitID)
+                {
+                    NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR featureUnitDescriptor = (NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor;
+                    UCHAR                                           numOfChannels = (featureUnitDescriptor->bLength - offsetof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR, ch)) / (sizeof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR::ch[0]));
+                    numOfChannels = (numOfChannels == 0) ? 0 : (numOfChannels - 1);
+                    return numOfChannels;
+                }
+                break;
+            case NS_USBAudio0200::PROCESSING_UNIT:
+                // TBD
+                break;
+            case NS_USBAudio0200::EXTENSION_UNIT:
+                if (((NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor)->bUnitID == unitID)
+                {
+                    NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON extensionUnitDescriptor = (NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor;
+                    return ((UCHAR *)extensionUnitDescriptor)[sizeof(NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON) + extensionUnitDescriptor->bNrInPins];
+                }
+                break;
+            default:
+            case NS_USBAudio0200::CLOCK_SOURCE:
+            case NS_USBAudio0200::CLOCK_SELECTOR:
+            case NS_USBAudio0200::CLOCK_MULTIPLIER:
+            case NS_USBAudio0200::SAMPLE_RATE_CONVERTER:
+                break;
             }
-            break;
-        case NS_USBAudio0200::OUTPUT_TERMINAL:
-            if (((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bTerminalID == unitID)
+            if (unitIDBackup != unitID)
             {
-                return GetUnitOutputChannelCount(((NS_USBAudio0200::PCS_AC_OUTPUT_TERMINAL_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bSourceID); // TBD Reentrant
+                break;
             }
-            break;
-        case NS_USBAudio0200::MIXER_UNIT:
-            if (((NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor)->bUnitID == unitID)
-            {
-                NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON mixerUnitDescriptor = (NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor;
-                return ((UCHAR *)mixerUnitDescriptor)[sizeof(NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + mixerUnitDescriptor->bNrInPins];
-            }
-            break;
-        case NS_USBAudio0200::SELECTOR_UNIT:
-            if (((NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bUnitID == unitID)
-            {
-                return GetUnitOutputChannelCount(((NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor)->baSourceID[0]); // TBD Reentrant
-            }
-            break;
-        case NS_USBAudio0200::FEATURE_UNIT:
-            if (((NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor)->bUnitID == unitID)
-            {
-                NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR featureUnitDescriptor = (NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor;
-                UCHAR                                           numOfChannels = (featureUnitDescriptor->bLength - offsetof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR, ch)) / (sizeof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR::ch[0]));
-                numOfChannels = (numOfChannels == 0) ? 0 : (numOfChannels - 1);
-                return numOfChannels;
-            }
-            break;
-        case NS_USBAudio0200::PROCESSING_UNIT:
-            // TBD
-            break;
-        case NS_USBAudio0200::EXTENSION_UNIT:
-            if (((NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor)->bUnitID == unitID)
-            {
-                NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON extensionUnitDescriptor = (NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor;
-                return ((UCHAR *)extensionUnitDescriptor)[sizeof(NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON) + extensionUnitDescriptor->bNrInPins];
-            }
-            break;
-        default:
-        case NS_USBAudio0200::CLOCK_SOURCE:
-        case NS_USBAudio0200::CLOCK_SELECTOR:
-        case NS_USBAudio0200::CLOCK_MULTIPLIER:
-        case NS_USBAudio0200::SAMPLE_RATE_CONVERTER:
-            break;
         }
     }
     return 0;
@@ -4078,14 +4103,11 @@ NTSTATUS USBAudio2ControlInterface::SearchInputTerminalFromOutputTerminal(
 )
 {
     NTSTATUS status = STATUS_UNSUCCESSFUL;
-    enum
-    {
-        MAX_OF_UNITS = 10
-    };
 
     PAGED_CODE();
 
     UCHAR sourceID = USBAudioConfiguration::InvalidID;
+    ULONG maxOfUnits = min(MAX_OF_UNITS, m_genericAudioDescriptorInfo.GetNumOfArray());
 
     numOfChannels = 0;
     terminalType = NS_USBAudio0200::LINE_CONNECTOR;
@@ -4105,7 +4127,7 @@ NTSTATUS USBAudio2ControlInterface::SearchInputTerminalFromOutputTerminal(
         }
     }
 
-    for (ULONG units = 0; units < MAX_OF_UNITS; units++)
+    for (ULONG units = 0; units < maxOfUnits; units++)
     {
         UCHAR sourceIDBackup = sourceID;
 
@@ -4148,6 +4170,19 @@ NTSTATUS USBAudio2ControlInterface::SearchInputTerminalFromOutputTerminal(
                 }
             }
             break;
+            case NS_USBAudio0200::MIXER_UNIT: {
+                NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON mixerUnitDescriptor = (NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor;
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - mixer unit bUnitID 0x%02x", mixerUnitDescriptor->bUnitID);
+                if (mixerUnitDescriptor->bUnitID == sourceID)
+                {
+                    if (mixerUnitDescriptor->bNrInPins != 0)
+                    {
+                        sourceID = *(((UCHAR *)mixerUnitDescriptor) + sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON));
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - mixer unit pin[0] baSourceID 0x%02x", sourceID);
+                    }
+                }
+            }
+            break;
             case NS_USBAudio0200::SELECTOR_UNIT: {
                 NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR selectorUnitDescriptor = (NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor;
                 TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - selector unit unit id %02x", selectorUnitDescriptor->bUnitID);
@@ -4165,12 +4200,23 @@ NTSTATUS USBAudio2ControlInterface::SearchInputTerminalFromOutputTerminal(
                 }
             }
             break;
+            case NS_USBAudio0200::EXTENSION_UNIT: {
+                NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR extensionUnitDescriptor = (NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor;
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - extension unit unit id %02x", extensionUnitDescriptor->bUnitID);
+                if (extensionUnitDescriptor->bUnitID == sourceID)
+                {
+                    if (extensionUnitDescriptor->bNrInPins != 0)
+                    {
+                        sourceID = extensionUnitDescriptor->baSourceID[0];
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - extension pin[0] unit sourceID 0x%02x", sourceID);
+                    }
+                }
+            }
+            break;
             default:
             case NS_USBAudio0200::CLOCK_MULTIPLIER:
             case NS_USBAudio0200::CLOCK_SELECTOR:
             case NS_USBAudio0200::CLOCK_SOURCE:
-            case NS_USBAudio0200::EXTENSION_UNIT:
-            case NS_USBAudio0200::MIXER_UNIT:
             case NS_USBAudio0200::OUTPUT_TERMINAL:
             case NS_USBAudio0200::PROCESSING_UNIT:
             case NS_USBAudio0200::SAMPLE_RATE_CONVERTER:
@@ -7631,7 +7677,7 @@ NTSTATUS USBAudioStreamInterfaceGroup::GetInformationForAgcElement(
 {
     PAGED_CODE();
 
-    return m_usbAudioControlInterface->GetInformationForMuteElement(m_deviceContext, unitID, numOfChannels);
+    return m_usbAudioControlInterface->GetInformationForAgcElement(m_deviceContext, unitID, numOfChannels);
 }
 
 _Use_decl_annotations_

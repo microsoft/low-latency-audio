@@ -1583,6 +1583,11 @@ class USBAudio1StreamInterface : public USBAudioStreamInterface
 
 class USBAudio2ControlInterface : public USBAudioControlInterface
 {
+    enum
+    {
+        MAX_OF_UNITS = 0x100
+    };
+
   public:
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -2151,12 +2156,10 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     PAGED_CODE_SEG
     NTSTATUS SearchOutputTerminal(
         _Inout_ UCHAR &  sourceID,
-        _Inout_ UCHAR &  numOfChannels,
         _Inout_ USHORT & terminalType,
         _Inout_ UCHAR &  terminalID,
         _Inout_ UCHAR &  volumeUnitID,
-        _Inout_ UCHAR &  muteUnitID,
-        _In_ SCHAR       recursionCount
+        _Inout_ UCHAR &  muteUnitID
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
