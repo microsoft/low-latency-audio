@@ -534,10 +534,74 @@ const GUID * ConvertTerminalType(
     case NS_USBAudio0200::_1394_DV_STREAM_SOUNDTRACK:
         pinCategory = &KSNODETYPE_1394_DV_STREAM_SOUNDTRACK;
         break;
+    case NS_USBAudio0200::EMBEDDED_UNDEFINED:
+        pinCategory = &KSNODETYPE_EMBEDDED_UNDEFINED;
+        break;
+    case NS_USBAudio0200::LEVEL_CALIBRATION_NOISE_SOURCE:
+        pinCategory = &KSNODETYPE_LEVEL_CALIBRATION_NOISE_SOURCE;
+        break;
+    case NS_USBAudio0200::EQUALIZATION_NOISE:
+        pinCategory = &KSNODETYPE_EQUALIZATION_NOISE;
+        break;
+    case NS_USBAudio0200::CD_PLAYER:
+        pinCategory = &KSNODETYPE_CD_PLAYER;
+        break;
+    case NS_USBAudio0200::DAT:
+        pinCategory = &KSNODETYPE_DAT_IO_DIGITAL_AUDIO_TAPE;
+        break;
+    case NS_USBAudio0200::DCC:
+        pinCategory = &KSNODETYPE_DCC_IO_DIGITAL_COMPACT_CASSETTE;
+        break;
+    case NS_USBAudio0200::COMPRESSED_AUDIO_PLAYER:
+        pinCategory = &KSNODETYPE_MINIDISK;
+        break;
+    case NS_USBAudio0200::ANALOG_TAPE:
+        pinCategory = &KSNODETYPE_ANALOG_TAPE;
+        break;
+    case NS_USBAudio0200::PHONOGRAPH:
+        pinCategory = &KSNODETYPE_PHONOGRAPH;
+        break;
+    case NS_USBAudio0200::VCR_AUDIO:
+        pinCategory = &KSNODETYPE_VCR_AUDIO;
+        break;
+    case NS_USBAudio0200::VIDEO_DISC_AUDIO:
+        pinCategory = &KSNODETYPE_VIDEO_DISC_AUDIO;
+        break;
+    case NS_USBAudio0200::DVD_AUDIO:
+        pinCategory = &KSNODETYPE_DVD_AUDIO;
+        break;
+    case NS_USBAudio0200::TV_TUNER_AUDIO:
+        pinCategory = &KSNODETYPE_TV_TUNER_AUDIO;
+        break;
+    case NS_USBAudio0200::SATELLITE_RECEIVER_AUDIO:
+        pinCategory = &KSNODETYPE_SATELLITE_RECEIVER_AUDIO;
+        break;
+    case NS_USBAudio0200::CABLE_TUNER_AUDIO:
+        pinCategory = &KSNODETYPE_CABLE_TUNER_AUDIO;
+        break;
+    case NS_USBAudio0200::DSS_AUDIO:
+        pinCategory = &KSNODETYPE_DSS_AUDIO;
+        break;
+    case NS_USBAudio0200::RADIO_RECEIVER:
+        pinCategory = &KSNODETYPE_RADIO_RECEIVER;
+        break;
+    case NS_USBAudio0200::RADIO_TRANSMITTER:
+        pinCategory = &KSNODETYPE_RADIO_TRANSMITTER;
+        break;
+    case NS_USBAudio0200::MULTITRACK_RECORDER:
+        pinCategory = &KSNODETYPE_MULTITRACK_RECORDER;
+        break;
+    case NS_USBAudio0200::SYNTHESIZER:
+        pinCategory = &KSNODETYPE_SYNTHESIZER;
+        break;
     default:
     case NS_USBAudio0200::ADAT_LIGHTPIPE:
     case NS_USBAudio0200::TDIF:
     case NS_USBAudio0200::MADI:
+    case NS_USBAudio0200::PIANO:
+    case NS_USBAudio0200::GUITAR:
+    case NS_USBAudio0200::DRUMS_RHYTHM:
+    case NS_USBAudio0200::OTHER_MUSICAL_INSTRUMENT:
         pinCategory = &KSNODETYPE_LINE_CONNECTOR;
         break;
     }
