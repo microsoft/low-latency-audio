@@ -28,6 +28,7 @@ Environment:
 #include "UAC_User.h"
 #include "USBAudio.h"
 #include "USBAudioDataFormat.h"
+#include "VariableArray.h"
 
 enum class TraversalDirection
 {
@@ -104,78 +105,6 @@ typedef struct _GENERIC_AUDIO_DESCRIPTOR_INFO
     ULONGLONG                                 VisitedUnitMap[4]{};
     ULONG                                     ControlBitmap{};
 } GENERIC_AUDIO_DESCRIPTOR_INFO, *PGENERIC_AUDIO_DESCRIPTOR_INFO;
-
-template <class T, ULONG I>
-class VariableArray
-{
-  public:
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    VariableArray();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    virtual ~VariableArray();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    NTSTATUS Set(
-        _In_ WDFOBJECT parentObject,
-        _In_ ULONG     index,
-        _In_ T         data
-    );
-
-    __drv_maxIRQL(DISPATCH_LEVEL)
-    NONPAGED_CODE_SEG
-    NTSTATUS Get(
-        _In_ ULONG index,
-        _Out_ T &  data
-    ) const;
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    NTSTATUS Append(
-        _In_ WDFOBJECT parentObject,
-        _In_ T         data
-    );
-
-    __drv_maxIRQL(DISPATCH_LEVEL)
-    NONPAGED_CODE_SEG
-    ULONG GetNumOfArray() const;
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    void Report() const;
-
-    __drv_maxIRQL(DISPATCH_LEVEL)
-    NONPAGED_CODE_SEG
-    T * begin() noexcept;
-
-    __drv_maxIRQL(DISPATCH_LEVEL)
-    NONPAGED_CODE_SEG
-    T * end() noexcept;
-
-    __drv_maxIRQL(DISPATCH_LEVEL)
-    NONPAGED_CODE_SEG
-    const T * begin() const noexcept;
-
-    __drv_maxIRQL(DISPATCH_LEVEL)
-    NONPAGED_CODE_SEG
-    const T * end() const noexcept;
-
-  protected:
-    WDFMEMORY m_memory{nullptr};
-    T *       m_array{nullptr};
-    ULONG     m_sizeOfArray{0};
-    ULONG     m_numOfArray{0};
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    NTSTATUS Allocate(
-        _In_ WDFOBJECT parentObject,
-        _In_ ULONG     sizeOfArray
-    );
-};
 
 class USBAudioEndpoint
 {

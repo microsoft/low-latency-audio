@@ -169,32 +169,6 @@ static NTSTATUS AllocateElementContext(
 }
 
 PAGED_CODE_SEG
-_Success_(return)
-static bool FindElement(
-    _In_ ULONG                                   UnitID,
-    _In_ AudioNodeKind                           AudioNodeKind,
-    _In_reads_(NumOfElements) const ACXELEMENT * Elements,
-    _In_ ULONG                                   NumOfElements,
-    _Out_ ACXELEMENT &                           Element
-)
-{
-    PAGED_CODE();
-
-    for (ULONG elementIndex = 0; elementIndex < NumOfElements; elementIndex++)
-    {
-        ELEMENT_CONTEXT * elementContext = GetElementContext(Elements[elementIndex]);
-        ASSERT(elementContext);
-        if ((elementContext->UnitID == UnitID) && (elementContext->AudioNodeKind == toULONG(AudioNodeKind)))
-        {
-            Element = Elements[elementIndex];
-            return true;
-        }
-    }
-
-    return false;
-}
-
-PAGED_CODE_SEG
 NTSTATUS
 Codec_EvtAcxPinRetrieveName(
     _In_ ACXPIN           Pin,
@@ -2008,56 +1982,46 @@ Codec_AllocateElements(
     const ULONG              SupportedSampleRate
 )
 {
-    NTSTATUS              status = STATUS_SUCCESS;
-    WDF_OBJECT_ATTRIBUTES attributes{};
-    const ULONG           sizeOfPins = 0x100;
-    const ULONG           sizeOfElements = 0x100 * 3; // unitID max * 3 (volume + mute + agc)
-    const ULONG           sizeOfConnections = sizeOfElements;
-    WDFMEMORY             pinsMemory = nullptr;
-    ACXPIN *              pins = nullptr;
-    ULONG                 pinIndex = 0;
-    WDFMEMORY             elementsMemory = nullptr;
-    ACXELEMENT *          elements = nullptr;
-    ULONG                 elementIndex = 0;
-    WDFMEMORY             connectionsMemory = nullptr;
-    ACX_CONNECTION *      connections = nullptr;
-    ULONG                 connectionIndex = 0;
-    bool                  hasMoreData = true;
-    TraversalDirection    traversalDirection = TraversalDirection::Forward;
-    AudioNodeKind         audioNodeKind = AudioNodeKind::Invalid;
-    UCHAR                 unitID = USBAudioConfiguration::InvalidID;
-    UCHAR                 nextUnitID = USBAudioConfiguration::InvalidID;
-    ULONGLONG             pendingUnitMap[4] = {};
-    ULONG                 counter = 0;
-    ACXELEMENT            currentElement{};
-    ACXELEMENT            prevElement{};
-    ULONG                 pinID = 0;
+    enum
+    {
+        DefaultSizeOfArray = 0x10
+    };
+
+    NTSTATUS                                          status = STATUS_SUCCESS;
+    WDF_OBJECT_ATTRIBUTES                             attributes{};
+    VariableArray<ACXPIN, DefaultSizeOfArray>         pins;
+    VariableArray<ACXELEMENT, DefaultSizeOfArray>     elements;
+    VariableArray<ACX_CONNECTION, DefaultSizeOfArray> connections;
+    bool                                              hasMoreData = true;
+    TraversalDirection                                traversalDirection = TraversalDirection::Forward;
+    AudioNodeKind                                     audioNodeKind = AudioNodeKind::Invalid;
+    UCHAR                                             unitID = USBAudioConfiguration::InvalidID;
+    UCHAR                                             nextUnitID = USBAudioConfiguration::InvalidID;
+    ULONGLONG                                         pendingUnitMap[4] = {};
+    ULONG                                             counter = 0;
+    ACXELEMENT                                        currentElement{};
+    ACXELEMENT                                        prevElement{};
+    ULONG                                             pinID = 0;
 
     PAGED_CODE();
 
     auto allocateElementsScope = wil::scope_exit([&]() {
-        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, " IsInput = %!bool!, %u pins, %u elements, %u connections", IsInput, pinIndex, elementIndex, connectionIndex);
-        if (pinsMemory != nullptr)
-        {
-            WdfObjectDelete(pinsMemory);
-            pinsMemory = nullptr;
-            pins = nullptr;
-        }
-
-        if (elementsMemory != nullptr)
-        {
-            WdfObjectDelete(elementsMemory);
-            elementsMemory = nullptr;
-            elements = nullptr;
-        }
-
-        if (connectionsMemory != nullptr)
-        {
-            WdfObjectDelete(connectionsMemory);
-            connectionsMemory = nullptr;
-            connections = nullptr;
-        }
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, " IsInput = %!bool!, %u pins, %u elements, %u connections", IsInput, pins.GetNumOfArray(), elements.GetNumOfArray(), connections.GetNumOfArray());
     });
+
+    auto findElement = [&elements](ULONG unitID, AudioNodeKind audioNodeKind, ACXELEMENT & currentElement) noexcept -> bool {
+        for (auto & element : elements)
+        {
+            ELEMENT_CONTEXT * elementContext = GetElementContext(element);
+            ASSERT(elementContext);
+            if ((elementContext->UnitID == unitID) && (elementContext->AudioNodeKind == toULONG(audioNodeKind)))
+            {
+                currentElement = element;
+                return true;
+            }
+        }
+        return false;
+    };
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
 
@@ -2076,24 +2040,6 @@ Codec_AllocateElements(
     circuitContext->NumOfVolumeElements = 0;
     circuitContext->NumOfMuteElements = 0;
 
-    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.ParentObject = Device;
-    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXPIN) * sizeOfPins, &pinsMemory, nullptr));
-    pins = (ACXPIN *)WdfMemoryGetBuffer(pinsMemory, nullptr);
-    RtlZeroMemory(pins, sizeof(ACXPIN) * sizeOfPins);
-
-    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.ParentObject = Device;
-    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACXELEMENT) * sizeOfElements, &elementsMemory, nullptr));
-    elements = (ACXELEMENT *)WdfMemoryGetBuffer(elementsMemory, nullptr);
-    RtlZeroMemory(elements, sizeof(ACXELEMENT) * sizeOfElements);
-
-    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.ParentObject = Device;
-    RETURN_NTSTATUS_IF_FAILED(WdfMemoryCreate(&attributes, NonPagedPoolNx, DRIVER_TAG, sizeof(ACX_CONNECTION) * sizeOfConnections, &connectionsMemory, nullptr));
-    connections = (ACX_CONNECTION *)WdfMemoryGetBuffer(connectionsMemory, nullptr);
-    RtlZeroMemory(connections, sizeof(ACX_CONNECTION) * sizeOfConnections);
-
     if ((IsInput && AudioIsochronousEngine->HasInputIsochronousInterface()) || (!IsInput && AudioIsochronousEngine->HasOutputIsochronousInterface()))
     {
         while (hasMoreData)
@@ -2104,102 +2050,129 @@ Codec_AllocateElements(
 
             switch (audioNodeKind)
             {
-            case AudioNodeKind::RenderHostPin:
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderHostPin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID, SupportedSampleRate));
-                currentElement = (ACXELEMENT)pins[pinIndex];
+            case AudioNodeKind::RenderHostPin: {
+                ACXPIN pin{};
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderHostPin(AudioIsochronousEngine, Device, Circuit, pinID, pin, unitID, SupportedSampleRate));
+                RETURN_NTSTATUS_IF_FAILED(pins.Append(Circuit, pin));
+                currentElement = (ACXELEMENT)pin;
                 pinID++;
-                pinIndex++;
-                break;
-            case AudioNodeKind::RenderBridgePin:
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderBridgePin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID));
-                currentElement = (ACXELEMENT)pins[pinIndex];
+            }
+            break;
+            case AudioNodeKind::RenderBridgePin: {
+                ACXPIN pin{};
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateRenderBridgePin(AudioIsochronousEngine, Device, Circuit, pinID, pin, unitID));
+                RETURN_NTSTATUS_IF_FAILED(pins.Append(Circuit, pin));
+                currentElement = (ACXELEMENT)pin;
                 pinID++;
-                pinIndex++;
-                break;
-            case AudioNodeKind::CaptureHostPin:
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateCaptureHostPin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID, SupportedSampleRate));
-                currentElement = (ACXELEMENT)pins[pinIndex];
+            }
+            break;
+            case AudioNodeKind::CaptureHostPin: {
+                ACXPIN pin{};
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateCaptureHostPin(AudioIsochronousEngine, Device, Circuit, pinID, pin, unitID, SupportedSampleRate));
+                RETURN_NTSTATUS_IF_FAILED(pins.Append(Circuit, pin));
+                currentElement = (ACXELEMENT)pin;
                 pinID++;
-                pinIndex++;
-                break;
-            case AudioNodeKind::CaptureBridgePin:
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateCaptureBridgePin(AudioIsochronousEngine, Device, Circuit, pinID, pins[pinIndex], unitID));
-                currentElement = (ACXELEMENT)pins[pinIndex];
+            }
+            break;
+            case AudioNodeKind::CaptureBridgePin: {
+                ACXPIN pin{};
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateCaptureBridgePin(AudioIsochronousEngine, Device, Circuit, pinID, pin, unitID));
+                RETURN_NTSTATUS_IF_FAILED(pins.Append(Circuit, pin));
+                currentElement = (ACXELEMENT)pin;
                 pinID++;
-                pinIndex++;
-                break;
-            case AudioNodeKind::VolumeElement: // Feature Unit (FU_VOLUME_CONTROL) : KSNODETYPE_VOLUME
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateVolumeElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID, 0));
-                currentElement = elements[elementIndex];
-                circuitContext->NumOfVolumeElements++;
-                elementIndex++;
-                break;
-            case AudioNodeKind::MuteElement: // Feature Unit (FU_MUTE_CONTROL) : KSNODETYPE_MUTE
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuteElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID, 0));
-                currentElement = elements[elementIndex];
+            }
+            break;
+            case AudioNodeKind::VolumeElement: { // Feature Unit (FU_VOLUME_CONTROL) : KSNODETYPE_VOLUME
+                ACXELEMENT element{};
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateVolumeElement(AudioIsochronousEngine, Device, Circuit, element, unitID, 0));
+                RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
+                currentElement = element;
+            }
+            break;
+            case AudioNodeKind::MuteElement: { // Feature Unit (FU_MUTE_CONTROL) : KSNODETYPE_MUTE
+                ACXELEMENT element{};
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuteElement(AudioIsochronousEngine, Device, Circuit, element, unitID, 0));
+                RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
+                currentElement = element;
                 circuitContext->NumOfMuteElements++;
-                elementIndex++;
-                break;
-            case AudioNodeKind::AgcElement: // Feature Unit (FU_AUTOMATIC_GAIN_CONTROL) : KSNODETYPE_AGC
-                RETURN_NTSTATUS_IF_FAILED(Codec_CreateAgcElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
-                currentElement = elements[elementIndex];
+            }
+            break;
+            case AudioNodeKind::AgcElement: { // Feature Unit (FU_AUTOMATIC_GAIN_CONTROL) : KSNODETYPE_AGC
+                ACXELEMENT element{};
+                RETURN_NTSTATUS_IF_FAILED(Codec_CreateAgcElement(AudioIsochronousEngine, Device, Circuit, element, unitID));
+                RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
+                currentElement = element;
                 circuitContext->NumOfAgcElements++;
-                elementIndex++;
-                break;
-            case AudioNodeKind::SuperMixElement: // Mixer Unit : KSNODETYPE_SUPERMIX
-                if (!FindElement(unitID, AudioNodeKind::SuperMixElement, elements, elementIndex, currentElement))
+            }
+            break;
+            case AudioNodeKind::SuperMixElement: { // Mixer Unit : KSNODETYPE_SUPERMIX
+                if (!findElement(unitID, AudioNodeKind::SuperMixElement, currentElement))
                 {
-                    RETURN_NTSTATUS_IF_FAILED(Codec_CreateSuperMixElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
-                    currentElement = elements[elementIndex];
-                    elementIndex++;
+                    ACXELEMENT element{};
+                    RETURN_NTSTATUS_IF_FAILED(Codec_CreateSuperMixElement(AudioIsochronousEngine, Device, Circuit, element, unitID));
+                    RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
+                    currentElement = element;
                 }
                 else
                 {
                     shouldConnect = false;
                 }
-                break;
-            case AudioNodeKind::MuxElement: // Selector Unit : KSNODETYPE_MUX
-                if (!FindElement(unitID, AudioNodeKind::MuxElement, elements, elementIndex, currentElement))
+            }
+            break;
+            case AudioNodeKind::MuxElement: { // Selector Unit : KSNODETYPE_MUX
+                if (!findElement(unitID, AudioNodeKind::MuxElement, currentElement))
                 {
-                    RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuxElement(AudioIsochronousEngine, Device, Circuit, elements[elementIndex], unitID));
-                    currentElement = elements[elementIndex];
-                    elementIndex++;
+                    ACXELEMENT element{};
+                    RETURN_NTSTATUS_IF_FAILED(Codec_CreateMuxElement(AudioIsochronousEngine, Device, Circuit, element, unitID));
+                    RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
+                    currentElement = element;
                 }
                 else
                 {
                     shouldConnect = false;
                 }
-                break;
-            case AudioNodeKind::SrcElement: // Sampling Rate Converter Unit : KSNODETYPE_SRC
-                // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForSRC(unitID));
-                // currentElement = elements[elementIndex];
-                // elementIndex++;
-                break;
-            case AudioNodeKind::EffectElement: // Effect Unit : KSNODETYPE_3D_EFFECTS
-                // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForEffect(unitID));
-                // currentElement = elements[elementIndex];
-                // elementIndex++;
-                break;
-            case AudioNodeKind::ProcessingElement: // Processing Unit : KSNODETYPE_MICROPHONE_ARRAY_PROCESSOR ?
-                // RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForProcessing(unitID));
-                // currentElement = elements[elementIndex];
-                // elementIndex++;
-                break;
+            }
+            break;
+            case AudioNodeKind::SrcElement: { // Sampling Rate Converter Unit : KSNODETYPE_SRC
+                // ACXELEMENT element{};
+                // RETURN_NTSTATUS_IF_FAILED(Codec_CreateSrcElement(AudioIsochronousEngine, Device, Circuit, element, unitID, 0));
+                // RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
+                // currentElement = element;
+                // circuitContext->NumOfSrcElements++;
+            }
+            break;
+            case AudioNodeKind::EffectElement: { // Effect Unit : KSNODETYPE_3D_EFFECTS
+                // ACXELEMENT element{};
+                // RETURN_NTSTATUS_IF_FAILED(Codec_CreateEffectElement(AudioIsochronousEngine, Device, Circuit, element, unitID, 0));
+                // RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
+                // currentElement = element;
+                // circuitContext->NumOfEffectElements++;
+            }
+            break;
+            case AudioNodeKind::ProcessingElement: { // Processing Unit : KSNODETYPE_MICROPHONE_ARRAY_PROCESSOR ?
+                // ACXELEMENT element{};
+                // RETURN_NTSTATUS_IF_FAILED(Codec_CreateProessingElement(AudioIsochronousEngine, Device, Circuit, element, unitID, 0));
+                // RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
+                // currentElement = element;
+                // circuitContext->NumOfProessingElements++;
+            }
+            break;
             default:
                 break;
             }
             unitID = nextUnitID;
             if ((counter != 0) && shouldConnect)
             {
+                ACX_CONNECTION connection{};
                 if (traversalDirection == TraversalDirection::Forward)
                 {
-                    Codec_ConnectElement(Circuit, connections[connectionIndex], prevElement, currentElement);
+                    Codec_ConnectElement(Circuit, connection, prevElement, currentElement);
                 }
                 else
                 {
-                    Codec_ConnectElement(Circuit, connections[connectionIndex], currentElement, prevElement);
+                    Codec_ConnectElement(Circuit, connection, currentElement, prevElement);
                 }
-                connectionIndex++;
+                RETURN_NTSTATUS_IF_FAILED(connections.Append(Circuit, connection));
             }
             counter++;
             if (counter > 0xff)
@@ -2210,23 +2183,29 @@ Codec_AllocateElements(
             prevElement = currentElement;
         }
 
-        if (elementIndex != 0)
+        if (elements.GetNumOfArray() != 0)
         {
-            RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddElements(Circuit, elements, elementIndex));
+            RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddElements(Circuit, elements.begin(), elements.GetNumOfArray()));
         }
-        RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddPins(Circuit, pins, pinIndex));
-
-        for (ULONG index = 0; index < connectionIndex; index++)
+        if (pins.GetNumOfArray() != 0)
         {
-            ELEMENT_CONTEXT * elementContext = GetElementContext(connections[index].FromObject);
+            RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddPins(Circuit, pins.begin(), pins.GetNumOfArray()));
+        }
+
+        for (auto & connection : connections)
+        {
+            ELEMENT_CONTEXT * elementContext = GetElementContext(connection.FromObject);
             if ((elementContext != nullptr) && (elementContext->AudioNodeKind == toULONG(AudioNodeKind::MuxElement)))
             {
-                PMUX_ELEMENT_CONTEXT muxContext = GetMuxElementContext(connections[index].FromObject);
-                connections[index].FromPin.Id = muxContext->ConnectPinIndex;
+                PMUX_ELEMENT_CONTEXT muxContext = GetMuxElementContext(connection.FromObject);
+                connection.FromPin.Id = muxContext->ConnectPinIndex;
             }
         }
 
-        RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddConnections(Circuit, connections, connectionIndex));
+        if (connections.GetNumOfArray() != 0)
+        {
+            RETURN_NTSTATUS_IF_FAILED(AcxCircuitAddConnections(Circuit, connections.begin(), connections.GetNumOfArray()));
+        }
 
         if (circuitContext->NumOfVolumeElements != 0)
         {
@@ -2255,28 +2234,28 @@ Codec_AllocateElements(
         if ((circuitContext->NumOfVolumeElements != 0) || (circuitContext->NumOfMuteElements != 0) || (circuitContext->NumOfAgcElements != 0))
         {
             ULONG volumeIndex = 0, muteIndex = 0, agcIndex = 0;
-            for (ULONG index = 0; index < elementIndex; index++)
+            for (auto & element : elements)
             {
-                ELEMENT_CONTEXT * elementContext = GetElementContext(elements[index]);
+                ELEMENT_CONTEXT * elementContext = GetElementContext(element);
                 ASSERT(elementContext);
                 switch (elementContext->AudioNodeKind)
                 {
                 case AudioNodeKind::VolumeElement:
                     if (volumeIndex < circuitContext->NumOfVolumeElements)
                     {
-                        circuitContext->VolumeElements[volumeIndex++] = (ACXVOLUME)elements[index];
+                        circuitContext->VolumeElements[volumeIndex++] = (ACXVOLUME)element;
                     }
                     break;
                 case AudioNodeKind::MuteElement:
                     if (muteIndex < circuitContext->NumOfMuteElements)
                     {
-                        circuitContext->MuteElements[muteIndex++] = (ACXMUTE)elements[index];
+                        circuitContext->MuteElements[muteIndex++] = (ACXMUTE)element;
                     }
                     break;
                 case AudioNodeKind::AgcElement:
                     if (agcIndex < circuitContext->NumOfAgcElements)
                     {
-                        circuitContext->AgcElements[agcIndex++] = elements[index];
+                        circuitContext->AgcElements[agcIndex++] = element;
                     }
                     break;
                 default:
