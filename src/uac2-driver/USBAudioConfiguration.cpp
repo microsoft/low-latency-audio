@@ -1245,6 +1245,20 @@ NTSTATUS USBAudio1ControlInterface::GetRangeSampleFrequency(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
+NTSTATUS USBAudio1ControlInterface::GetTerminalName(
+    PDEVICE_CONTEXT /* deviceContext */,
+    UCHAR /* unitID */,
+    WDFMEMORY & /* channelMemory */,
+    PWSTR & /* channelName */
+)
+{
+    PAGED_CODE();
+
+    return STATUS_NOT_SUPPORTED;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
 NTSTATUS USBAudio1ControlInterface::GetInformationForHostPin(
     PDEVICE_CONTEXT /* deviceContext */,
     UCHAR /* unitID */,
@@ -3517,6 +3531,76 @@ bool USBAudio2ControlInterface::InterlockedTestEntityBit(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
+NTSTATUS USBAudio2ControlInterface::GetTerminalName(
+    PDEVICE_CONTEXT deviceContext,
+    UCHAR           unitID,
+    WDFMEMORY &     channelMemory,
+    PWSTR &         channelName
+)
+{
+    NTSTATUS status = STATUS_NOT_SUPPORTED;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
+
+    UCHAR channelNames = USBAudioConfiguration::InvalidString;
+    channelMemory = nullptr;
+    channelName = nullptr;
+
+    if (unitID != USBAudioConfiguration::InvalidID)
+    {
+        for (auto & outputTerminalDescriptor : m_acOutputTerminals)
+        {
+            if (outputTerminalDescriptor->bTerminalID == unitID)
+            {
+                if ((outputTerminalDescriptor->bmControls[0] | (((USHORT)outputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_OUTPUT_TERMINAL_CONTROL_CONNECTOR_CONTROL_MASK)
+                {
+                    NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR connectorState{};
+                    RETURN_NTSTATUS_IF_FAILED(GetCurrentConnectorState(deviceContext, unitID, connectorState));
+                    channelNames = connectorState.iChannelNames;
+                }
+                if (channelNames == USBAudioConfiguration::InvalidString)
+                {
+                    channelNames = outputTerminalDescriptor->iTerminal;
+                }
+                break;
+            }
+        }
+
+        if (channelNames == USBAudioConfiguration::InvalidString)
+        {
+            for (auto & inputTerminalDescriptor : m_acInputTerminals)
+            {
+                if (inputTerminalDescriptor->bTerminalID == unitID)
+                {
+                    if ((inputTerminalDescriptor->bmControls[0] | (((USHORT)inputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_INPUT_TERMINAL_CONTROL_CONNECTOR_CONTROL_MASK)
+                    {
+                        NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR connectorState{};
+                        RETURN_NTSTATUS_IF_FAILED(GetCurrentConnectorState(deviceContext, unitID, connectorState));
+                        channelNames = connectorState.iChannelNames;
+                    }
+                    if (channelNames == USBAudioConfiguration::InvalidString)
+                    {
+                        channelNames = inputTerminalDescriptor->iTerminal;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+    if (channelNames != USBAudioConfiguration::InvalidString)
+    {
+        status = USBAudioConfiguration::GetStringDescriptor(deviceContext->UsbDevice, channelNames, LANGID_EN_US, channelMemory, channelName);
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
+
+    return status;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
 NTSTATUS USBAudio2ControlInterface::GetInformationForHostPin(
     PDEVICE_CONTEXT /* deviceContext */,
     UCHAR   unitID,
@@ -3556,7 +3640,7 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
         {
             terminalType = outputTerminalDescriptor->wTerminalType;
 
-            if ((outputTerminalDescriptor->bmControls[0] | (((USHORT)outputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_OUTPUT_TERMINAL_CONTROL_COPY_PROTECT_CONTROL_MASK)
+            if ((outputTerminalDescriptor->bmControls[0] | (((USHORT)outputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_OUTPUT_TERMINAL_CONTROL_CONNECTOR_CONTROL_MASK)
             {
                 RETURN_NTSTATUS_IF_FAILED(GetCurrentConnectorState(deviceContext, unitID, connectorState));
                 numOfChannels = connectorState.bNrChannels;
@@ -3583,7 +3667,7 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
         {
             terminalType = inputTerminalDescriptor->wTerminalType;
 
-            if ((inputTerminalDescriptor->bmControls[0] | (((USHORT)inputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_INPUT_TERMINAL_CONTROL_COPY_PROTECT_CONTROL_MASK)
+            if ((inputTerminalDescriptor->bmControls[0] | (((USHORT)inputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_INPUT_TERMINAL_CONTROL_CONNECTOR_CONTROL_MASK)
             {
                 RETURN_NTSTATUS_IF_FAILED(GetCurrentConnectorState(deviceContext, unitID, connectorState));
                 numOfChannels = connectorState.bNrChannels;
@@ -7284,6 +7368,52 @@ USBAudioStreamInterfaceGroup::GetStreamChannelInfoAdjusted(
     return STATUS_SUCCESS;
 }
 
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
+USBAudioStreamInterfaceGroup::GetCurrentTerminalName(
+    bool                              isInput,
+    const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
+    WDFMEMORY &                       channelMemory,
+    PWSTR &                           channelName
+)
+{
+    NTSTATUS status = STATUS_NOT_SUPPORTED;
+    UCHAR    terminalLink = USBAudioConfiguration::InvalidID;
+    UCHAR    numOfChannels = 0;
+    USHORT   terminalType = 0;
+    UCHAR    terminalID = USBAudioConfiguration::InvalidID;
+    UCHAR    volumeUnitID = USBAudioConfiguration::InvalidID;
+    UCHAR    muteUnitID = USBAudioConfiguration::InvalidID;
+
+    PAGED_CODE();
+
+	channelMemory = nullptr;
+	channelName = nullptr;
+
+    RETURN_NTSTATUS_IF_FAILED(GetCurrentTerminalLink(isInput, audioStreamPropertySet, terminalLink));
+
+    if (terminalLink != USBAudioConfiguration::InvalidID)
+    {
+        if (isInput)
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - terminal link 0x%02x", terminalLink);
+            status = m_usbAudioControlInterface->SearchInputTerminalFromOutputTerminal(m_deviceContext, terminalLink, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID);
+        }
+        else
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - terminal link 0x%02x", terminalLink);
+            status = m_usbAudioControlInterface->SearchOutputTerminalFromInputTerminal(m_deviceContext, terminalLink, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID);
+        }
+
+        if (terminalID != USBAudioConfiguration::InvalidID)
+        {
+            status = m_usbAudioControlInterface->GetTerminalName(m_deviceContext, terminalID, channelMemory, channelName);
+        }
+    }
+    return status;
+}
+
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS
@@ -7817,6 +7947,48 @@ USBAudioStreamInterfaceGroup::GetGroupIndex()
     PAGED_CODE();
 
     return m_groupIndex;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+ULONG
+USBAudioStreamInterfaceGroup::GetInputGroupIndex()
+{
+    PAGED_CODE();
+
+    return m_inputGroupIndex;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+ULONG
+USBAudioStreamInterfaceGroup::GetOutputGroupIndex()
+{
+    PAGED_CODE();
+
+    return m_outputGroupIndex;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+void USBAudioStreamInterfaceGroup::SetInputGroupIndex(
+    ULONG inputGroupIndex
+)
+{
+    PAGED_CODE();
+
+    m_inputGroupIndex = inputGroupIndex;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+void USBAudioStreamInterfaceGroup::SetOutputGroupIndex(
+    ULONG outputGroupIndex
+)
+{
+    PAGED_CODE();
+
+    m_outputGroupIndex = outputGroupIndex;
 }
 
 _Use_decl_annotations_
@@ -9769,7 +9941,7 @@ PAGED_CODE_SEG
 NTSTATUS USBAudioConfiguration::BuildUsbAudioStreamInterfaceGroups()
 {
     NTSTATUS status = STATUS_SUCCESS;
-    ULONG    groupIndex = 0;
+    ULONG    groupIndex = 0, inputGroupIndex = 0, outputGroupIndex = 0;
 
     PAGED_CODE();
 
@@ -9808,6 +9980,22 @@ NTSTATUS USBAudioConfiguration::BuildUsbAudioStreamInterfaceGroups()
         }
     }
 
+    for (auto usbAudioStreamInterfaceGroup : m_usbAudioStreamInterfaceGroups)
+    {
+        if (usbAudioStreamInterfaceGroup->HasInputIsochronousInterface() && !usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface())
+        {
+            usbAudioStreamInterfaceGroup->SetInputGroupIndex(inputGroupIndex++);
+        }
+        else if (!usbAudioStreamInterfaceGroup->HasInputIsochronousInterface() && usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface())
+        {
+            usbAudioStreamInterfaceGroup->SetOutputGroupIndex(outputGroupIndex++);
+        }
+        else
+        {
+            usbAudioStreamInterfaceGroup->SetInputGroupIndex(inputGroupIndex++);
+            usbAudioStreamInterfaceGroup->SetOutputGroupIndex(outputGroupIndex++);
+        }
+    }
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
 
     return status;

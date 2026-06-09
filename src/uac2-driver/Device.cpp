@@ -1692,7 +1692,7 @@ VOID EvtUSBAudioAcxDriverGetAudioProperty(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
@@ -1748,7 +1748,7 @@ VOID EvtUSBAudioAcxDriverGetChannelInfo(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     ACX_REQUEST_PARAMETERS_INIT(&params);
@@ -1795,7 +1795,7 @@ VOID EvtUSBAudioAcxDriverGetClockInfo(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     ACX_REQUEST_PARAMETERS_INIT(&params);
@@ -1843,7 +1843,7 @@ VOID EvtUSBAudioAcxDriverSetClockSource(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     ACX_REQUEST_PARAMETERS_INIT(&params);
@@ -1891,7 +1891,7 @@ VOID EvtUSBAudioAcxDriverSetSampleFormat(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
@@ -1940,7 +1940,7 @@ VOID EvtUSBAudioAcxDriverChangeSampleRate(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
@@ -2001,7 +2001,7 @@ Return Value:
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
@@ -2048,7 +2048,7 @@ VOID EvtUSBAudioAcxDriverStartAsioStream(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
@@ -2094,7 +2094,7 @@ VOID EvtUSBAudioAcxDriverStopAsioStream(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
@@ -2141,7 +2141,7 @@ VOID EvtUSBAudioAcxDriverSetAsioBuffer(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
@@ -2208,7 +2208,7 @@ VOID EvtUSBAudioAcxDriverUnsetAsioBuffer(
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
@@ -2267,7 +2267,7 @@ Return Value:
     // ACXSTREAM              stream = static_cast<ACXSTREAM>(object);
     // ASSERT(stream != nullptr);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     PAGED_CODE();
@@ -2327,7 +2327,7 @@ VOID EvtUSBAudioAcxDriverGetBufferPeriod(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(params.Parameters.Property.ValueCb == sizeof(ULONG));
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     IF_TRUE_ACTION_JUMP(
@@ -2382,7 +2382,7 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(params.Parameters.Property.ValueCb == sizeof(ULONG));
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     IF_TRUE_ACTION_JUMP(
@@ -2439,7 +2439,7 @@ VOID EvtUSBAudioAcxDriverGetInputLatency(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(params.Parameters.Property.ValueCb == sizeof(LONG));
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     IF_TRUE_ACTION_JUMP(
@@ -2497,7 +2497,7 @@ VOID EvtUSBAudioAcxDriverGetOutputLatency(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(params.Parameters.Property.ValueCb == sizeof(LONG));
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     IF_TRUE_ACTION_JUMP(
@@ -2554,7 +2554,7 @@ VOID EvtUSBAudioAcxDriverSetAsioDevice(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(0 < params.Parameters.Property.ValueCb);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     IF_TRUE_ACTION_JUMP(
@@ -2632,7 +2632,7 @@ VOID EvtUSBAudioAcxDriverGetAsioDevice(
     ASSERT(params.Parameters.Property.Value != nullptr);
     ASSERT(0 < params.Parameters.Property.ValueCb);
 
-    CODEC_RENDER_CIRCUIT_CONTEXT * circuitContext = GetRenderCircuitContext((ACXCIRCUIT)object);
+    CODEC_CIRCUIT_CONTEXT * circuitContext = GetCircuitContext((ACXCIRCUIT)object);
     ASSERT(circuitContext != nullptr);
 
     NTSTATUS status = STATUS_NOT_SUPPORTED;

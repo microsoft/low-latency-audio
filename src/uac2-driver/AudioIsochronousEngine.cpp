@@ -122,20 +122,6 @@ AudioIsochronousEngine::AudioIsochronousEngine(
     m_audioStreamPropertySet.AudioProperty.CurrentSampleFormat = UACSampleFormat::UAC_SAMPLE_FORMAT_PCM;
     m_audioStreamPropertySet.AudioProperty.ProductName[0] = NULL;
 
-    if (m_deviceContext->UsbAudioConfiguration->IsMultipleClockSources())
-    {
-        DECLARE_UNICODE_STRING_SIZE(productName, UAC_MAX_PRODUCT_NAME_LENGTH);
-        NTSTATUS status = RtlUnicodeStringPrintf(&productName, L"%ws %d", m_deviceContext->ProductName, m_usbAudioStreamInterfaceGroup->GetGroupIndex());
-        if (NT_SUCCESS(status))
-        {
-            RtlStringCbCopyW(m_audioStreamPropertySet.AudioProperty.ProductName, UAC_MAX_PRODUCT_NAME_LENGTH * sizeof(WCHAR), productName.Buffer);
-        }
-    }
-    if (m_audioStreamPropertySet.AudioProperty.ProductName[0] == NULL)
-    {
-        RtlStringCbCopyW(m_audioStreamPropertySet.AudioProperty.ProductName, UAC_MAX_PRODUCT_NAME_LENGTH * sizeof(WCHAR), m_deviceContext->ProductName);
-    }
-
     if (m_deviceContext->IsDeviceHighSpeed || m_deviceContext->IsDeviceSuperSpeed)
     {
         // USB 2.0 or USB 3.0
@@ -348,6 +334,58 @@ AudioIsochronousEngine::Initialize()
     // an area less than 4GB.
     //
     RETURN_NTSTATUS_IF_FAILED(m_contiguousMemory->Allocate(m_usbAudioStreamInterfaceGroup, m_deviceContext->SupportedControl.MaxBurstOverride, UAC_MAX_CLASSIC_FRAMES_PER_IRP, m_deviceContext->FramesPerMs));
+
+    if (m_deviceContext->UsbAudioConfiguration->IsMultipleClockSources())
+    {
+        DECLARE_UNICODE_STRING_SIZE(productName, UAC_MAX_PRODUCT_NAME_LENGTH);
+
+        if (m_usbAudioStreamInterfaceGroup->HasInputIsochronousInterface() && !m_usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface())
+        {
+            WDFMEMORY channelMemory = nullptr;
+            PWSTR     channelName = nullptr;
+
+            status = m_usbAudioStreamInterfaceGroup->GetCurrentTerminalName(true, m_audioStreamPropertySet, channelMemory, channelName);
+            if (NT_SUCCESS(status) && (channelMemory != nullptr))
+            {
+                status = RtlUnicodeStringPrintf(&productName, L"%ws %ws Input", m_deviceContext->ProductName, channelName);
+                WdfObjectDelete(channelMemory);
+                channelMemory = nullptr;
+            }
+            else
+            {
+                status = RtlUnicodeStringPrintf(&productName, L"%ws Input %d", m_deviceContext->ProductName, m_usbAudioStreamInterfaceGroup->GetInputGroupIndex() + 1);
+            }
+        }
+        else if (!m_usbAudioStreamInterfaceGroup->HasInputIsochronousInterface() && m_usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface())
+        {
+            WDFMEMORY channelMemory = nullptr;
+            PWSTR     channelName = nullptr;
+
+            status = m_usbAudioStreamInterfaceGroup->GetCurrentTerminalName(false, m_audioStreamPropertySet, channelMemory, channelName);
+            if (NT_SUCCESS(status) && (channelMemory != nullptr))
+            {
+                status = RtlUnicodeStringPrintf(&productName, L"%ws %ws Output", m_deviceContext->ProductName, channelName);
+                WdfObjectDelete(channelMemory);
+                channelMemory = nullptr;
+            }
+            else
+            {
+                status = RtlUnicodeStringPrintf(&productName, L"%ws Output %d", m_deviceContext->ProductName, m_usbAudioStreamInterfaceGroup->GetInputGroupIndex() + 1);
+            }
+        }
+        else
+        {
+            status = RtlUnicodeStringPrintf(&productName, L"%ws %d", m_deviceContext->ProductName, m_usbAudioStreamInterfaceGroup->GetGroupIndex() + 1);
+        }
+        if (NT_SUCCESS(status))
+        {
+            RtlStringCbCopyW(m_audioStreamPropertySet.AudioProperty.ProductName, UAC_MAX_PRODUCT_NAME_LENGTH * sizeof(WCHAR), productName.Buffer);
+        }
+    }
+    if (m_audioStreamPropertySet.AudioProperty.ProductName[0] == NULL)
+    {
+        RtlStringCbCopyW(m_audioStreamPropertySet.AudioProperty.ProductName, UAC_MAX_PRODUCT_NAME_LENGTH * sizeof(WCHAR), m_deviceContext->ProductName);
+    }
 
     return status;
 }
@@ -2651,6 +2689,20 @@ AudioIsochronousEngine::GetStreamChannelInfoAdjusted(
     PAGED_CODE();
 
     return m_usbAudioStreamInterfaceGroup->GetStreamChannelInfoAdjusted(isInput, m_audioStreamPropertySet, numOfChannels, terminalType, terminalID, volumeUnitID, muteUnitID);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
+AudioIsochronousEngine::GetCurrentTerminalName(
+    bool        isInput,
+    WDFMEMORY & memory,
+    PWSTR &     channelName
+)
+{
+	PAGED_CODE();
+
+    return m_usbAudioStreamInterfaceGroup->GetCurrentTerminalName(isInput, m_audioStreamPropertySet, memory, channelName);
 }
 
 _Use_decl_annotations_

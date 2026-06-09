@@ -441,15 +441,6 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DSP_PIN_CONTEXT, GetDspPinContext)
 //
 // Define render circuit context.
 //
-typedef struct _CODEC_RENDER_CIRCUIT_CONTEXT
-{
-    ACXAUDIOENGINE           AudioEngineElement;
-    ULONG                    NumOfDevices;
-    AudioIsochronousEngine * AudioIsochronousEngine;
-} CODEC_RENDER_CIRCUIT_CONTEXT, *PCODEC_RENDER_CIRCUIT_CONTEXT;
-
-WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_RENDER_CIRCUIT_CONTEXT, GetRenderCircuitContext)
-
 typedef enum
 {
     CodecRenderHostPin = 0,
@@ -600,14 +591,6 @@ CodecR_CreateRenderCircuit(
 //
 // Define capture circuit context.
 //
-typedef struct _CODEC_CAPTURE_CIRCUIT_CONTEXT
-{
-    ULONG NumOfDevices;
-    // ACXKEYWORDSPOTTER KeywordSpotter;
-    AudioIsochronousEngine * AudioIsochronousEngine;
-} CODEC_CAPTURE_CIRCUIT_CONTEXT, *PCODEC_CAPTURE_CIRCUIT_CONTEXT;
-
-WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_CAPTURE_CIRCUIT_CONTEXT, GetCaptureCircuitContext)
 
 typedef enum
 {
@@ -724,15 +707,17 @@ NTSTATUS Codec_CreateCaptureEndpointPin(
 //
 typedef struct _CODEC_CIRCUIT_CONTEXT
 {
-    ULONG        NumOfVolumeElements;
-    WDFMEMORY    VolumeElementsMemory;
-    ACXVOLUME *  VolumeElements;
-    ULONG        NumOfMuteElements;
-    WDFMEMORY    MuteElementsMemory;
-    ACXMUTE *    MuteElements;
-    ULONG        NumOfAgcElements;
-    WDFMEMORY    AgcElementsMemory;
-    ACXELEMENT * AgcElements;
+    ULONG                    NumOfDevices;
+    AudioIsochronousEngine * AudioIsochronousEngine;
+    ULONG                    NumOfVolumeElements;
+    WDFMEMORY                VolumeElementsMemory;
+    ACXVOLUME *              VolumeElements;
+    ULONG                    NumOfMuteElements;
+    WDFMEMORY                MuteElementsMemory;
+    ACXMUTE *                MuteElements;
+    ULONG                    NumOfAgcElements;
+    WDFMEMORY                AgcElementsMemory;
+    ACXELEMENT *             AgcElements;
 } CODEC_CIRCUIT_CONTEXT, *PCODEC_CIRCUIT_CONTEXT;
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_CIRCUIT_CONTEXT, GetCircuitContext)
 
@@ -775,6 +760,9 @@ EVT_ACX_OBJECT_PROCESS_REQUEST Codec_EvtUSBAudioAcxDriverAgcProcessRequest;
 
 PAGED_CODE_SEG
 EVT_ACX_OBJECT_PROCESS_REQUEST Codec_EvtUSBAudioAcxDriverMixLevelCapsProcessRequest;
+
+PAGED_CODE_SEG
+EVT_ACX_OBJECT_PROCESS_REQUEST Codec_EvtUSBAudioAcxDriverJackDescriptionProcessRequest;
 
 PAGED_CODE_SEG
 _Success_(NT_SUCCESS(return))
@@ -852,5 +840,8 @@ extern UNICODE_STRING g_RegistryPath;
 // List of sample rates supported by this driver
 extern const ULONG c_SampleRateList[];
 extern const ULONG c_SampleRateCount;
+
+extern ACX_PROPERTY_ITEM s_CircuitPropertyItems[];
+extern const ULONG       s_CircuitPropertyCount;
 
 #endif // _PRIVATE_H_

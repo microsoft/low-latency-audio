@@ -95,6 +95,19 @@ static ACX_PROPERTY_ITEM s_PropertyItems[] = {
     },
 };
 
+static ACX_PROPERTY_ITEM s_PinPropertyItems[] = {
+    {
+        &KSPROPSETID_Audio,                                               // const GUID * Set;
+        KSPROPERTY_JACK_DESCRIPTION,
+        ACX_PROPERTY_ITEM_FLAG_GET | ACX_PROPERTY_ITEM_FLAG_BASICSUPPORT, // ULONG Flags;
+        Codec_EvtUSBAudioAcxDriverJackDescriptionProcessRequest,          // PFN_ACX_OBJECT_PROCESS_REQUEST EvtAcxObjectProcessRequest;
+        0,                                                                // PVOID Reserved;
+        0,                                                                // ULONG ControlCb;
+        0,                                                                // ULONG ValueCb;
+        VT_EMPTY                                                          // ULONG ValueType; (variable length)
+    },
+};
+
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS Codec_AddAudioJackToBridgePin(
@@ -1150,6 +1163,73 @@ Exit:
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
+VOID Codec_EvtUSBAudioAcxDriverJackDescriptionProcessRequest(
+    WDFOBJECT /* Object */,
+    WDFREQUEST Request
+)
+{
+    NTSTATUS               status = STATUS_NOT_SUPPORTED;
+    ACX_REQUEST_PARAMETERS params{};
+
+    PAGED_CODE();
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    ACX_REQUEST_PARAMETERS_INIT(&params);
+    AcxRequestGetParameters(Request, &params);
+
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Size = 0x%x, MajorFunction = 0x%x, MinorFunction = 0x%x, Type = 0x%x", params.Size, params.MajorFunction, params.MinorFunction, params.Type);
+    if (params.Type == AcxRequestTypeProperty)
+    {
+        // GUID              Set;
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Id = 0x%x, Verb = 0x%x, ItemType = 0x%x, ItemId = 0x%x, Control = %p, ControlCb = 0x%x, Value = 0x%p, ValueCb = 0x%x", params.Parameters.Property.Id, params.Parameters.Property.Verb, params.Parameters.Property.ItemType, params.Parameters.Property.ItemId, params.Parameters.Property.Control, params.Parameters.Property.ControlCb, params.Parameters.Property.Value, params.Parameters.Property.ValueCb);
+    }
+
+    ASSERT(params.Type == AcxRequestTypeProperty);
+
+    IF_TRUE_ACTION_JUMP((params.Type != AcxRequestTypeProperty) ||
+                            (!IsEqualGUID(params.Parameters.Property.Set, KSPROPSETID_Audio) ||
+                             (params.Parameters.Property.Id != KSPROPERTY_JACK_DESCRIPTION)),
+                        ASSERT(FALSE);
+                        status = STATUS_INVALID_PARAMETER;,
+                                                          Exit);
+
+#if 0
+//	ACXCIRCUIT circuit = AcxElementGetContainer((ACXELEMENT)Object);
+//    ASSERT(circuit != nullptr);
+
+//    WDFDEVICE device = AcxCircuitGetWdfDevice((ACXCIRCUIT)circuit);
+//    ASSERT(device != nullptr);
+#else
+//    WDFDEVICE       device = AcxCircuitGetWdfDevice((ACXCIRCUIT)Object);
+#endif
+
+    //    PDEVICE_CONTEXT deviceContext = GetDeviceContext(device);
+    //    ASSERT(deviceContext != nullptr);
+
+    if (params.Parameters.Property.Verb == AcxPropertyVerbGet)
+    {
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbGet ");
+        status = STATUS_SUCCESS;
+    }
+    else if (params.Parameters.Property.Verb == AcxPropertyVerbSet)
+    {
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbSet ");
+        status = STATUS_NOT_SUPPORTED;
+    }
+    else if (params.Parameters.Property.Verb == AcxPropertyVerbBasicSupport)
+    {
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AcxPropertyVerbBasicSupport ");
+        status = ProcessRequestHandler_BasicSupport(&params, KSPROPERTY_TYPE_ALL, VT_EMPTY);
+        status = STATUS_SUCCESS;
+    }
+
+Exit:
+    WdfRequestComplete(Request, status);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
 NTSTATUS Codec_CreateSuperMixElement(
     _In_ AudioIsochronousEngine * AudioIsochronousEngine,
     _In_ WDFDEVICE                Device,
@@ -1727,6 +1807,8 @@ NTSTATUS Codec_CreateRenderBridgePin(
         pinCfg.Category = ConvertTerminalType(terminalType);
     }
     pinCfg.PinCallbacks = &pinCallbacks;
+    pinCfg.Properties = s_PinPropertyItems;
+    pinCfg.PropertiesCount = ARRAYSIZE(s_PinPropertyItems);
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, CODEC_PIN_CONTEXT);
     attributes.EvtCleanupCallback = Codec_EvtPinContextCleanup;
@@ -1871,6 +1953,8 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     pinCfg.Communication = AcxPinCommunicationNone;
     pinCfg.Category = ConvertTerminalType(terminalType);
     pinCfg.PinCallbacks = &pinCallbacks;
+    pinCfg.Properties = s_PinPropertyItems;
+    pinCfg.PropertiesCount = ARRAYSIZE(s_PinPropertyItems);
 
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, CODEC_PIN_CONTEXT);
     attributes.EvtCleanupCallback = Codec_EvtPinContextCleanup;

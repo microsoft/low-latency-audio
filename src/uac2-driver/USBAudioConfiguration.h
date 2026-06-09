@@ -463,6 +463,13 @@ class USBAudioControlInterface : public USBAudioInterface
         _Out_ ULONG &        supportedSampleRate
     ) = 0;
 
+    virtual NTSTATUS GetTerminalName(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ WDFMEMORY &    channelMemory,
+        _Out_ PWSTR &        channelName
+    ) = 0;
+
     _Success_(NT_SUCCESS(return))
     virtual NTSTATUS GetInformationForHostPin(
         _In_ PDEVICE_CONTEXT deviceContext,
@@ -1007,6 +1014,16 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           clockSourceID,
         _Out_ ULONG &        supportedSampleRate
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    GetTerminalName(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ WDFMEMORY &    channelMemory,
+        _Out_ PWSTR &        channelName
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1647,6 +1664,16 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           clockSourceID,
         _Out_ ULONG &        supportedSampleRate
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    GetTerminalName(
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ UCHAR           unitID,
+        _Out_ WDFMEMORY &    channelMemory,
+        _Out_ PWSTR &        channelName
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -2654,6 +2681,15 @@ class USBAudioStreamInterfaceGroup
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS GetCurrentTerminalName(
+        _In_ bool                              isInput,
+        _In_ const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
+        _Out_ WDFMEMORY &                      memory,
+        _Out_ PWSTR &                          channelName
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     NTSTATUS
     GetStreamDevices(
         _In_ bool                              isInput,
@@ -2821,6 +2857,26 @@ class USBAudioStreamInterfaceGroup
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    ULONG GetInputGroupIndex();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    ULONG GetOutputGroupIndex();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void SetInputGroupIndex(
+        _In_ ULONG inputGroupIndex
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void SetOutputGroupIndex(
+        _In_ ULONG outputGroupIndex
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     void Dump();
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -2877,6 +2933,8 @@ class USBAudioStreamInterfaceGroup
     USBAudioDataFormatManager                                                 m_outputUsbAudioDataFormatManager;
     VariableArray<USBAudioInterfaceInfo *, DEFAULT_SIZE_OF_STREAM_INTERFACES> m_usbAudioStreamInterfaceInfo;
     ULONG                                                                     m_groupIndex{0};
+    ULONG                                                                     m_inputGroupIndex{0};
+    ULONG                                                                     m_outputGroupIndex{0};
     UCHAR                                                                     m_clockSourceID{0};
     UCHAR                                                                     m_targetClockSourceID{0};
 };
@@ -3099,7 +3157,7 @@ class USBAudioConfiguration
     NTSTATUS GetChannelName(
         _In_ UCHAR        channelNames,
         _In_ ULONG        channel,
-        _Out_ WDFMEMORY & memory,
+        _Out_ WDFMEMORY & channelMemory,
         _Out_ PWSTR &     channelName
     );
 

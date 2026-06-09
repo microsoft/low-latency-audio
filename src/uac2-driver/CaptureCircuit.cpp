@@ -111,29 +111,23 @@ VOID CodecC_EvtCircuitCleanup(
 
     ACXCIRCUIT circuit = (ACXCIRCUIT)Object;
 
-    PCODEC_CIRCUIT_CONTEXT         circuitContext = GetCircuitContext(circuit);
-    PCODEC_CAPTURE_CIRCUIT_CONTEXT captureCircuitContext = GetCaptureCircuitContext(circuit);
+    PCODEC_CIRCUIT_CONTEXT circuitContext = GetCircuitContext(circuit);
 
     ASSERT(circuitContext != nullptr);
-    ASSERT(captureCircuitContext != nullptr);
 
     if (circuitContext->VolumeElementsMemory != nullptr)
     {
         WdfObjectDelete(circuitContext->VolumeElementsMemory);
         circuitContext->VolumeElementsMemory = nullptr;
         circuitContext->VolumeElements = nullptr;
+        circuitContext->NumOfVolumeElements = 0;
     }
     if (circuitContext->MuteElementsMemory != nullptr)
     {
         WdfObjectDelete(circuitContext->MuteElementsMemory);
         circuitContext->MuteElementsMemory = nullptr;
         circuitContext->MuteElements = nullptr;
-    }
-    if (circuitContext->MuteElementsMemory != nullptr)
-    {
-        WdfObjectDelete(circuitContext->MuteElementsMemory);
-        circuitContext->MuteElementsMemory = nullptr;
-        circuitContext->MuteElements = nullptr;
+        circuitContext->NumOfMuteElements = 0;
     }
     if (circuitContext->AgcElementsMemory != nullptr)
     {
@@ -142,7 +136,7 @@ VOID CodecC_EvtCircuitCleanup(
         circuitContext->AgcElements = nullptr;
         circuitContext->NumOfAgcElements = 0;
     }
-    captureCircuitContext->NumOfDevices = 0;
+    circuitContext->NumOfDevices = 0;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 }
@@ -229,12 +223,11 @@ Return Value:
 
 --*/
 {
-    NTSTATUS                        status;
-    PDEVICE_CONTEXT                 deviceContext;
-    WDF_OBJECT_ATTRIBUTES           attributes;
-    ACXCIRCUIT                      circuit;
-    CODEC_CIRCUIT_CONTEXT *         circuitContext = nullptr;
-    CODEC_CAPTURE_CIRCUIT_CONTEXT * captureCircuitContext;
+    NTSTATUS                status;
+    PDEVICE_CONTEXT         deviceContext;
+    WDF_OBJECT_ATTRIBUTES   attributes;
+    ACXCIRCUIT              circuit;
+    CODEC_CIRCUIT_CONTEXT * circuitContext = nullptr;
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
@@ -313,21 +306,25 @@ Return Value:
         RETURN_NTSTATUS_IF_FAILED(AcxCircuitInitAssignAcxCreateStreamCallback(circuitInit, CodecC_EvtCircuitCreateStream));
 
         //
+        // Private Property Handler
+        //
+        if (!AudioIsochronousEngine->HasOutputIsochronousInterface())
+        {
+            RETURN_NTSTATUS_IF_FAILED(AcxCircuitInitAssignProperties(circuitInit, s_CircuitPropertyItems, s_CircuitPropertyCount));
+        }
+
+        //
         // The driver uses this DDI to create a new ACX circuit.
         //
-        WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, CODEC_CAPTURE_CIRCUIT_CONTEXT);
+        WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, CODEC_CIRCUIT_CONTEXT);
         attributes.EvtCleanupCallback = CodecC_EvtCircuitCleanup;
         RETURN_NTSTATUS_IF_FAILED(AcxCircuitCreate(Device, &attributes, &circuitInit, &circuit));
 
-        captureCircuitContext = GetCaptureCircuitContext(circuit);
-        ASSERT(captureCircuitContext);
-
-        captureCircuitContext->NumOfDevices = 1;
-        captureCircuitContext->AudioIsochronousEngine = AudioIsochronousEngine;
-
-        WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, CODEC_CIRCUIT_CONTEXT);
-        RETURN_NTSTATUS_IF_FAILED(WdfObjectAllocateContext(circuit, &attributes, (PVOID *)&circuitContext));
+        circuitContext = GetCircuitContext(circuit);
         ASSERT(circuitContext);
+
+        circuitContext->NumOfDevices = 1;
+        circuitContext->AudioIsochronousEngine = AudioIsochronousEngine;
 
         circuitInitScope.release();
     }
@@ -405,7 +402,7 @@ Return Value:
         RtlZeroMemory(connections, sizeof(ACX_CONNECTION) * numOfConnections);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - num of channels = %u, num of connections = %u, num of devices = %u", numOfChannels, numOfConnections, numOfDevices);
 
-        captureCircuitContext->NumOfDevices = numOfDevices;
+        circuitContext->NumOfDevices = numOfDevices;
 
         WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
         attributes.ParentObject = circuit;
@@ -662,17 +659,17 @@ Return Value:
 
 --*/
 {
-    NTSTATUS                        status;
-    PDEVICE_CONTEXT                 deviceContext;
-    PCAPTURE_DEVICE_CONTEXT         captureDeviceContext;
-    WDF_OBJECT_ATTRIBUTES           attributes;
-    ACXSTREAM                       stream;
-    STREAMENGINE_CONTEXT *          streamContext;
-    ACX_STREAM_CALLBACKS            streamCallbacks;
-    ACX_RT_STREAM_CALLBACKS         rtCallbacks;
-    CCaptureStreamEngine *          streamEngine = nullptr;
-    CODEC_CAPTURE_CIRCUIT_CONTEXT * captureCircuitContext;
-    CODEC_PIN_CONTEXT *             pinContext;
+    NTSTATUS                status;
+    PDEVICE_CONTEXT         deviceContext;
+    PCAPTURE_DEVICE_CONTEXT captureDeviceContext;
+    WDF_OBJECT_ATTRIBUTES   attributes;
+    ACXSTREAM               stream;
+    STREAMENGINE_CONTEXT *  streamContext;
+    ACX_STREAM_CALLBACKS    streamCallbacks;
+    ACX_RT_STREAM_CALLBACKS rtCallbacks;
+    CCaptureStreamEngine *  streamEngine = nullptr;
+    CODEC_CIRCUIT_CONTEXT * circuitContext;
+    CODEC_PIN_CONTEXT *     pinContext;
 
     auto streamEngineScope = wil::scope_exit([&streamEngine]() {
         if (streamEngine)
@@ -693,17 +690,17 @@ Return Value:
     captureDeviceContext = GetCaptureDeviceContext(Device);
     ASSERT(captureDeviceContext != nullptr);
 
-    captureCircuitContext = GetCaptureCircuitContext(Circuit);
-    ASSERT(captureCircuitContext != nullptr);
-    ASSERT(captureCircuitContext->AudioIsochronousEngine);
+    circuitContext = GetCircuitContext(Circuit);
+    ASSERT(circuitContext != nullptr);
+    ASSERT(circuitContext->AudioIsochronousEngine);
 
     pinContext = GetCodecPinContext(Pin);
     ASSERT(pinContext != nullptr);
 
-    if (captureCircuitContext->AudioIsochronousEngine->HasAsioOwnership())
+    if (circuitContext->AudioIsochronousEngine->HasAsioOwnership())
     {
         ACXDATAFORMAT dataFormat = nullptr;
-        status = captureCircuitContext->AudioIsochronousEngine->GetCurrentDataFormat(true, dataFormat);
+        status = circuitContext->AudioIsochronousEngine->GetCurrentDataFormat(true, dataFormat);
         RETURN_NTSTATUS_IF_FAILED(status);
 
         ACXDATAFORMAT stereoDataFormat;
@@ -760,7 +757,7 @@ Return Value:
     // Create the virtual streaming engine which will control
     // streaming logic for the capture circuit.
     //
-    streamEngine = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) CCaptureStreamEngine(deviceContext, captureCircuitContext->AudioIsochronousEngine, stream, StreamFormat, pinContext->DeviceIndex, pinContext->Channel, pinContext->NumOfChannelsPerDevice);
+    streamEngine = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) CCaptureStreamEngine(deviceContext, circuitContext->AudioIsochronousEngine, stream, StreamFormat, pinContext->DeviceIndex, pinContext->Channel, pinContext->NumOfChannelsPerDevice);
     RETURN_NTSTATUS_IF_TRUE(streamEngine == nullptr, STATUS_INSUFFICIENT_RESOURCES);
 
     streamContext->StreamEngine = (PVOID)streamEngine;

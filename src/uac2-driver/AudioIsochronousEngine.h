@@ -262,6 +262,14 @@ class AudioIsochronousEngine
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS GetCurrentTerminalName(
+        _In_ bool         isInput,
+        _Out_ WDFMEMORY & memory,
+        _Out_ PWSTR &     channelName
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     NTSTATUS
     _Success_(NT_SUCCESS(return))
     GetInformationForHostPin(
