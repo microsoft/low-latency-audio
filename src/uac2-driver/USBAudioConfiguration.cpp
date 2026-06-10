@@ -1278,6 +1278,7 @@ NTSTATUS USBAudio1ControlInterface::GetInformationForBridgePin(
     UCHAR & /* numOfChannels */,
     USHORT & /* terminalType */,
     UCHAR & /* channelNames */,
+    bool & /* isEnableConnector */,
     NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & /* connectorState */
 )
 {
@@ -3626,6 +3627,7 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
     UCHAR &                                         numOfChannels,
     USHORT &                                        terminalType,
     UCHAR &                                         channelNames,
+    bool &                                          isEnableConnector,
     NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
 )
 {
@@ -3633,27 +3635,50 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Entry");
 
+    auto findInputTerminal = [this](UCHAR unitID) noexcept -> NS_USBAudio0200::PCS_AC_INPUT_TERMINAL_DESCRIPTOR {
+        for (auto & inputTerminalDescriptor : m_acInputTerminals)
+        {
+            if (inputTerminalDescriptor->bTerminalID == unitID)
+            {
+                return inputTerminalDescriptor;
+            }
+        }
+        return nullptr;
+    };
+
     channelNames = USBAudioConfiguration::InvalidString;
+    isEnableConnector = false;
     for (auto & outputTerminalDescriptor : m_acOutputTerminals)
     {
         if (outputTerminalDescriptor->bTerminalID == unitID)
         {
+            USHORT inputTerminalType = 0;
+            UCHAR  inputTerminalID = USBAudioConfiguration::InvalidID;
+            UCHAR  volumeUnitID = USBAudioConfiguration::InvalidID;
+            UCHAR  muteUnitID = USBAudioConfiguration::InvalidID;
+
             terminalType = outputTerminalDescriptor->wTerminalType;
 
             if ((outputTerminalDescriptor->bmControls[0] | (((USHORT)outputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_OUTPUT_TERMINAL_CONTROL_CONNECTOR_CONTROL_MASK)
             {
-                RETURN_NTSTATUS_IF_FAILED(GetCurrentConnectorState(deviceContext, unitID, connectorState));
-                numOfChannels = connectorState.bNrChannels;
-                channelNames = connectorState.iChannelNames;
+                isEnableConnector = true;
+            }
+            channelNames = outputTerminalDescriptor->iTerminal;
+            RETURN_NTSTATUS_IF_FAILED(SearchInputTerminalFromOutputTerminal(deviceContext, unitID, numOfChannels, inputTerminalType, inputTerminalID, volumeUnitID, muteUnitID));
+            auto inputTerminalDescriptor = findInputTerminal(inputTerminalID);
+            if (inputTerminalDescriptor != nullptr)
+            {
+                numOfChannels = inputTerminalDescriptor->bNrChannels;
+                connectorState.bNrChannels = numOfChannels;
+                connectorState.bmChannelConfig = ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] | ((ULONG)inputTerminalDescriptor->bmChannelConfig[1] << 8) | ((ULONG)inputTerminalDescriptor->bmChannelConfig[1] << 16) | ((ULONG)inputTerminalDescriptor->bmChannelConfig[2] << 24));
             }
             else
             {
-                channelNames = outputTerminalDescriptor->iTerminal;
                 numOfChannels = (UCHAR)GetUnitOutputChannelCount(outputTerminalDescriptor->bTerminalID);
                 connectorState.bNrChannels = numOfChannels;
-                connectorState.iChannelNames = channelNames;
                 connectorState.bmChannelConfig = (numOfChannels == 1 ? NS_USBAudio0200::FRONT_CENTER : NS_USBAudio0200::FRONT_LEFT | NS_USBAudio0200::FRONT_RIGHT);
             }
+            connectorState.iChannelNames = channelNames;
             ValidateChannelNamesStringDescriptor(deviceContext, channelNames);
             TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", STATUS_SUCCESS);
 
@@ -3661,31 +3686,24 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForBridgePin(
         }
     }
 
-    for (auto & inputTerminalDescriptor : m_acInputTerminals)
+    auto inputTerminalDescriptor = findInputTerminal(unitID);
+    if (inputTerminalDescriptor != nullptr)
     {
-        if (inputTerminalDescriptor->bTerminalID == unitID)
+        terminalType = inputTerminalDescriptor->wTerminalType;
+
+        if ((inputTerminalDescriptor->bmControls[0] | (((USHORT)inputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_INPUT_TERMINAL_CONTROL_CONNECTOR_CONTROL_MASK)
         {
-            terminalType = inputTerminalDescriptor->wTerminalType;
-
-            if ((inputTerminalDescriptor->bmControls[0] | (((USHORT)inputTerminalDescriptor->bmControls[1]) << 8)) & NS_USBAudio0200::AC_INPUT_TERMINAL_CONTROL_CONNECTOR_CONTROL_MASK)
-            {
-                RETURN_NTSTATUS_IF_FAILED(GetCurrentConnectorState(deviceContext, unitID, connectorState));
-                numOfChannels = connectorState.bNrChannels;
-                channelNames = connectorState.iChannelNames;
-            }
-            else
-            {
-                numOfChannels = inputTerminalDescriptor->bNrChannels;
-                channelNames = inputTerminalDescriptor->iTerminal;
-                connectorState.bNrChannels = numOfChannels;
-                connectorState.iChannelNames = channelNames;
-                connectorState.bmChannelConfig = ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] | ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] << 8) | ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] << 16) | ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] << 24));
-            }
-            ValidateChannelNamesStringDescriptor(deviceContext, channelNames);
-
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", STATUS_SUCCESS);
-            return STATUS_SUCCESS;
+            isEnableConnector = true;
         }
+        numOfChannels = inputTerminalDescriptor->bNrChannels;
+        channelNames = inputTerminalDescriptor->iTerminal;
+        connectorState.bNrChannels = numOfChannels;
+        connectorState.iChannelNames = channelNames;
+        connectorState.bmChannelConfig = ((ULONG)inputTerminalDescriptor->bmChannelConfig[0] | ((ULONG)inputTerminalDescriptor->bmChannelConfig[1] << 8) | ((ULONG)inputTerminalDescriptor->bmChannelConfig[1] << 16) | ((ULONG)inputTerminalDescriptor->bmChannelConfig[2] << 24));
+        ValidateChannelNamesStringDescriptor(deviceContext, channelNames);
+
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", STATUS_SUCCESS);
+        return STATUS_SUCCESS;
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", STATUS_INVALID_PARAMETER);
@@ -7388,8 +7406,8 @@ USBAudioStreamInterfaceGroup::GetCurrentTerminalName(
 
     PAGED_CODE();
 
-	channelMemory = nullptr;
-	channelName = nullptr;
+    channelMemory = nullptr;
+    channelName = nullptr;
 
     RETURN_NTSTATUS_IF_FAILED(GetCurrentTerminalLink(isInput, audioStreamPropertySet, terminalLink));
 
@@ -7535,12 +7553,13 @@ USBAudioStreamInterfaceGroup::GetInformationForBridgePin(
     UCHAR &                                         numOfChannels,
     USHORT &                                        terminalType,
     UCHAR &                                         channelNames,
+    bool &                                          isEnableConnector,
     NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
 )
 {
     PAGED_CODE();
 
-    return m_usbAudioControlInterface->GetInformationForBridgePin(m_deviceContext, unitID, numOfChannels, terminalType, channelNames, connectorState);
+    return m_usbAudioControlInterface->GetInformationForBridgePin(m_deviceContext, unitID, numOfChannels, terminalType, channelNames, isEnableConnector, connectorState);
 }
 
 PAGED_CODE_SEG

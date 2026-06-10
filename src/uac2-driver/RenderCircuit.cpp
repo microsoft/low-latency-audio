@@ -642,7 +642,7 @@ Return Value:
             // Add audio jack to bridge pin.
             // For more information on audio jack see: https://docs.microsoft.com/en-us/windows/win32/api/devicetopology/ns-devicetopology-ksjack_description
             //
-            RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioJackToBridgePin(pins[index * CodecRenderPinCount + CodecRenderBridgePin], numOfChannelsPerDevice == 1 ? SPEAKER_FRONT_CENTER : SPEAKER_FRONT_LEFT | SPEAKER_FRONT_RIGHT));
+            RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioDummyJackToBridgePin(pins[index * CodecRenderPinCount + CodecRenderBridgePin]));
 
             if (AudioIsochronousEngine->HasOutputIsochronousInterface())
             {

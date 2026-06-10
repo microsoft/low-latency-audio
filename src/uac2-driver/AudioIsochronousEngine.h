@@ -286,6 +286,7 @@ class AudioIsochronousEngine
         _Out_ UCHAR &  numOfChannels,
         _Out_ USHORT & terminalType,
         _Out_ UCHAR &  channelNames,
+        _Out_ bool &   isEnableConnector,
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
     );
 

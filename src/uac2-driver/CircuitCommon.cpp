@@ -133,10 +133,57 @@ NTSTATUS Codec_AddAudioJackToBridgePin(
     ACX_JACK_CONFIG_INIT(&jackCfg);
     jackCfg.Description.ChannelMapping = SpeakerPositions;
     jackCfg.Description.Color = RGB(0, 0, 0);
-    jackCfg.Description.ConnectionType = AcxConnTypeAtapiInternal;
+    jackCfg.Description.ConnectionType = AcxConnTypeRCA;
     jackCfg.Description.GeoLocation = AcxGeoLocFront;
     jackCfg.Description.GenLocation = AcxGenLocPrimaryBox;
-    jackCfg.Description.PortConnection = AcxPortConnIntegratedDevice;
+    jackCfg.Description.PortConnection = AcxPortConnJack;
+    jackCfg.Flags = AcxJackConfigJackDetection;
+    jackCfg.Callbacks = &jackCallbacks;
+    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, JACK_CONTEXT);
+    attributes.ParentObject = Pin;
+
+    RETURN_NTSTATUS_IF_FAILED(AcxJackCreate(Pin, &attributes, &jackCfg, &jack));
+
+    ASSERT(jack != nullptr);
+    jackContext = GetJackContext(jack);
+    ASSERT(jackContext);
+    jackContext->IsConnected = TRUE;
+
+    PCODEC_PIN_CONTEXT pinContext = GetCodecPinContext(Pin);
+    pinContext->jack = jack;
+
+    RETURN_NTSTATUS_IF_FAILED(AcxPinAddJacks(Pin, &jack, 1));
+    return STATUS_SUCCESS;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS Codec_AddAudioDummyJackToBridgePin(
+    _In_ ACXPIN Pin
+)
+{
+    ACX_JACK_CALLBACKS    jackCallbacks{};
+    ACX_JACK_CONFIG       jackCfg{};
+    ACXJACK               jack{};
+    PJACK_CONTEXT         jackContext = nullptr;
+    WDF_OBJECT_ATTRIBUTES attributes{};
+
+    PAGED_CODE();
+
+    //
+    // Add audio jack to bridge pin.
+    // For more information on audio jack see: https://docs.microsoft.com/en-us/windows/win32/api/devicetopology/ns-devicetopology-ksjack_description
+    //
+    ACX_JACK_CALLBACKS_INIT(&jackCallbacks);
+    jackCallbacks.EvtAcxJackRetrievePresenceState = EvtJackRetrievePresence;
+
+    ACX_JACK_CONFIG_INIT(&jackCfg);
+    jackCfg.Description.ChannelMapping = 0;
+    jackCfg.Description.Color = RGB(0, 0, 0);
+    jackCfg.Description.ConnectionType = AcxConnTypeUnknown;
+    jackCfg.Description.GeoLocation = AcxGeoLocNotApplicable;
+    jackCfg.Description.GenLocation = AcxGenLocOther;
+    jackCfg.Description.PortConnection = AcxPortConnUnknown;
     jackCfg.Flags = AcxJackConfigJackDetection;
     jackCfg.Callbacks = &jackCallbacks;
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, JACK_CONTEXT);
@@ -1767,13 +1814,14 @@ NTSTATUS Codec_CreateRenderBridgePin(
     USHORT                                        terminalType = 0;
     UCHAR                                         numOfChannels = 0;
     UCHAR                                         channelNames = 0;
+    bool                                          isEnableConnector = false;
     NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR connectorState{};
 
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, unit id 0x%02x", UnitID);
 
-    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForBridgePin(UnitID, numOfChannels, terminalType, channelNames, connectorState));
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForBridgePin(UnitID, numOfChannels, terminalType, channelNames, isEnableConnector, connectorState));
 
     ///////////////////////////////////////////////////////////
     //
@@ -1834,7 +1882,14 @@ NTSTATUS Codec_CreateRenderBridgePin(
 
     RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::RenderBridgePin, UnitID, PinID));
 
-    RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioJackToBridgePin(pin, ConverSpeakerPositions(connectorState.bmChannelConfig)));
+    if (isEnableConnector)
+    {
+        RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioJackToBridgePin(pin, ConverSpeakerPositions(connectorState.bmChannelConfig)));
+    }
+    else
+    {
+        RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioDummyJackToBridgePin(pin));
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 
@@ -1929,13 +1984,14 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     USHORT                                        terminalType = 0;
     UCHAR                                         numOfChannels = 0;
     UCHAR                                         channelNames = 0;
+    bool                                          isEnableConnector = false;
     NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR connectorState{};
 
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, unit id 0x%02x", UnitID);
 
-    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForBridgePin(UnitID, numOfChannels, terminalType, channelNames, connectorState));
+    RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->GetInformationForBridgePin(UnitID, numOfChannels, terminalType, channelNames, isEnableConnector, connectorState));
 
     ///////////////////////////////////////////////////////////
     //
@@ -1980,7 +2036,14 @@ NTSTATUS Codec_CreateCaptureBridgePin(
 
     RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::CaptureBridgePin, UnitID, PinID));
 
-    RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioJackToBridgePin(pin, ConverSpeakerPositions(connectorState.bmChannelConfig)));
+    if (isEnableConnector)
+    {
+        RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioJackToBridgePin(pin, ConverSpeakerPositions(connectorState.bmChannelConfig)));
+    }
+    else
+    {
+        RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioDummyJackToBridgePin(pin));
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 

@@ -110,6 +110,9 @@
     <ClInclude Include="AudioIsochronousEngine.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="VariableArray.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Device.cpp">

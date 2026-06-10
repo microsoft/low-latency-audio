@@ -2700,7 +2700,7 @@ AudioIsochronousEngine::GetCurrentTerminalName(
     PWSTR &     channelName
 )
 {
-	PAGED_CODE();
+    PAGED_CODE();
 
     return m_usbAudioStreamInterfaceGroup->GetCurrentTerminalName(isInput, m_audioStreamPropertySet, memory, channelName);
 }
@@ -2726,12 +2726,13 @@ AudioIsochronousEngine::GetInformationForBridgePin(
     UCHAR &                                         numOfChannels,
     USHORT &                                        terminalType,
     UCHAR &                                         channelNames,
+    bool &                                          isEnableConnector,
     NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
 )
 {
     PAGED_CODE();
 
-    return m_usbAudioStreamInterfaceGroup->GetInformationForBridgePin(unitID, numOfChannels, terminalType, channelNames, connectorState);
+    return m_usbAudioStreamInterfaceGroup->GetInformationForBridgePin(unitID, numOfChannels, terminalType, channelNames, isEnableConnector, connectorState);
 }
 
 _Use_decl_annotations_

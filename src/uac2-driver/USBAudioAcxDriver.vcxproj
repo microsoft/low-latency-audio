@@ -73,6 +73,7 @@
     <ClInclude Include="RtPacketObject.h" />
     <ClInclude Include="USBAudioConfiguration.h" />
     <ClInclude Include="USBAudioDataFormat.h" />
+    <ClInclude Include="VariableArray.h" />
     <ClInclude Include="WorkerThread.h" />
   </ItemGroup>
   <ItemGroup>

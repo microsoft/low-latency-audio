@@ -729,6 +729,12 @@ NTSTATUS Codec_AddAudioJackToBridgePin(
 );
 
 PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_AddAudioDummyJackToBridgePin(
+    _In_ ACXPIN Pin
+);
+
+PAGED_CODE_SEG
 NTSTATUS
 Codec_VolumeChangeLevelNotification(
     _In_ ACXCIRCUIT Circuit,

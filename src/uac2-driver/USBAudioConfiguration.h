@@ -484,6 +484,7 @@ class USBAudioControlInterface : public USBAudioInterface
         _Out_ UCHAR &        numOfChannels,
         _Out_ USHORT &       terminalType,
         _Out_ UCHAR &        channelNames,
+        _Out_ bool &         isEnableConnector,
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
     ) = 0;
 
@@ -1046,6 +1047,7 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
         _Out_ UCHAR &        numOfChannels,
         _Out_ USHORT &       terminalType,
         _Out_ UCHAR &        channelNames,
+        _Out_ bool &         isEnableConnector,
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
     );
 
@@ -1696,6 +1698,7 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
         _Out_ UCHAR &        numOfChannels,
         _Out_ USHORT &       terminalType,
         _Out_ UCHAR &        channelNames,
+        _Out_ bool &         isEnableConnector,
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
     );
 
@@ -2733,6 +2736,7 @@ class USBAudioStreamInterfaceGroup
         _Out_ UCHAR &  numOfChannels,
         _Out_ USHORT & terminalType,
         _Out_ UCHAR &  channelNames,
+        _Out_ bool &   isEnableConnector,
         _Out_ NS_USBAudio::AUDIO_CHANNEL_CLUSTER_DESCRIPTOR & connectorState
     );
 
