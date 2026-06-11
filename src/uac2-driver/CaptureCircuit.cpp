@@ -308,9 +308,12 @@ Return Value:
         //
         // Private Property Handler
         //
-        if (!AudioIsochronousEngine->HasOutputIsochronousInterface())
+        if (deviceContext->UsbAudioConfiguration->IsEnableASIO())
         {
-            RETURN_NTSTATUS_IF_FAILED(AcxCircuitInitAssignProperties(circuitInit, s_CircuitPropertyItems, s_CircuitPropertyCount));
+            if (!AudioIsochronousEngine->HasOutputIsochronousInterface())
+            {
+                RETURN_NTSTATUS_IF_FAILED(AcxCircuitInitAssignProperties(circuitInit, s_CircuitPropertyItems, s_CircuitPropertyCount));
+            }
         }
 
         //
@@ -612,7 +615,7 @@ CodecC_EvtCircuitPowerUp(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
 
-    NTSTATUS status = AddPropertyToCircuitInterface(Circuit, ARRAYSIZE(c_InterfaceProperties), c_InterfaceProperties);
+    NTSTATUS status = AddPropertyToCircuitInterface(Circuit, c_InterfacePropertiesCount, c_InterfaceProperties);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit %!STATUS!", status);
 

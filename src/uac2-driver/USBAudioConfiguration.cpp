@@ -8752,7 +8752,10 @@ Return Value:
         }
     }
 
-    RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->SetDefaultAttributeAll(m_deviceContext));
+    if (!IsMultipleClockSources())
+    {
+        RETURN_NTSTATUS_IF_FAILED(m_usbAudioControlInterface->SetDefaultAttributeAll(m_deviceContext));
+    }
     for (ULONG index = 0; index < m_numOfUsbAudioStreamInterfaceInfo; index++)
     {
         if (m_usbAudioStreamInterfaceInfo[index] != nullptr)

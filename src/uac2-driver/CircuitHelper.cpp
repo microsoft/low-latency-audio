@@ -44,6 +44,43 @@ const ULONG c_SampleRateList[] = {
 };
 const ULONG c_SampleRateCount = SIZEOF_ARRAY(c_SampleRateList);
 
+#define HNSTIME_PER_MILLISECOND 10000
+
+static struct
+{
+    KSAUDIO_PACKETSIZE_CONSTRAINTS2              TransportPacketConstraints;         // 1
+    KSAUDIO_PACKETSIZE_PROCESSINGMODE_CONSTRAINT AdditionalProcessingConstraints[1]; // 1 + 1 = 2
+} s_PacketSizeConstraints = {
+    {ULONG(2.0 * (double)HNSTIME_PER_MILLISECOND),                                   // 2 ms minimum processing interval
+     FILE_LONG_ALIGNMENT,                                                            // 4 byte packet size alignment
+     0,                                                                              // no maximum packet size constraint
+     2,                                                                              // 2 processing constraints follow
+     {
+         STATIC_AUDIO_SIGNALPROCESSINGMODE_RAW,                                      // constraint for raw processing mode
+         0,                                                                          // NA samples per processing frame
+         ULONG(2.0 * (double)HNSTIME_PER_MILLISECOND),                               // 20000 hns (2ms) per processing frame
+     }
+    },
+    {{
+        STATIC_AUDIO_SIGNALPROCESSINGMODE_DEFAULT,    // constraint for default processing mode
+        0,                                            // NA samples per processing frame
+        ULONG(2.0 * (double)HNSTIME_PER_MILLISECOND), // 20000 hns (2ms) per processing frame
+    }
+    }
+};
+
+const DSP_DEVPROPERTY c_InterfaceProperties[] =
+    {
+        {
+            &DEVPKEY_KsAudio_PacketSize_Constraints2, // Key
+            DEVPROP_TYPE_BINARY,                      // Type
+            sizeof(s_PacketSizeConstraints),          // BufferSize
+            &s_PacketSizeConstraints,                 // Buffer
+        },
+};
+
+const ULONG c_InterfacePropertiesCount = ARRAYSIZE(c_InterfaceProperties);
+
 typedef struct _TERMINALTYPE_TO_PINCATEGORY_ENTRY
 {
     const USHORT TerminalType;
