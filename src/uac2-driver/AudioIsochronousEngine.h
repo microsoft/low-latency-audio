@@ -804,6 +804,18 @@ class AudioIsochronousEngine
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    LONG AddRef();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    LONG Release();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void CleanupBeforeDestroy();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     void ReportInternalParameters();
 
     static __drv_maxIRQL(PASSIVE_LEVEL)
@@ -1026,6 +1038,7 @@ class AudioIsochronousEngine
     LONG                           m_startCounterAsio{0};
     LONG                           m_startCounterWdmAudio{0};
     LONG                           m_startCounterIsoStream{0};
+    LONG                           m_referenceCounter{0};
     WCHAR                          m_inputAsioChannelName[UAC_MAX_ASIO_CHANNEL][UAC_MAX_CHANNEL_NAME_LENGTH]{};
     WCHAR                          m_outputAsioChannelName[UAC_MAX_ASIO_CHANNEL][UAC_MAX_CHANNEL_NAME_LENGTH]{};
     ACXCIRCUIT                     m_renderCircuit{nullptr};

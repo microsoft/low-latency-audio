@@ -705,7 +705,8 @@ Return Value:
                 //
                 deviceContext->AudioIsochronousEngines[index]->RemoveRenderCircuit(device);
                 deviceContext->AudioIsochronousEngines[index]->RemoveCaptureCircuit(device);
-                delete deviceContext->AudioIsochronousEngines[index];
+                deviceContext->AudioIsochronousEngines[index]->CleanupBeforeDestroy();
+                deviceContext->AudioIsochronousEngines[index]->Release();
                 deviceContext->AudioIsochronousEngines[index] = nullptr;
             }
         }

@@ -83,6 +83,9 @@ CStreamEngine::CStreamEngine(
     GUID ksDataFormatSubType = AcxDataFormatGetSubFormat(StreamFormat);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, %p, isInput = %!bool!, Stream = %p, StreamFormat = %p", this, Input, Stream, StreamFormat);
+
+    m_audioIsochronousEngine->AddRef();
+
     RtlZeroMemory(m_packets, sizeof(m_packets));
 
     m_audioIsochronousEngine->StreamResetInternal(m_input, m_deviceIndex);
@@ -100,6 +103,13 @@ CStreamEngine::~CStreamEngine()
 {
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry, %p", this);
+
+    if (m_audioIsochronousEngine != nullptr)
+    {
+        m_audioIsochronousEngine->Release();
+        m_audioIsochronousEngine = nullptr;
+    }
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 }
 

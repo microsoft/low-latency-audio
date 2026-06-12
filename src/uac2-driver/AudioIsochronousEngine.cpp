@@ -115,6 +115,8 @@ AudioIsochronousEngine::AudioIsochronousEngine(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
+    AddRef();
+
     m_audioStreamPropertySet.AudioProperty.VendorId = m_deviceContext->VendorId;
     m_audioStreamPropertySet.AudioProperty.ProductId = m_deviceContext->ProductId;
     m_audioStreamPropertySet.AudioProperty.DeviceRelease = m_deviceContext->DeviceRelease;
@@ -146,13 +148,6 @@ AudioIsochronousEngine::~AudioIsochronousEngine()
 {
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    if (m_deviceContext->IsPrepareHardwareSucceeded)
-    {
-        SaveInternalParametersToDeviceRegistry();
-
-        SaveSampleRateToRegistry(m_deviceContext->Device, m_audioStreamPropertySet.AudioProperty.SampleRate);
-    }
 
     if (m_contiguousMemory != nullptr)
     {
@@ -5037,6 +5032,49 @@ NTSTATUS AudioIsochronousEngine::WalkNextUnit(
     {
         return m_usbAudioStreamInterfaceGroup->WalkNextUnitTowardForward(m_audioStreamPropertySet, pendingUnitMap, audioNodeKind, unitID, nextUnitID, traversalDirection, hasMoreData);
     }
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+LONG AudioIsochronousEngine::AddRef(
+)
+{
+    PAGED_CODE();
+
+    return InterlockedIncrement(&m_referenceCounter);
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+LONG AudioIsochronousEngine::Release(
+)
+{
+    PAGED_CODE();
+
+    LONG counter = InterlockedDecrement(&m_referenceCounter);
+    if (counter == 0)
+    {
+        delete this;
+    }
+    return counter;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+void AudioIsochronousEngine::CleanupBeforeDestroy()
+{
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
+    if (m_deviceContext->IsPrepareHardwareSucceeded)
+    {
+        SaveInternalParametersToDeviceRegistry();
+
+        SaveSampleRateToRegistry(m_deviceContext->Device, m_audioStreamPropertySet.AudioProperty.SampleRate);
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
 
 PAGED_CODE_SEG
