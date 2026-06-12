@@ -994,3 +994,53 @@ NTSTATUS AddPropertyToCircuitInterface(
 
     return STATUS_SUCCESS;
 }
+
+PAGED_CODE_SEG
+WORD GetFormatTagFromAcxDataFormat(
+    _In_    ACXDATAFORMAT   DataFormat
+)
+{
+    PAGED_CODE();
+    PWAVEFORMATEX waveFormatEx = (PWAVEFORMATEX)AcxDataFormatGetWaveFormatEx(DataFormat);
+    return waveFormatEx->wFormatTag;
+}
+
+PAGED_CODE_SEG
+NTSTATUS ConvertWaveFormatExToWaveFormatExtensible
+(
+    _In_    WDFDEVICE       Device,
+    _In_    ACXCIRCUIT      Circuit,
+    _In_    ACXDATAFORMAT   DataFormatEx,
+    _Out_   ACXDATAFORMAT& DataFormatExtensible
+)
+{
+    PAGED_CODE();
+
+    if (GetFormatTagFromAcxDataFormat(DataFormatEx) == WAVE_FORMAT_EXTENSIBLE)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    KSDATAFORMAT_WAVEFORMATEXTENSIBLE ksDataFormatExtensible;
+    RtlZeroMemory(&ksDataFormatExtensible, sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE));
+
+    PKSDATAFORMAT_WAVEFORMATEX ksDataFormatEx = (PKSDATAFORMAT_WAVEFORMATEX)AcxDataFormatGetKsDataFormat(DataFormatEx);
+    RtlCopyMemory(&ksDataFormatExtensible, ksDataFormatEx, sizeof(KSDATAFORMAT_WAVEFORMATEX));
+
+    ksDataFormatExtensible.WaveFormatExt.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    ksDataFormatExtensible.WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+    ksDataFormatExtensible.WaveFormatExt.Samples.wValidBitsPerSample = ksDataFormatEx->WaveFormatEx.wBitsPerSample;
+
+    if (ksDataFormatEx->WaveFormatEx.nChannels < 2)
+    {
+        ksDataFormatExtensible.WaveFormatExt.dwChannelMask = KSAUDIO_SPEAKER_MONO;
+    }
+    else
+    {
+        ksDataFormatExtensible.WaveFormatExt.dwChannelMask = KSAUDIO_SPEAKER_STEREO;
+    }
+
+    INIT_WAVEFORMATEX_GUID(&ksDataFormatExtensible.WaveFormatExt.SubFormat, ksDataFormatEx->WaveFormatEx.wFormatTag);
+
+    return AllocateFormat(&ksDataFormatExtensible, Circuit, Device, &DataFormatExtensible);
+}
