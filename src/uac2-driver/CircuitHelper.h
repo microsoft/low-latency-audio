@@ -53,6 +53,51 @@ typedef NTSTATUS(EVT_KSATTRIBUTES_VISITOR)(
 
 typedef EVT_KSATTRIBUTES_VISITOR * PFN_KSATTRIBUTES_VISITOR;
 
+#define HNSTIME_PER_MILLISECOND 10000
+
+typedef struct _DSP_DEVPROPERTY {
+    const DEVPROPKEY* PropertyKey;
+    DEVPROPTYPE Type;
+    ULONG BufferSize;
+    __field_bcount_opt(BufferSize) PVOID Buffer;
+} DSP_DEVPROPERTY, PDSP_DEVPROPERTY;
+
+static struct
+{
+    KSAUDIO_PACKETSIZE_CONSTRAINTS2                 TransportPacketConstraints;         // 1
+    KSAUDIO_PACKETSIZE_PROCESSINGMODE_CONSTRAINT    AdditionalProcessingConstraints[1]; // 1 + 1 = 2
+} s_PacketSizeConstraints =
+{
+    {
+        ULONG(7.0 * (double)HNSTIME_PER_MILLISECOND),           // 7 ms minimum processing interval
+        FILE_BYTE_ALIGNMENT,                                    // 1 byte packet size alignment
+        0,                                                      // no maximum packet size constraint
+        2,                                                      // 2 processing constraints follow
+        {
+            STATIC_AUDIO_SIGNALPROCESSINGMODE_RAW,              // constraint for raw processing mode
+            0,                                                  // NA samples per processing frame
+            ULONG(7.0 * (double)HNSTIME_PER_MILLISECOND),       // 70000 hns (7ms) per processing frame
+        }
+    },
+    {
+        {
+            STATIC_AUDIO_SIGNALPROCESSINGMODE_DEFAULT,          // constraint for default processing mode
+            0,                                                  // NA samples per processing frame
+            ULONG(7.0 * (double)HNSTIME_PER_MILLISECOND),       // 70000 hns (7ms) per processing frame
+        }
+    }
+};
+
+const DSP_DEVPROPERTY c_InterfaceProperties[] =
+{
+    {
+        &DEVPKEY_KsAudio_PacketSize_Constraints2,       // Key
+        DEVPROP_TYPE_BINARY,                            // Type
+        sizeof(s_PacketSizeConstraints),                // BufferSize
+        &s_PacketSizeConstraints,                       // Buffer
+    },
+};
+
 PAGED_CODE_SEG
 NTSTATUS AllocateFormat(
     _In_ KSDATAFORMAT_WAVEFORMATEXTENSIBLE * WaveFormat,
@@ -145,4 +190,25 @@ PAGED_CODE_SEG
 void TraceAcxDataFormat(
     _In_ UCHAR         DebugPrintLevel,
     _In_ ACXDATAFORMAT DataFormat
+);
+
+PAGED_CODE_SEG
+NTSTATUS AddPropertyToCircuitInterface(
+    _In_ ACXCIRCUIT             Circuit,
+    _In_ ULONG                  PropertyCount,
+    _In_ const DSP_DEVPROPERTY* Properties
+);
+
+PAGED_CODE_SEG
+WORD GetFormatTagFromAcxDataFormat(
+    _In_    ACXDATAFORMAT   DataFormat
+);
+
+PAGED_CODE_SEG
+NTSTATUS ConvertWaveFormatExToWaveFormatExtensible
+(
+    _In_    WDFDEVICE       Device,
+    _In_    ACXCIRCUIT      Circuit,
+    _In_    ACXDATAFORMAT   DataFormatEx,
+    _Out_   ACXDATAFORMAT& DataFormatExtensible
 );

@@ -21,7 +21,7 @@ Environment:
     Kernel mode
 
 --*/
-
+#include <initguid.h>
 #include "Private.h"
 #include "Public.h"
 #include "CircuitHelper.h"
@@ -751,4 +751,123 @@ void TraceAcxDataFormat(
         TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::wBitsPerSample  %u", waveFormatEx->wBitsPerSample);
         TraceEvents(DebugPrintLevel, TRACE_DEVICE, " - WAVEFORMATEX::cbSize          %u", waveFormatEx->cbSize);
     }
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS AddPropertyToCircuitInterface(
+    ACXCIRCUIT              Circuit,
+    ULONG                   PropertyCount,
+    const DSP_DEVPROPERTY*  Properties
+)
+{
+    PAGED_CODE();
+
+    NTSTATUS        status = STATUS_UNSUCCESSFUL;
+    UNICODE_STRING  acxLink = { 0 };
+    UNICODE_STRING  audioLink = { 0 };
+    WDFSTRING       wdfLink = AcxCircuitGetSymbolicLinkName(Circuit);
+    bool            freeStr = false;
+
+    auto exit = wil::scope_exit(
+        [&]() {
+            if (freeStr)
+            {
+                RtlFreeUnicodeString(&audioLink);
+                freeStr = false;
+            }
+        }
+    );
+
+    // Get the underline unicode string.
+    WdfStringGetUnicodeString(wdfLink, &acxLink);
+
+    // Make sure there is a string.
+    if (!acxLink.Length || !acxLink.Buffer)
+    {
+        status = STATUS_INVALID_DEVICE_STATE;
+        return status;
+    }
+
+    // Get the audio interface.
+    status = IoGetDeviceInterfaceAlias(&acxLink, &KSCATEGORY_AUDIO, &audioLink);
+    if (!NT_SUCCESS(status))
+    {
+        return status;
+    }
+
+    freeStr = true;
+
+    // Set specified properties on the audio interface for the ACXCIRCUIT.
+    for (ULONG i = 0; i < PropertyCount; ++i)
+    {
+        status = IoSetDeviceInterfacePropertyData(
+            &audioLink,
+            Properties[i].PropertyKey,
+            LOCALE_NEUTRAL,
+            PLUGPLAY_PROPERTY_PERSISTENT,
+            Properties[i].Type,
+            Properties[i].BufferSize,
+            Properties[i].Buffer
+        );
+
+        if (!NT_SUCCESS(status))
+        {
+            return status;
+        }
+    }
+
+    status = STATUS_SUCCESS;
+
+    return status;
+}
+
+PAGED_CODE_SEG
+WORD GetFormatTagFromAcxDataFormat(
+    _In_    ACXDATAFORMAT   DataFormat
+)
+{
+    PAGED_CODE();
+    PWAVEFORMATEX waveFormatEx = (PWAVEFORMATEX)AcxDataFormatGetWaveFormatEx(DataFormat);
+    return waveFormatEx->wFormatTag;
+}
+
+PAGED_CODE_SEG
+NTSTATUS ConvertWaveFormatExToWaveFormatExtensible
+(
+    _In_    WDFDEVICE       Device,
+    _In_    ACXCIRCUIT      Circuit,
+    _In_    ACXDATAFORMAT   DataFormatEx,
+    _Out_   ACXDATAFORMAT& DataFormatExtensible
+)
+{
+    PAGED_CODE();
+
+    if (GetFormatTagFromAcxDataFormat(DataFormatEx) == WAVE_FORMAT_EXTENSIBLE)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    KSDATAFORMAT_WAVEFORMATEXTENSIBLE ksDataFormatExtensible;
+    RtlZeroMemory(&ksDataFormatExtensible, sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE));
+
+    PKSDATAFORMAT_WAVEFORMATEX ksDataFormatEx = (PKSDATAFORMAT_WAVEFORMATEX)AcxDataFormatGetKsDataFormat(DataFormatEx);
+    RtlCopyMemory(&ksDataFormatExtensible, ksDataFormatEx, sizeof(KSDATAFORMAT_WAVEFORMATEX));
+
+    ksDataFormatExtensible.WaveFormatExt.Format.wFormatTag = WAVE_FORMAT_EXTENSIBLE;
+    ksDataFormatExtensible.WaveFormatExt.Format.cbSize = sizeof(WAVEFORMATEXTENSIBLE) - sizeof(WAVEFORMATEX);
+    ksDataFormatExtensible.WaveFormatExt.Samples.wValidBitsPerSample = ksDataFormatEx->WaveFormatEx.wBitsPerSample;
+
+    if (ksDataFormatEx->WaveFormatEx.nChannels < 2)
+    {
+        ksDataFormatExtensible.WaveFormatExt.dwChannelMask = KSAUDIO_SPEAKER_MONO;
+    }
+    else
+    {
+        ksDataFormatExtensible.WaveFormatExt.dwChannelMask = KSAUDIO_SPEAKER_STEREO;
+    }
+
+    INIT_WAVEFORMATEX_GUID(&ksDataFormatExtensible.WaveFormatExt.SubFormat, ksDataFormatEx->WaveFormatEx.wFormatTag);
+
+    return AllocateFormat(&ksDataFormatExtensible, Circuit, Device, &DataFormatExtensible);
 }

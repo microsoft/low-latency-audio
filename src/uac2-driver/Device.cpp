@@ -5784,41 +5784,28 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
 
     if (*bufferPeriod != deviceContext->Params.SuggestedBufferPeriod)
     {
-
-        if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
+        if (deviceContext->AsioOwner != nullptr)
         {
-            StopIsoStream(deviceContext);
-        }
 
-        status = UpdateFramePerIrp(deviceContext, *bufferPeriod);
-        ASSERT(NT_SUCCESS(status));
-
-        status = UpdateBufferOperationOffset(deviceContext, *bufferPeriod);
-        ASSERT(NT_SUCCESS(status));
-
-        deviceContext->Params.SuggestedBufferPeriod = *bufferPeriod;
-
-        status = ActivateAudioInterface(
-            deviceContext,
-            deviceContext->AudioProperty.SampleRate,
-            NS_USBAudio0200::FORMAT_TYPE_I,
-            NS_USBAudio0200::PCM,
-            deviceContext->InputProperty.BytesPerSample,
-            deviceContext->InputProperty.ValidBitsPerSample,
-            deviceContext->OutputProperty.BytesPerSample,
-            deviceContext->OutputProperty.ValidBitsPerSample
-        );
-
-        if (NT_SUCCESS(status))
-        {
             if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
             {
-                StartIsoStream(deviceContext);
+                StopIsoStream(deviceContext);
             }
-            else
-            {
-                ASSERT(NT_SUCCESS(status));
-            }
+
+            status = UpdateFramePerIrp(deviceContext, *bufferPeriod);
+            ASSERT(NT_SUCCESS(status));
+
+            status = UpdateBufferOperationOffset(deviceContext, *bufferPeriod);
+            ASSERT(NT_SUCCESS(status));
+
+            deviceContext->Params.SuggestedBufferPeriod = *bufferPeriod;
+
+            deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::ResetRequired);
+        }
+        else
+        {
+            deviceContext->Params.SuggestedBufferPeriod = *bufferPeriod;
+            status = STATUS_SUCCESS;
         }
     }
     else
