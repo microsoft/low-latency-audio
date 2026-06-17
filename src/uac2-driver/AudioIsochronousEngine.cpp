@@ -1035,6 +1035,17 @@ NTSTATUS AudioIsochronousEngine::StartIsoStream()
         m_rtPacketObject->ResetInternal(false);
     }
 
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - FirstPacketLatency               = %u", m_audioStreamPropertySet.InternalParameters.FirstPacketLatency);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - MaxIrpNumber                     = %u", m_audioStreamPropertySet.InternalParameters.MaxIrpNumber);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - ClassicFramesPerIrp              = %u", m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - ClassicFramesPerIrp2;            = %u", m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp2);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputBufferOperationOffset;      = 0x%x", m_audioStreamPropertySet.InternalParameters.InputBufferOperationOffset);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputHubOffset;                  = %u", m_audioStreamPropertySet.InternalParameters.InputHubOffset);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputBufferOperationOffset;     = 0x%x", m_audioStreamPropertySet.InternalParameters.OutputBufferOperationOffset);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputHubOffset;                 = %u", m_audioStreamPropertySet.InternalParameters.OutputHubOffset);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - SuggestedBufferPeriod            = %u", m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - SampleRate                       = %u", m_audioStreamPropertySet.AudioProperty.SampleRate);
+
     m_streamObject->SetStartIsoFrame(GetCurrentFrame(m_deviceContext), m_audioStreamPropertySet.InternalParameters.OutputFrameDelay);
     m_streamObject->SetIsoFrameDelay(m_audioStreamPropertySet.InternalParameters.FirstPacketLatency);
     m_streamObject->ResetIsoRequestCompletionTime();
@@ -4176,35 +4187,37 @@ NTSTATUS AudioIsochronousEngine::SetBufferPeriod(
 
     if (bufferPeriod != m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod)
     {
-        if (m_asioOwner != nullptr)
+        if ((m_startCounterAsio != 0) || (m_startCounterWdmAudio != 0))
         {
-            if ((m_startCounterAsio != 0) || (m_startCounterWdmAudio != 0))
-            {
-                StopIsoStream();
-            }
+            StopIsoStream();
+        }
 
-            status = UpdateFramePerIrp(bufferPeriod);
-            ASSERT(NT_SUCCESS(status));
+        status = UpdateFramesPerIrp(bufferPeriod);
+        IF_FAILED_JUMP(status, Exit);
 
-            status = UpdateBufferOperationOffset(bufferPeriod);
-            ASSERT(NT_SUCCESS(status));
+        status = UpdateBufferOperationOffset(bufferPeriod);
+        IF_FAILED_JUMP(status, Exit);
 
-            m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod = bufferPeriod;
+        m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod = bufferPeriod;
 
+        CalculateUsbLatency(&m_usbLatency);
+
+        m_audioStreamPropertySet.AudioProperty.InputLatencyOffset = m_usbLatency.InputLatency;
+        m_audioStreamPropertySet.AudioProperty.OutputLatencyOffset = m_usbLatency.OutputLatency;
+
+        if ((m_asioOwner != nullptr) && (m_asioBufferObject != nullptr))
+        {
             m_asioBufferObject->SetRecDeviceStatus(DeviceStatuses::ResetRequired);
-            status = STATUS_SUCCESS;
         }
-        else
-        {
-            m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod = bufferPeriod;
-            status = STATUS_SUCCESS;
-        }
+        status = STATUS_SUCCESS;
     }
     else
     {
         // Nothing is done because there is no change in flag.
         status = STATUS_SUCCESS;
     }
+
+Exit:
 
     ReleaseStreamWaitLock();
 
@@ -4558,30 +4571,31 @@ bool AudioIsochronousEngine::IsValidInternalParameters(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
-NTSTATUS AudioIsochronousEngine::UpdateFramePerIrp(
+NTSTATUS AudioIsochronousEngine::UpdateFramesPerIrp(
     ULONG bufferPeriod
 )
 {
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC!");
 
-    int bufferSizeIndex = 0;
-    for (; bufferSizeIndex < (ARRAYSIZE(g_DriverSettingsTable) - 1); ++bufferSizeIndex)
+    for (ULONG bufferSizeIndex = 0; bufferSizeIndex < (ARRAYSIZE(g_DriverSettingsTable) - 1); ++bufferSizeIndex)
     {
         if (g_DriverSettingsTable[bufferSizeIndex].PeriodFrames == bufferPeriod)
         {
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "ClassicFramesPerIrp  %u -> %u", m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp, g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp);
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "ClassicFramesPerIrp2 %u -> %u", m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp2, g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp2);
+
+            m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp = g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp;
+            m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp2 = g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp2;
+            status = STATUS_SUCCESS;
             break;
         }
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "ClassicFramesPerIrp  %u -> %u", m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp, g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "ClassicFramesPerIrp2 %u -> %u", m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp2, g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp2);
-
-    m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp = g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp;
-    m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp2 = g_DriverSettingsTable[bufferSizeIndex].Parameter.ClassicFramesPerIrp2;
-
-    return STATUS_SUCCESS;
+    return status;
 }
 
 PAGED_CODE_SEG
@@ -4590,25 +4604,25 @@ NTSTATUS AudioIsochronousEngine::UpdateBufferOperationOffset(
     ULONG bufferPeriod
 )
 {
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC!");
 
-    int bufferSizeIndex = 0;
-
-    for (; bufferSizeIndex < (ARRAYSIZE(g_DriverSettingsTable) - 1); ++bufferSizeIndex)
+    for (ULONG bufferSizeIndex = 0; bufferSizeIndex < (ARRAYSIZE(g_DriverSettingsTable) - 1); ++bufferSizeIndex)
     {
         if (g_DriverSettingsTable[bufferSizeIndex].PeriodFrames == bufferPeriod)
         {
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "OutputBufferOperationOffset  0x%08x -> 0x%08x", m_audioStreamPropertySet.InternalParameters.OutputBufferOperationOffset, g_DriverSettingsTable[bufferSizeIndex].Parameter.OutputBufferOperationOffset);
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "InputBufferOperationOffset   0x%08x -> 0x%08x", m_audioStreamPropertySet.InternalParameters.InputBufferOperationOffset, g_DriverSettingsTable[bufferSizeIndex].Parameter.InputBufferOperationOffset);
+
+            m_audioStreamPropertySet.InternalParameters.OutputBufferOperationOffset = g_DriverSettingsTable[bufferSizeIndex].Parameter.OutputBufferOperationOffset;
+            m_audioStreamPropertySet.InternalParameters.InputBufferOperationOffset = g_DriverSettingsTable[bufferSizeIndex].Parameter.InputBufferOperationOffset;
+            status = STATUS_SUCCESS;
             break;
         }
     }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "OutputBufferOperationOffset  0x%08x -> 0x%08x", m_audioStreamPropertySet.InternalParameters.OutputBufferOperationOffset, g_DriverSettingsTable[bufferSizeIndex].Parameter.OutputBufferOperationOffset);
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "InputBufferOperationOffset   0x%08x -> 0x%08x", m_audioStreamPropertySet.InternalParameters.InputBufferOperationOffset, g_DriverSettingsTable[bufferSizeIndex].Parameter.InputBufferOperationOffset);
-
-    m_audioStreamPropertySet.InternalParameters.OutputBufferOperationOffset = g_DriverSettingsTable[bufferSizeIndex].Parameter.OutputBufferOperationOffset;
-    m_audioStreamPropertySet.InternalParameters.InputBufferOperationOffset = g_DriverSettingsTable[bufferSizeIndex].Parameter.InputBufferOperationOffset;
 
     return STATUS_SUCCESS;
 }
@@ -4718,7 +4732,7 @@ NTSTATUS AudioIsochronousEngine::LoadInternalParametersFromDeviceRegistry()
         RETURN_NTSTATUS_IF_FAILED(SaveInternalParametersToDeviceRegistry());
     }
 
-    RETURN_NTSTATUS_IF_FAILED(UpdateFramePerIrp(m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod));
+    RETURN_NTSTATUS_IF_FAILED(UpdateFramesPerIrp(m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod));
 
     RETURN_NTSTATUS_IF_FAILED(UpdateBufferOperationOffset(m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod));
 

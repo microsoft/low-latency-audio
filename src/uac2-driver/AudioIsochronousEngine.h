@@ -948,7 +948,7 @@ class AudioIsochronousEngine
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    NTSTATUS UpdateFramePerIrp(
+    NTSTATUS UpdateFramesPerIrp(
         _In_ ULONG bufferPeriod
     );
 
