@@ -166,20 +166,69 @@ typedef struct FEEDBACK_PROPERTY_
 
 typedef struct _INTERNAL_PARAMETERS
 {
+    // Number of frames from the first ISO transfer request to the start of the transfer
+    // Value range: 0~1000
     ULONG FirstPacketLatency;
+
+    // Number of USB frames processed per IRP port on a USB 1.1 device
+    // Value range: 1~16
     ULONG ClassicFramesPerIrp;
+
+    // Number of USB frames processed per IRP on a USB 2.0 device
+    // Value range: 1~16
+    ULONG ClassicFramesPerIrp2;
+
+    // Number of IRPs issued simultaneously
+    // Value range: 2~8
     ULONG MaxIrpNumber;
+
+    // offset of the buffer boundary timing of the output and the notification timing to the ASIO driver [samples].
+    // Value range: 0~1000
     ULONG PreSendFrames;
-    LONG  OutputFrameDelay;
+
+    // If it is 0, the input and output frame numbers are the same at the time of IRP issuance. If it is not 0, the output frame number is delayed by the specified number of input frames.
+    // Value range: 0~16
+    LONG OutputFrameDelay;
+
+    // When it is 0, input and output processing is performed independently, and a buffer switch is generated based on the completion of output processing.
+    // In case 1, when input processing is complete, input/output processing is performed collectively, and a buffer switch is generated when input/output processing is complete.
+    // For 1, the OutputFrameDelay must be at least 1 and (ClassicFramesPerIrp-1) or less.
+    // Value range: 0~1
     ULONG DelayedOutputBufferSwitch;
     ULONG Reserved;
+
+    // When processing input buffers in a thread, the target is the current frame position read from the USB controller to the position after this value is subtracted, and the value is read from the buffer.
+    // When a value containing the OperationFlags::UseKernelOffset flag (0x10000000) and OR is written, the offset is calculated by the kernel driver based on the device model and connection status, and the value specified in this parameter is added and used.
+    // If a value is written with the OperationFlags::UseKernelLatency flag (0x80000000) and OR, the latency value used by the ASIO driver is calculated in the kernel.
+    // When using dropout detection, you need to specify this flag.
+    // Value range: 0~128 and OperationFlags::UseKernelOffset flags (0x10000000), OperationFlags::UseKernelLatency flags (0x80000000)
     ULONG InputBufferOperationOffset;
+
+    // When the OperationFlags::UseKernelOffset is specified in OutBufferOperationOffset, and when a hub is detected or its presence is unknown, the kernel driver internally adds this value to the value of InBufferOperationOffset.
+    // The kernel driver adds the output latency correction value by fs/1000 and reports it to the ASIO driver.
+    // Value range: 0~128
     ULONG InputHubOffset;
+
+    // When performing output buffer processing on a thread, the buffer is written to the buffer with the current frame position read from the USB controller plus this value as the processing target.
+    // When a value containing the OperationFlags::UseKernelOffset flag (0x10000000) and OR is written, the offset is calculated by the kernel driver based on the device model and connection status, and the value specified in this parameter is added and used.
+    // If a value is written with the OperationFlags::UseKernelLatency flag (0x80000000) and OR, the latency value used by the ASIO driver is calculated in the kernel.
+    // When using dropout detection, you need to specify this flag.
+    // Value range: 0~128 and OperationFlags::UseKernelOffset flags (0x10000000), OperationFlags::UseKernelLatency flags (0x80000000)
     ULONG OutputBufferOperationOffset;
+
+    // When the OperationFlags::UseKernelOffset is specified in OutBufferOperationOffset, and when a hub is detected or the presence or absence of a hub is unknown, the kernel driver internally adds this value to the OutBufferOperationOffset value.
+    // The kernel driver adds the output latency correction value by fs/1000 and reports it to the ASIO driver.
+    // Value range: 0~128
     ULONG OutputHubOffset;
     ULONG BufferThreadPriority;
     ULONG BufferFlags;
-    ULONG ClassicFramesPerIrp2;
+
+    // ASIO buffer size
+	// The actual buffer size is determined by multiplying this period based on the device's sample rate:
+	// 2x for sample rates >= 50 kHz and < 100 kHz,
+	// 4x for >= 100 kHz and < 200 kHz,
+	// 8x for >= 200 kHz and < 400 kHz,
+	// and 16x for >= 400 kHz.
     ULONG SuggestedBufferPeriod;
 } INTERNAL_PARAMETERS;
 

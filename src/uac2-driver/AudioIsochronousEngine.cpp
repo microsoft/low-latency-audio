@@ -595,7 +595,7 @@ AudioIsochronousEngine::CalculateUsbLatency(
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "Driver Internal Buffer : In %usamples, Out %usamples", usbLatency->InputDriverBuffer, usbLatency->OutputDriverBuffer);
 
-    if ((inBufferOperationOffset & 0x80000000UL) != 0)
+    if ((inBufferOperationOffset & toULONG(OperationFlags::UseKernelLatency)) != 0)
     {
         usbLatency->InputLatency = usbLatency->InputDriverBuffer;
     }
@@ -603,7 +603,7 @@ AudioIsochronousEngine::CalculateUsbLatency(
     {
         usbLatency->InputLatency = (inHardwareMs + inHubMs) * sampleRate / 1000;
     }
-    if ((outBufferOperationOffset & 0x80000000UL) != 0)
+    if ((outBufferOperationOffset & toULONG(OperationFlags::UseKernelLatency)) != 0)
     {
         usbLatency->OutputLatency = usbLatency->OutputDriverBuffer;
     }

@@ -100,6 +100,17 @@ constexpr int toInt(DeviceStatuses Status)
     return static_cast<int>(Status);
 }
 
+enum class OperationFlags : ULONG
+{
+    UseKernelLatency = 0x80000000ULL,
+    UseKernelOffset = 0x10000000ULL // Currently unused
+};
+
+constexpr ULONG toULONG(OperationFlags Flag)
+{
+    return static_cast<ULONG>(Flag);
+};
+
 // {016AF08F-F499-4637-B7A5-AFC01C86276F}
 DEFINE_GUID(KSPROPSETID_LowLatencyAudio, 0x16af08f, 0xf499, 0x4637, 0xb7, 0xa5, 0xaf, 0xc0, 0x1c, 0x86, 0x27, 0x6f);
 
