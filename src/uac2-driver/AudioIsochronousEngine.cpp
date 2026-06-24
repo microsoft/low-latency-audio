@@ -4234,7 +4234,11 @@ NTSTATUS AudioIsochronousEngine::GetInputLatency(
 
     AcquireStreamWaitLock();
 
-    inputLatency = m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod + m_audioStreamPropertySet.AudioProperty.InputLatencyOffset;
+    //
+    // m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod represents the value before applying sample rate-dependent coefficients, so it is not used here.
+    // Instead, use m_blockFrames, which has already been adjusted on the ASIO driver side, and treat it as the latency.
+    //
+    inputLatency = m_audioStreamPropertySet.AudioProperty.InputLatencyOffset;
 
     ReleaseStreamWaitLock();
 
@@ -4251,7 +4255,11 @@ NTSTATUS AudioIsochronousEngine::GetOutputLatency(
 
     AcquireStreamWaitLock();
 
-    outputLatency = m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod + m_audioStreamPropertySet.AudioProperty.OutputLatencyOffset;
+    //
+    // m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod represents the value before applying sample rate-dependent coefficients, so it is not used here.
+    // Instead, use m_blockFrames, which has already been adjusted on the ASIO driver side, and treat it as the latency.
+    //
+    outputLatency = m_audioStreamPropertySet.AudioProperty.OutputLatencyOffset;
 
     ReleaseStreamWaitLock();
 

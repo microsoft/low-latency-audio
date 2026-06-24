@@ -466,13 +466,13 @@ ASIOError CUSBAsio::getLatencies(long * inputLatency, long * outputLatency)
         return ASE_InvalidParameter;
     }
 
-    if (GetAudioProperty(m_usbDeviceHandle, &m_audioProperty))
+    if (!GetLatency())
     {
-        info_print_(_T("Obtained latency offset in-%d out-%d\n"), m_audioProperty.InputLatencyOffset, m_audioProperty.OutputLatencyOffset);
+        return ASE_NotPresent;
     }
 
-    *inputLatency = m_blockFrames + m_audioProperty.InputLatencyOffset;
-    *outputLatency = m_blockFrames + m_audioProperty.OutputLatencyOffset;
+    *inputLatency = m_inputLatency;
+    *outputLatency = m_outputLatency;
 
     // >>comment-002<<
     return ASE_OK;
@@ -1486,6 +1486,12 @@ bool CUSBAsio::GetLatency()
     {
         return result;
     }
+
+    //
+    // m_blockFrames is already adjusted using sample rate-dependent coefficients.
+    //
+    m_inputLatency += m_blockFrames;
+    m_outputLatency += m_blockFrames;
 
     info_print_(_T("latency is in:%d, out:%d samples.\n"), m_inputLatency, m_outputLatency);
 
