@@ -969,9 +969,17 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
             if (bufferSize != m_blockFrames)
             {
                 info_print_(_T("createBuffers : requested buffer size %u differs from preferred %u.\n"), bufferSize, m_blockFrames);
+#if false
                 m_blockFrames = bufferSize;
                 m_isRequireAsioReset = true;
                 SetEvent(m_asioResetEvent);
+#else
+				//
+				// Return an error if the specified ASIO buffer size differs from the kernel driver setting, ato support applications that cannot handle kAsioResetRequest immediately after ASIOCreateBuffers().
+				// 
+				error = ASE_InvalidMode;
+				return error;
+#endif
             }
 
             ULONG bytesPerSample = 0;
