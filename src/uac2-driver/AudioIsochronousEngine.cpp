@@ -124,21 +124,6 @@ AudioIsochronousEngine::AudioIsochronousEngine(
     m_audioStreamPropertySet.AudioProperty.CurrentSampleFormat = UACSampleFormat::UAC_SAMPLE_FORMAT_PCM;
     m_audioStreamPropertySet.AudioProperty.ProductName[0] = NULL;
 
-    if (m_deviceContext->IsDeviceHighSpeed || m_deviceContext->IsDeviceSuperSpeed)
-    {
-        // USB 2.0 or USB 3.0
-        m_audioStreamPropertySet.ClassicFramesPerIrp = m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp2;
-    }
-    else
-    {
-        // USB 1.1
-        m_audioStreamPropertySet.ClassicFramesPerIrp = m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp;
-    }
-    if (m_audioStreamPropertySet.ClassicFramesPerIrp == 0)
-    {
-        m_audioStreamPropertySet.ClassicFramesPerIrp = 1;
-    }
-
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
 
@@ -4601,6 +4586,21 @@ NTSTATUS AudioIsochronousEngine::UpdateFramesPerIrp(
             status = STATUS_SUCCESS;
             break;
         }
+    }
+
+    if (m_deviceContext->IsDeviceHighSpeed || m_deviceContext->IsDeviceSuperSpeed)
+    {
+        // USB 2.0 or USB 3.0
+        m_audioStreamPropertySet.ClassicFramesPerIrp = m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp2;
+    }
+    else
+    {
+        // USB 1.1
+        m_audioStreamPropertySet.ClassicFramesPerIrp = m_audioStreamPropertySet.InternalParameters.ClassicFramesPerIrp;
+    }
+    if (m_audioStreamPropertySet.ClassicFramesPerIrp == 0)
+    {
+        m_audioStreamPropertySet.ClassicFramesPerIrp = 1;
     }
 
     return status;
