@@ -1814,8 +1814,8 @@ void StreamObject::MixingEngineThreadMain(
                     ASSERT(inputInterval != 0);
                     ASSERT(outputInterval != 0);
 
-                    ULONGLONG inAdjustedBuffersCount = inBuffersTotalCount;
-                    ULONGLONG outAdjustedBuffersCount = outBuffersTotalCount;
+                    ULONGLONG inAdjustedBuffersCount = inBuffersCount;
+                    ULONGLONG outAdjustedBuffersCount = outBuffersCount;
 
                     if (inputInterval > outputInterval)
                     {
@@ -2231,8 +2231,8 @@ void StreamObject::MixingEngineThreadMainWithoutASIO(
                     ASSERT(inputInterval != 0);
                     ASSERT(outputInterval != 0);
 
-                    ULONGLONG inAdjustedBuffersCount = inBuffersTotalCount;
-                    ULONGLONG outAdjustedBuffersCount = outBuffersTotalCount;
+                    ULONGLONG inAdjustedBuffersCount = inBuffersCount;
+                    ULONGLONG outAdjustedBuffersCount = outBuffersCount;
 
                     if (inputInterval > outputInterval)
                     {

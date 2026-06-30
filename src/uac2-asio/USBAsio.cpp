@@ -974,11 +974,11 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
                 m_isRequireAsioReset = true;
                 SetEvent(m_asioResetEvent);
 #else
-				//
-				// Return an error if the specified ASIO buffer size differs from the kernel driver setting, ato support applications that cannot handle kAsioResetRequest immediately after ASIOCreateBuffers().
-				// 
-				error = ASE_InvalidMode;
-				return error;
+                //
+                // Return an error if the specified ASIO buffer size differs from the kernel driver setting, to support applications that cannot handle kAsioResetRequest immediately after ASIOCreateBuffers().
+                //
+                error = ASE_InvalidMode;
+                return error;
 #endif
             }
 
