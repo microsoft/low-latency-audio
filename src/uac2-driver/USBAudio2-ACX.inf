@@ -38,6 +38,7 @@ USBAudio2-ACX.sys  = 1,,
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1509        ; Steinberg UR22
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1730        ; Steinberg UR44C
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1760        ; Steinberg IXO22
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1761        ; Steinberg IXO12
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_8219&MI_00  ; Focusrite Scarlett 2i2 4th Gen
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_821B&MI_00  ; Focusrite Scarlett 16i16
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_060D&MI_00  ; PreSonus Quantum HD 2

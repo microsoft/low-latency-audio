@@ -55,7 +55,7 @@ static constexpr double c_TwoRaisedTo32Reciprocal = 1. / c_TwoRaisedTo32;
 #define DRIVER_NAME _T(DRIVER_NAME_8b)
 
 static const TCHAR * c_ServiceName = _T("USBAudio2-ACX");
-static const TCHAR * c_ReferenceName = _T("RenderDevice0");
+static const TCHAR * c_ReferenceName = _T("RenderDevice");
 
 #define DSD_ZERO_BYTE 0x96
 #define DSD_ZERO_WORD 0x9696
