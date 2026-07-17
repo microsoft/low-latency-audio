@@ -470,7 +470,7 @@ Return Value:
     status = ReadAndSelectDescriptors(device);
     if (!NT_SUCCESS(status))
     {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ReadandSelectDescriptors failed %!STATUS!", status);
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ReadAndSelectDescriptors failed %!STATUS!", status);
         return status;
     }
 

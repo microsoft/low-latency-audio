@@ -392,29 +392,7 @@ CStreamEngine::Run()
         goto exit;
     }
 
-    //
-    // When a device is connected or the driver calls
-    // AcxPinNotifyDataFormatChange, Windows invokes EvtStreamPrepareHardware
-    // and EvtStreamReleaseHardware to check the corresponding DataFormat.
-    //
-    // If the sample rate of the device is changed within
-    // EvtStreamPrepareHardware, it may result in frequent changes in a short
-    // period, leading to unexpected behavior or issues.
-    //
-    // Similarly, when the sample rate is changed via ASIO and notified
-    // through AcxPinNotifyDataFormatChange, the same problem can occur,
-    // causing the sample rate set by ASIO to be unintentionally altered.
-    //
-    // To address this issue, we have modified the implementation so that the
-    // sample rate is no longer changed in EvtStreamPrepareHardware, but
-    // instead in EvtStreamRun.
-    //
-
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, "this = %p, m_streamFormat = %p", this, m_streamFormat);
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - %u, %llu, %u, %u, %u, %u, %u, %u, %u", AcxDataFormatGetChannelsCount(m_streamFormat), AcxDataFormatGetChannelMask(m_streamFormat), AcxDataFormatGetSampleSize(m_streamFormat), AcxDataFormatGetBitsPerSample(m_streamFormat), AcxDataFormatGetValidBitsPerSample(m_streamFormat), AcxDataFormatGetSamplesPerBlock(m_streamFormat), AcxDataFormatGetBlockAlign(m_streamFormat), AcxDataFormatGetSampleRate(m_streamFormat), AcxDataFormatGetAverageBytesPerSec(m_streamFormat));
-
-    status = m_audioIsochronousEngine->StreamSetDataFormat(m_input, m_deviceIndex, m_streamFormat);
-    IF_FAILED_JUMP(status, exit);
 
     status = m_audioIsochronousEngine->StreamRun(m_input, m_deviceIndex);
     IF_FAILED_JUMP(status, exit);
@@ -614,8 +592,11 @@ CRenderStreamEngine::PrepareHardware()
     // For the reason why sample rate changes are not performed here,
     // please refer to the comments in CStreamEngine::Run().
     //
-    // status = m_audioIsochronousEngine->StreamSetDataFormat(false, GetDeviceContext(), m_streamFormat);
-    // RETURN_NTSTATUS_IF_FAILED(status);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, "this = %p, m_streamFormat = %p", this, m_streamFormat);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - %u, %llu, %u, %u, %u, %u, %u, %u, %u", AcxDataFormatGetChannelsCount(m_streamFormat), AcxDataFormatGetChannelMask(m_streamFormat), AcxDataFormatGetSampleSize(m_streamFormat), AcxDataFormatGetBitsPerSample(m_streamFormat), AcxDataFormatGetValidBitsPerSample(m_streamFormat), AcxDataFormatGetSamplesPerBlock(m_streamFormat), AcxDataFormatGetBlockAlign(m_streamFormat), AcxDataFormatGetSampleRate(m_streamFormat), AcxDataFormatGetAverageBytesPerSec(m_streamFormat));
+
+    status = m_audioIsochronousEngine->StreamSetDataFormat(m_input, m_deviceIndex, m_streamFormat);
+    RETURN_NTSTATUS_IF_FAILED(status);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit %!STATUS!", status);
     return status;
@@ -802,8 +783,10 @@ CCaptureStreamEngine::PrepareHardware()
     // For the reason why sample rate changes are not performed here,
     // please refer to the comments in CStreamEngine::Run().
     //
-    // status = m_audioIsochronousEngine->StreamSetDataFormat(true, GetDeviceContext(), m_streamFormat);
-    // RETURN_NTSTATUS_IF_FAILED(status);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, "this = %p, m_streamFormat = %p", this, m_streamFormat);
+    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - %u, %llu, %u, %u, %u, %u, %u, %u, %u", AcxDataFormatGetChannelsCount(m_streamFormat), AcxDataFormatGetChannelMask(m_streamFormat), AcxDataFormatGetSampleSize(m_streamFormat), AcxDataFormatGetBitsPerSample(m_streamFormat), AcxDataFormatGetValidBitsPerSample(m_streamFormat), AcxDataFormatGetSamplesPerBlock(m_streamFormat), AcxDataFormatGetBlockAlign(m_streamFormat), AcxDataFormatGetSampleRate(m_streamFormat), AcxDataFormatGetAverageBytesPerSec(m_streamFormat));
+    status = m_audioIsochronousEngine->StreamSetDataFormat(m_input, m_deviceIndex, m_streamFormat);
+    RETURN_NTSTATUS_IF_FAILED(status);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit %!STATUS!", status);
     return status;
