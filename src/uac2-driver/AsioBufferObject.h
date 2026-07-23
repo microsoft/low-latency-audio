@@ -72,8 +72,8 @@ class AsioBufferObject
     bool IsUserSpaceThreadOutputReady() const;
 
     __drv_maxIRQL(PASSIVE_LEVEL)
-        PAGED_CODE_SEG
-        bool IsInitialized() const;
+    PAGED_CODE_SEG
+    bool IsInitialized() const;
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG

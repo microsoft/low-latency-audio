@@ -458,6 +458,7 @@ RtPacketObject::CopyFromRtPacketToOutputData(
     case UACSampleFormat::UAC_SAMPLE_FORMAT_PCM: {
         for (ULONG acxCh = 0; acxCh < rtPacketInfo->Channels; acxCh++)
         {
+            bool  copySamples = ((acxCh + rtPacketInfo->UsbChannel) < m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels);
             ULONG rtPacketIndex = (rtPacketInfo->RtPacketPosition / rtPacketInfo->RtPacketSize) % rtPacketInfo->RtPacketsCount;
             ULONG srcIndexInRtPacket = rtPacketInfo->RtPacketPosition % rtPacketInfo->RtPacketSize + acxCh * m_outputBytesPerSample;
             PBYTE srcData = (PBYTE)rtPacketInfo->RtPackets[rtPacketIndex];
@@ -471,73 +472,76 @@ RtPacketObject::CopyFromRtPacketToOutputData(
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - srcIndexInRtPacket, dstIndex = %u, %u", srcIndexInRtPacket, dstIndex);
 
                 // To accommodate differing specifications between the bytesPerSample of the device and ACX audio, the following code modifications are necessary.
-                if (m_outputBytesPerSample == 2)
+                if (copySamples)
                 {
-                    PSHORT outSample = (PSHORT)(dstData + dstIndex);
-                    LONG   thisSample = (LONG)(*outSample) + *(PSHORT)(srcData + srcIndexInRtPacket);
-                    if (thisSample > 0x7fff)
+                    if (m_outputBytesPerSample == 2)
                     {
-                        *outSample = 0x7fff;
-                    }
-                    else if (thisSample < -0x8000)
-                    {
-                        *outSample = -0x8000;
-                    }
+                        PSHORT outSample = (PSHORT)(dstData + dstIndex);
+                        LONG   thisSample = (LONG)(*outSample) + *(PSHORT)(srcData + srcIndexInRtPacket);
+                        if (thisSample > 0x7fff)
+                        {
+                            *outSample = 0x7fff;
+                        }
+                        else if (thisSample < -0x8000)
+                        {
+                            *outSample = -0x8000;
+                        }
 
-                    {
-                        *outSample = (SHORT)thisSample;
+                        {
+                            *outSample = (SHORT)thisSample;
+                        }
                     }
-                }
-                else if (m_outputBytesPerSample == 3)
-                {
-                    PUCHAR          outSample = (PUCHAR)(dstData + dstIndex);
-                    volatile BYTE * wdmSample = (volatile BYTE *)(srcData + srcIndexInRtPacket);
-                    LONG            thisSample = (LONG)((ULONG)outSample[0] + ((ULONG)outSample[1] << 8)) + ((LONG)((PCHAR)outSample)[2] << 16) + (LONG)((ULONG)wdmSample[0] + ((ULONG)wdmSample[1] << 8)) + ((LONG)((PCHAR)wdmSample)[2] << 16);
-                    if (thisSample > 0x7fffff)
+                    else if (m_outputBytesPerSample == 3)
                     {
-                        outSample[0] = 0xff;
-                        outSample[1] = 0xff;
-                        outSample[2] = 0x7f;
+                        PUCHAR          outSample = (PUCHAR)(dstData + dstIndex);
+                        volatile BYTE * wdmSample = (volatile BYTE *)(srcData + srcIndexInRtPacket);
+                        LONG            thisSample = (LONG)((ULONG)outSample[0] + ((ULONG)outSample[1] << 8)) + ((LONG)((PCHAR)outSample)[2] << 16) + (LONG)((ULONG)wdmSample[0] + ((ULONG)wdmSample[1] << 8)) + ((LONG)((PCHAR)wdmSample)[2] << 16);
+                        if (thisSample > 0x7fffff)
+                        {
+                            outSample[0] = 0xff;
+                            outSample[1] = 0xff;
+                            outSample[2] = 0x7f;
+                        }
+                        else if (thisSample < -0x800000)
+                        {
+                            outSample[0] = 0x00;
+                            outSample[1] = 0x00;
+                            outSample[2] = 0x80;
+                        }
+                        else
+                        {
+                            outSample[0] = ((PUCHAR)(&thisSample))[0];
+                            outSample[1] = ((PUCHAR)(&thisSample))[1];
+                            outSample[2] = ((PUCHAR)(&thisSample))[2];
+                        }
                     }
-                    else if (thisSample < -0x800000)
+                    else if (m_outputBytesPerSample == 4)
                     {
-                        outSample[0] = 0x00;
-                        outSample[1] = 0x00;
-                        outSample[2] = 0x80;
-                    }
-                    else
-                    {
-                        outSample[0] = ((PUCHAR)(&thisSample))[0];
-                        outSample[1] = ((PUCHAR)(&thisSample))[1];
-                        outSample[2] = ((PUCHAR)(&thisSample))[2];
-                    }
-                }
-                else if (m_outputBytesPerSample == 4)
-                {
-                    PUCHAR          outSample = (PUCHAR)(dstData + dstIndex);
-                    volatile BYTE * wdmSample = (volatile BYTE *)(srcData + srcIndexInRtPacket);
-                    LONGLONG        thisSample = (LONGLONG) * ((LONG *)outSample) + (LONGLONG) * ((LONG *)wdmSample);
+                        PUCHAR          outSample = (PUCHAR)(dstData + dstIndex);
+                        volatile BYTE * wdmSample = (volatile BYTE *)(srcData + srcIndexInRtPacket);
+                        LONGLONG        thisSample = (LONGLONG) * ((LONG *)outSample) + (LONGLONG) * ((LONG *)wdmSample);
 
-                    if (thisSample > 0x7fffffffLL)
-                    {
-                        outSample[0] = 0xff;
-                        outSample[1] = 0xff;
-                        outSample[2] = 0xff;
-                        outSample[3] = 0x7f;
-                    }
-                    else if (thisSample < -0x80000000LL)
-                    {
-                        outSample[0] = 0x00;
-                        outSample[1] = 0x00;
-                        outSample[2] = 0x00;
-                        outSample[3] = 0x80;
-                    }
-                    else
-                    {
-                        outSample[0] = ((PUCHAR)(&thisSample))[0];
-                        outSample[1] = ((PUCHAR)(&thisSample))[1];
-                        outSample[2] = ((PUCHAR)(&thisSample))[2];
-                        outSample[3] = ((PUCHAR)(&thisSample))[3];
+                        if (thisSample > 0x7fffffffLL)
+                        {
+                            outSample[0] = 0xff;
+                            outSample[1] = 0xff;
+                            outSample[2] = 0xff;
+                            outSample[3] = 0x7f;
+                        }
+                        else if (thisSample < -0x80000000LL)
+                        {
+                            outSample[0] = 0x00;
+                            outSample[1] = 0x00;
+                            outSample[2] = 0x00;
+                            outSample[3] = 0x80;
+                        }
+                        else
+                        {
+                            outSample[0] = ((PUCHAR)(&thisSample))[0];
+                            outSample[1] = ((PUCHAR)(&thisSample))[1];
+                            outSample[2] = ((PUCHAR)(&thisSample))[2];
+                            outSample[3] = ((PUCHAR)(&thisSample))[3];
+                        }
                     }
                 }
                 dstIndex += (usbBytesPerSample * usbChannels);
@@ -567,6 +571,7 @@ RtPacketObject::CopyFromRtPacketToOutputData(
     case UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT: {
         for (ULONG acxCh = 0; acxCh < rtPacketInfo->Channels; acxCh++)
         {
+            bool  copySamples = ((acxCh + rtPacketInfo->UsbChannel) < m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels);
             ULONG rtPacketIndex = (rtPacketInfo->RtPacketPosition / rtPacketInfo->RtPacketSize) % rtPacketInfo->RtPacketsCount;
             ULONG srcIndexInRtPacket = rtPacketInfo->RtPacketPosition % rtPacketInfo->RtPacketSize + acxCh * m_outputBytesPerSample;
             PBYTE srcData = (PBYTE)rtPacketInfo->RtPackets[rtPacketIndex];
@@ -580,7 +585,10 @@ RtPacketObject::CopyFromRtPacketToOutputData(
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - srcIndexInRtPacket, dstIndex = %u, %u", srcIndexInRtPacket, dstIndex);
 
                 float * outSample = (float *)(dstData + dstIndex);
-                *outSample = *outSample + *(float *)(srcData + srcIndexInRtPacket);
+                if (copySamples)
+                {
+                    *outSample = *outSample + *(float *)(srcData + srcIndexInRtPacket);
+                }
 
                 dstIndex += (usbBytesPerSample * usbChannels);
                 srcIndexInRtPacket += m_outputBytesPerSample * rtPacketInfo->Channels;
@@ -747,6 +755,7 @@ RtPacketObject::CopyToRtPacketFromInputData(
     case UACSampleFormat::UAC_SAMPLE_FORMAT_PCM: {
         for (ULONG acxCh = 0; acxCh < rtPacketInfo->Channels; acxCh++)
         {
+            bool  copySamples = ((acxCh + rtPacketInfo->UsbChannel) < m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.UsbChannels);
             ULONG rtPacketIndex = (rtPacketInfo->RtPacketPosition / rtPacketInfo->RtPacketSize) % rtPacketInfo->RtPacketsCount;
             ULONG dstIndexInRtPacket = rtPacketInfo->RtPacketPosition % rtPacketInfo->RtPacketSize + acxCh * m_inputBytesPerSample;
             PBYTE srcData = (PBYTE)buffer;
@@ -760,19 +769,39 @@ RtPacketObject::CopyToRtPacketFromInputData(
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - dstIndexInRtPacket, dstIndex = %u, %u", dstIndexInRtPacket, srcIndex);
 
                 // To accommodate differing specifications between the bytesPerSample of the device and ACX audio, the following code modifications are necessary.
-                if (m_inputBytesPerSample == 2)
+                if (copySamples)
                 {
-                    *(PSHORT)(dstData + dstIndexInRtPacket) = *(PSHORT)(srcData + srcIndex);
+                    if (m_inputBytesPerSample == 2)
+                    {
+                        *(PSHORT)(dstData + dstIndexInRtPacket) = *(PSHORT)(srcData + srcIndex);
+                    }
+                    else if (m_inputBytesPerSample == 3)
+                    {
+                        *(dstData + dstIndexInRtPacket) = *(srcData + srcIndex);
+                        *(dstData + dstIndexInRtPacket + 1) = *(srcData + srcIndex + 1);
+                        *(dstData + dstIndexInRtPacket + 2) = *(srcData + srcIndex + 2);
+                    }
+                    else if (m_inputBytesPerSample == 4)
+                    {
+                        *((LONG *)(dstData + dstIndexInRtPacket)) = *((LONG *)(srcData + srcIndex));
+                    }
                 }
-                else if (m_inputBytesPerSample == 3)
+                else
                 {
-                    *(dstData + dstIndexInRtPacket) = *(srcData + srcIndex);
-                    *(dstData + dstIndexInRtPacket + 1) = *(srcData + srcIndex + 1);
-                    *(dstData + dstIndexInRtPacket + 2) = *(srcData + srcIndex + 2);
-                }
-                else if (m_inputBytesPerSample == 4)
-                {
-                    *((LONG *)(dstData + dstIndexInRtPacket)) = *((LONG *)(srcData + srcIndex));
+                    if (m_inputBytesPerSample == 2)
+                    {
+                        *(PSHORT)(dstData + dstIndexInRtPacket) = 0;
+                    }
+                    else if (m_inputBytesPerSample == 3)
+                    {
+                        *(dstData + dstIndexInRtPacket) = 0;
+                        *(dstData + dstIndexInRtPacket + 1) = 0;
+                        *(dstData + dstIndexInRtPacket + 2) = 0;
+                    }
+                    else if (m_inputBytesPerSample == 4)
+                    {
+                        *((LONG *)(dstData + dstIndexInRtPacket)) = 0;
+                    }
                 }
                 srcIndex += (usbBytesPerSample * usbChannels);
                 dstIndexInRtPacket += m_inputBytesPerSample * rtPacketInfo->Channels;
@@ -796,6 +825,7 @@ RtPacketObject::CopyToRtPacketFromInputData(
     case UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT: {
         for (ULONG acxCh = 0; acxCh < rtPacketInfo->Channels; acxCh++)
         {
+            bool  copySamples = ((acxCh + rtPacketInfo->UsbChannel) < m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.UsbChannels);
             ULONG rtPacketIndex = (rtPacketInfo->RtPacketPosition / rtPacketInfo->RtPacketSize) % rtPacketInfo->RtPacketsCount;
             ULONG dstIndexInRtPacket = rtPacketInfo->RtPacketPosition % rtPacketInfo->RtPacketSize + acxCh * m_inputBytesPerSample;
             PBYTE srcData = (PBYTE)buffer;
@@ -807,7 +837,14 @@ RtPacketObject::CopyToRtPacketFromInputData(
             {
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - dstIndexInRtPacket, dstIndex = %u, %u", dstIndexInRtPacket, srcIndex);
 
-                *((float *)(dstData + dstIndexInRtPacket)) = *((float *)(srcData + srcIndex));
+                if (copySamples)
+                {
+                    *((float *)(dstData + dstIndexInRtPacket)) = *((float *)(srcData + srcIndex));
+                }
+                else
+                {
+                    *((float *)(dstData + dstIndexInRtPacket)) = (float)0;
+                }
                 srcIndex += (usbBytesPerSample * usbChannels);
                 dstIndexInRtPacket += m_inputBytesPerSample * rtPacketInfo->Channels;
                 bytesCopiedDstData += m_inputBytesPerSample;
