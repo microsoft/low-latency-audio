@@ -3738,7 +3738,7 @@ NTSTATUS AudioIsochronousEngine::ChangeSampleRate(
     if (m_streamObject != nullptr)
     {
         AcquireAsioWaitLock();
-        if (m_asioBufferObject == nullptr)
+        if (m_asioBufferObject != nullptr)
         {
             streamRunning = true;
         }

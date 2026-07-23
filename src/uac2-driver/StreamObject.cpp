@@ -1678,6 +1678,13 @@ void StreamObject::MixingEngineThreadMain(
         m_audioIsochronousEngine->AcquireAsioWaitLock();
         bool handleAsioBuffer = ((streamStatus == c_ioSteady) && (m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && m_audioIsochronousEngine->GetAsioBufferObject()->IsRecBufferReady() && (m_recoverActive == 0) && (m_outputRequireZeroFill == 0) && !IsFirstWakeUp());
 
+        if ((m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && m_audioIsochronousEngine->GetAsioBufferObject()->IsInitialized())
+        {
+            m_asioReadyPosition = 0LL;
+            m_outputAsioBufferedPosition = 0LL;
+            m_inputAsioBufferedPosition = 0LL;
+        }
+
         LONGLONG playReadyPosition = {0};
         if ((m_audioIsochronousEngine->GetAsioBufferObject() != nullptr) && m_audioIsochronousEngine->GetAsioBufferObject()->IsRecBufferReady())
         {
@@ -1763,6 +1770,10 @@ void StreamObject::MixingEngineThreadMain(
                         inRemainder.Buffer = nullptr;
                     }
                     m_inputAsioBufferedPosition += m_inputBuffers[inBuffersCount].Length / m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock;
+                }
+                else
+                {
+                    inRemainder.Buffer = nullptr;
                 }
 
                 if (inBuffersCount != 0 || !inProcessRemainder)
@@ -1891,6 +1902,10 @@ void StreamObject::MixingEngineThreadMain(
                         }
                     }
                     m_outputAsioBufferedPosition += m_outputBuffers[outBuffersCount].Length / m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock;
+                }
+                else
+                {
+                    inRemainder.Buffer = nullptr;
                 }
 
                 if (outBuffersCount != 0 || !outProcessRemainder)

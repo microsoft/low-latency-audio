@@ -450,6 +450,13 @@ bool AsioBufferObject::IsUserSpaceThreadOutputReady() const
     return ((outputReady & toInt(UserThreadStatuses::OutputReady)) && (outputReady & toInt(UserThreadStatuses::BufferStart)));
 }
 
+__drv_maxIRQL(PASSIVE_LEVEL)
+PAGED_CODE_SEG
+bool AsioBufferObject::IsInitialized() const
+{
+    return ((m_readPosition == 0LL) && (m_writePosition == 0LL));
+}
+
 _Use_decl_annotations_
 PAGED_CODE_SEG
 ULONG AsioBufferObject::UpdateReadyPosition()
