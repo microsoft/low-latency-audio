@@ -996,8 +996,11 @@ void USBAudioStreamInterface::Dump()
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - stram interface %u, alternate setting %u, %u endpoints, has input %!bool!, has output %!bool!, has feedback %!bool!", GetInterfaceNumber(), GetAlternateSetting(), GetNumEndpoints(), HasInputIsochronousEndpoint(), HasOutputIsochronousEndpoint(), HasFeedbackEndpoint());
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " -   %u ch, %u bytes per sample, %u valid bits, %u max suported bytes per sample, %u max supported valid bits, 0x%02x feedback endpoint address, 0x%02x feedback interval", GetCurrentChannels(), GetBytesPerSample(), GetValidBitsPerSample(), GetMaxSupportedBytesPerSample(), GetMaxSupportedValidBitsPerSample(), GetFeedbackEndpointAddress(), GetFeedbackInterval());
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " -   current terminal link %u, bm controls %u, active alternate setting 0x%02x, valid alternate settingmap 0x%08x", GetCurrentTerminalLink(), GetCurrentBmControls(), GetCurrentActiveAlternateSetting(), GetCurrentValidAlternateSettingMap());
+    if (GetAlternateSetting() != 0)
+    {
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " -   %u ch, %u bytes per sample, %u valid bits, %u max suported bytes per sample, %u max supported valid bits, 0x%02x feedback endpoint address, 0x%02x feedback interval", GetCurrentChannels(), GetBytesPerSample(), GetValidBitsPerSample(), GetMaxSupportedBytesPerSample(), GetMaxSupportedValidBitsPerSample(), GetFeedbackEndpointAddress(), GetFeedbackInterval());
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " -   current terminal link %u, bm controls %u, active alternate setting 0x%02x, valid alternate settingmap 0x%08x", GetCurrentTerminalLink(), GetCurrentBmControls(), GetCurrentActiveAlternateSetting(), GetCurrentValidAlternateSettingMap());
+    }
 }
 
 // ======================================================================
@@ -6043,6 +6046,7 @@ NTSTATUS USBAudio2StreamInterface::UpdateCurrentACTValAltSettingsControl(
         else if (status == STATUS_UNSUCCESSFUL)
         {
             // For devices that do not support NS_USBAudio0200::AS_ACT_ALT_SETTING_CONTROL, return STATUS_SUCCESS.
+            TraceEvents(TRACE_LEVEL_WARNING, TRACE_DESCRIPTOR, " - interface %u, alternateSetting %u: The Class-Specific AS Interface Descriptor advertises support for the Active Alternate Setting Control (read access). However, a Control Request to read this control returns %!STATUS!", GetInterfaceNumber(), GetAlternateSetting(), status);
             m_activeAlternateSetting = 0;
             status = STATUS_SUCCESS;
         }
@@ -6083,7 +6087,7 @@ NTSTATUS USBAudio2StreamInterface::UpdateCurrentACTAltSettingsControl(
         else if (status == STATUS_UNSUCCESSFUL)
         {
             // For devices that do not support NS_USBAudio0200::AS_VAL_ALT_SETTINGS_CONTROL, return STATUS_SUCCESS.
-            TraceEvents(TRACE_LEVEL_WARNING, TRACE_DESCRIPTOR, " - interface %u, validAlternateSettingMap 0x%x, control read only. %!STATUS!", GetInterfaceNumber(), validAlternateSettingMap, status);
+            TraceEvents(TRACE_LEVEL_WARNING, TRACE_DESCRIPTOR, " - interface %u, alternateSetting %u: The Class-Specific AS Interface Descriptor advertises support for the Valid Alternate Settings Control (read access). However, a Control Request to read this control returns %!STATUS!", GetInterfaceNumber(), GetAlternateSetting(), status);
             m_validAlternateSettingMap = 0;
             status = STATUS_SUCCESS;
         }

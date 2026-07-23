@@ -137,11 +137,35 @@ bool USBAudioDataFormat::IsEqualFormat(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
-bool USBAudioDataFormat::operator==(_In_ USBAudioDataFormat const & format) const
+bool USBAudioDataFormat::operator==(_In_ USBAudioDataFormat const & rhs) const
 {
     PAGED_CODE();
 
-    return (m_formatType == format.m_formatType) && (m_format == format.m_format) && (m_subslotSize == format.m_subslotSize) && (m_bitResolution == format.m_bitResolution);
+    return (m_formatType == rhs.m_formatType) && (m_format == rhs.m_format) && (m_subslotSize == rhs.m_subslotSize) && (m_bitResolution == rhs.m_bitResolution);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+bool USBAudioDataFormat::operator<(_In_ USBAudioDataFormat const & rhs) const
+{
+    PAGED_CODE();
+
+    if (m_formatType != rhs.m_formatType)
+    {
+        return m_formatType < rhs.m_formatType;
+    }
+
+    if (m_format != rhs.m_format)
+    {
+        return m_format < rhs.m_format;
+    }
+
+    if (m_subslotSize != rhs.m_subslotSize)
+    {
+        return m_subslotSize < rhs.m_subslotSize;
+    }
+
+    return m_bitResolution < rhs.m_bitResolution;
 }
 
 _Use_decl_annotations_
@@ -157,7 +181,7 @@ USBAudioDataFormat::GetNext()
 _Use_decl_annotations_
 PAGED_CODE_SEG
 USBAudioDataFormat *
-USBAudioDataFormat::Append(USBAudioDataFormat * nextUSBAudioDataFormat)
+USBAudioDataFormat::SetNext(USBAudioDataFormat * nextUSBAudioDataFormat)
 {
     PAGED_CODE();
 
@@ -807,6 +831,78 @@ USBAudioDataFormatManager::~USBAudioDataFormatManager()
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
+USBAudioDataFormatManager::InsertUSBAudioDataFormat(
+    UCHAR                 formatType,
+    UCHAR                 formats[4],
+    UCHAR                 subslotSize,
+    UCHAR                 bitResolution,
+    USBAudioDataFormat *& createdUsbAudioDataFormat
+)
+{
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! %u, %u, %u, %u, %u, %u, %u", formatType, formats[0], formats[1], formats[2], formats[3], subslotSize, bitResolution);
+
+    USBAudioDataFormat * usbAudioDataFormat = m_usbAudioDataFormat;
+
+    createdUsbAudioDataFormat = nullptr;
+
+    if (m_usbAudioDataFormat == nullptr)
+    {
+        m_usbAudioDataFormat = createdUsbAudioDataFormat = USBAudioDataFormat::Create(formatType, formats, subslotSize, bitResolution);
+        RETURN_NTSTATUS_IF_TRUE(createdUsbAudioDataFormat == nullptr, STATUS_INSUFFICIENT_RESOURCES);
+        m_numOfFormats++;
+
+        return STATUS_SUCCESS;
+    }
+    else
+    {
+        USBAudioDataFormat * prevUsbAudioDataFormat = nullptr;
+        usbAudioDataFormat = m_usbAudioDataFormat;
+
+        while (usbAudioDataFormat != nullptr)
+        {
+            if (usbAudioDataFormat->IsEqualFormat(formatType, formats, subslotSize, bitResolution))
+            {
+                return STATUS_SUCCESS;
+            }
+            if (USBAudioDataFormat(formatType, formats, subslotSize, bitResolution) < *usbAudioDataFormat)
+            {
+                createdUsbAudioDataFormat = USBAudioDataFormat::Create(formatType, formats, subslotSize, bitResolution);
+                RETURN_NTSTATUS_IF_TRUE(createdUsbAudioDataFormat == nullptr, STATUS_INSUFFICIENT_RESOURCES);
+                if (prevUsbAudioDataFormat != nullptr)
+                {
+                    ASSERT(usbAudioDataFormat == prevUsbAudioDataFormat->GetNext());
+                    createdUsbAudioDataFormat->SetNext(usbAudioDataFormat);
+                    prevUsbAudioDataFormat->SetNext(createdUsbAudioDataFormat);
+                }
+                else
+                {
+                    createdUsbAudioDataFormat->SetNext(m_usbAudioDataFormat);
+                    m_usbAudioDataFormat = createdUsbAudioDataFormat;
+                }
+                m_numOfFormats++;
+                return STATUS_SUCCESS;
+            }
+            prevUsbAudioDataFormat = usbAudioDataFormat;
+            usbAudioDataFormat = usbAudioDataFormat->GetNext();
+        }
+
+        ASSERT(prevUsbAudioDataFormat != nullptr);
+
+        createdUsbAudioDataFormat = USBAudioDataFormat::Create(formatType, formats, subslotSize, bitResolution);
+        RETURN_NTSTATUS_IF_TRUE(createdUsbAudioDataFormat == nullptr, STATUS_INSUFFICIENT_RESOURCES);
+
+        prevUsbAudioDataFormat->SetNext(createdUsbAudioDataFormat);
+        m_numOfFormats++;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+NTSTATUS
 USBAudioDataFormatManager::SetUSBAudioDataFormat(
     UCHAR                 formatType,
     UCHAR                 formats[4],
@@ -823,7 +919,6 @@ USBAudioDataFormatManager::SetUSBAudioDataFormat(
 
     for (ULONG formatMask = 0x01; formatMask != 0; formatMask <<= 1)
     {
-        bool  append = true;
         ULONG currentFormat = format & formatMask;
         if (currentFormat && USBAudioDataFormat::IsSupportedFormat(formatType, currentFormat))
         {
@@ -834,27 +929,7 @@ USBAudioDataFormatManager::SetUSBAudioDataFormat(
 
             TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%u, %u, %u, %u, %u, %u", formatType, format, formatMask, currentFormat, subslotSize, bitResolution);
 
-            while (usbAudioDataFormat != nullptr)
-            {
-                if (usbAudioDataFormat->IsEqualFormat(formatType, formatArray, subslotSize, bitResolution))
-                {
-                    append = false;
-                    break;
-                }
-                usbAudioDataFormat = usbAudioDataFormat->GetNext();
-            }
-            if (append)
-            {
-                usbAudioDataFormat = USBAudioDataFormat::Create(formatType, formatArray, subslotSize, bitResolution);
-                RETURN_NTSTATUS_IF_TRUE(usbAudioDataFormat == nullptr, STATUS_INSUFFICIENT_RESOURCES);
-
-                if (m_usbAudioDataFormat != nullptr)
-                {
-                    usbAudioDataFormat->Append(m_usbAudioDataFormat);
-                }
-                m_usbAudioDataFormat = usbAudioDataFormat;
-                m_numOfFormats++;
-            }
+            RETURN_NTSTATUS_IF_FAILED(InsertUSBAudioDataFormat(formatType, formatArray, subslotSize, bitResolution, usbAudioDataFormat));
         }
     }
 

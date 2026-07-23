@@ -1374,18 +1374,21 @@ Codec_AllocateSupportedFormats(
     formatList = AcxPinGetRawDataFormatList(Pin);
     RETURN_NTSTATUS_IF_TRUE(formatList == nullptr, STATUS_INSUFFICIENT_RESOURCES);
 
-    for (ULONG mask = 1, index = 0; mask != 0; mask <<= 1, index++)
+	// 
+	// Register ACXDATAFORMAT objects in ascending order to ensure that Windows correctly evaluates KSDATARANGE_AUDIO.
+	// 
+    for (ULONG formatIndex = 0; formatIndex < UsbAudioDataFormatManager->GetNumOfUSBAudioDataFormats(); formatIndex++)
     {
-        if (mask & SupportedSampleRate)
+        for (ULONG mask = 1, index = 0; mask != 0; mask <<= 1, index++)
         {
-            ULONG sampleRate = GetSampleRateFromIndex(index);
-
-            ///////////////////////////////////////////////////////////
-            //
-            // Allocate the formats this circuit supports.
-            //
-            for (ULONG formatIndex = 0; formatIndex < UsbAudioDataFormatManager->GetNumOfUSBAudioDataFormats(); formatIndex++)
+            if (mask & SupportedSampleRate)
             {
+                ULONG sampleRate = GetSampleRateFromIndex(index);
+
+                ///////////////////////////////////////////////////////////
+                //
+                // Allocate the formats this circuit supports.
+                //
                 UCHAR bytesPerSample = UsbAudioDataFormatManager->GetBytesPerSample(formatIndex);
                 UCHAR validBits = UsbAudioDataFormatManager->GetValidBits(formatIndex);
 
