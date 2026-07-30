@@ -233,34 +233,56 @@ Return Value:
 
 --*/
 {
-    NTSTATUS       status = STATUS_SUCCESS;
-    WDFMEMORY      memory = nullptr;
-    PWSTR          channelName = nullptr;
-    UNICODE_STRING retrievedName{};
+    NTSTATUS  status = STATUS_SUCCESS;
+    WDFMEMORY memory = nullptr;
+    PWSTR     channelName = nullptr;
 
     PAGED_CODE();
 
     // TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Entry");
 
+    auto retrieveNameScope = wil::scope_exit([&]() {
+        if (memory != nullptr)
+        {
+            WdfObjectDelete(memory);
+            memory = nullptr;
+            channelName = nullptr;
+        }
+    });
+
     CODEC_PIN_CONTEXT * pinContext = GetCodecPinContext(Pin);
     ASSERT(pinContext != nullptr);
     ASSERT(pinContext->AudioIsochronousEngine != nullptr);
 
-    if (pinContext->NumOfChannelsPerDevice == 1)
+    if (pinContext->ChannelNames != USBAudioConfiguration::InvalidString)
     {
-        RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetChannelName(false, pinContext->Channel, memory, channelName));
+        UNICODE_STRING retrievedName{};
+        if (pinContext->NumOfChannelsPerDevice == 1)
+        {
+            RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetChannelName(false, pinContext->Channel, memory, channelName));
+        }
+        else
+        {
+            RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetStereoChannelName(false, pinContext->Channel, memory, channelName));
+        }
+        RtlInitUnicodeString(&retrievedName, channelName);
+        *Name = retrievedName;
     }
     else
     {
-        RETURN_NTSTATUS_IF_FAILED(pinContext->AudioIsochronousEngine->GetStereoChannelName(false, pinContext->Channel, memory, channelName));
+        ULONG channel = pinContext->Channel + 1;
+        DECLARE_UNICODE_STRING_SIZE(retrievedName, UAC_MAX_CHANNEL_NAME_LENGTH);
+
+        if (pinContext->NumOfChannelsPerDevice == 1)
+        {
+            RETURN_NTSTATUS_IF_FAILED(RtlUnicodeStringPrintf(&retrievedName, L"Output %u", channel));
+        }
+        else
+        {
+            RETURN_NTSTATUS_IF_FAILED(RtlUnicodeStringPrintf(&retrievedName, L"Output %u/%u", channel, channel + 1));
+        }
+        *Name = retrievedName;
     }
-    RtlInitUnicodeString(&retrievedName, channelName);
-
-    *Name = retrievedName;
-
-    WdfObjectDelete(memory);
-    memory = nullptr;
-    channelName = nullptr;
 
     // TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
 

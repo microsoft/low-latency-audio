@@ -1374,9 +1374,9 @@ Codec_AllocateSupportedFormats(
     formatList = AcxPinGetRawDataFormatList(Pin);
     RETURN_NTSTATUS_IF_TRUE(formatList == nullptr, STATUS_INSUFFICIENT_RESOURCES);
 
-	// 
-	// Register ACXDATAFORMAT objects in ascending order to ensure that Windows correctly evaluates KSDATARANGE_AUDIO.
-	// 
+    //
+    // Register ACXDATAFORMAT objects in ascending order to ensure that Windows correctly evaluates KSDATARANGE_AUDIO.
+    //
     for (ULONG formatIndex = 0; formatIndex < UsbAudioDataFormatManager->GetNumOfUSBAudioDataFormats(); formatIndex++)
     {
         for (ULONG mask = 1, index = 0; mask != 0; mask <<= 1, index++)
@@ -1545,10 +1545,7 @@ NTSTATUS Codec_CreateBridgePin(
     //
     ACX_PIN_CALLBACKS_INIT(&pinCallbacks);
     channelNames = AudioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.ChannelNames;
-    if (channelNames != USBAudioConfiguration::InvalidString)
-    {
-        pinCallbacks.EvtAcxPinRetrieveName = CodecR_EvtAcxPinRetrieveName;
-    }
+    pinCallbacks.EvtAcxPinRetrieveName = CodecR_EvtAcxPinRetrieveName;
 
     ACX_PIN_CONFIG_INIT(&pinCfg);
     pinCfg.Id = Id;
@@ -1563,7 +1560,7 @@ NTSTATUS Codec_CreateBridgePin(
     // the name of EvtAcxPinRetrieveName is valid, change it to
     // KSNODETYPE_LINE_CONNECTOR.
     //
-    if (IsEqualGUID(*ConvertTerminalType(TerminalType), KSNODETYPE_SPEAKER) && (channelNames != USBAudioConfiguration::InvalidString))
+    if (IsEqualGUID(*ConvertTerminalType(TerminalType), KSNODETYPE_SPEAKER))
     {
         pinCfg.Category = &KSNODETYPE_LINE_CONNECTOR;
     }
@@ -1687,10 +1684,7 @@ NTSTATUS Codec_CreateCaptureEndpointPin(
     //
     ACX_PIN_CALLBACKS_INIT(&pinCallbacks);
     channelNames = AudioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.ChannelNames;
-    if (channelNames != USBAudioConfiguration::InvalidString)
-    {
-        pinCallbacks.EvtAcxPinRetrieveName = CodecC_EvtAcxPinRetrieveName;
-    }
+    pinCallbacks.EvtAcxPinRetrieveName = CodecC_EvtAcxPinRetrieveName;
 
     ACX_PIN_CONFIG_INIT(&pinCfg);
     pinCfg.Type = AcxPinTypeSink;
