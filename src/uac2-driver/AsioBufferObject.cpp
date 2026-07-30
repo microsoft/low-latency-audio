@@ -454,6 +454,8 @@ _Use_decl_annotations_
 PAGED_CODE_SEG
 bool AsioBufferObject::IsInitialized() const
 {
+    PAGED_CODE();
+
     return ((m_readPosition == 0LL) && (m_writePosition == 0LL));
 }
 

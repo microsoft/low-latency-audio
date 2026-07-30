@@ -212,8 +212,8 @@ class TransferObject
     PUCHAR
     GetDataBuffer();
 
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
     ULONG GetTransferredBytesInThisIrp();
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -268,8 +268,8 @@ class TransferObject
     PAGED_CODE_SEG
     ULONGLONG GetPeriodQPCPosition();
 
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
     ULONGLONG CalculateEstimatedQPCPosition(
         _In_ ULONG bytesCopiedUpToBoundary
     );

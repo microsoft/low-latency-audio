@@ -1276,12 +1276,15 @@ TransferObject::GetDataBuffer()
 }
 
 _Use_decl_annotations_
-PAGED_CODE_SEG
+NONPAGED_CODE_SEG
 ULONG
 TransferObject::GetTransferredBytesInThisIrp()
 {
-    PAGED_CODE();
-    return m_transferredBytesInThisIrp;
+    WdfSpinLockAcquire(m_spinLock);
+    ULONG transferredBytesInThisIrp = m_transferredBytesInThisIrp;
+    WdfSpinLockRelease(m_spinLock);
+
+    return transferredBytesInThisIrp;
 }
 
 _Use_decl_annotations_
@@ -1405,16 +1408,34 @@ TransferObject::GetPeriodQPCPosition()
 }
 
 _Use_decl_annotations_
-PAGED_CODE_SEG
+NONPAGED_CODE_SEG
 ULONGLONG
 TransferObject::CalculateEstimatedQPCPosition(
     ULONG bytesCopiedUpToBoundary
 )
 {
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " %llu + (%llu * %u) / %u = %llu", m_qpcPosition, m_periodQPCPosition, bytesCopiedUpToBoundary, m_transferredBytesInThisIrp, m_qpcPosition + (m_periodQPCPosition * bytesCopiedUpToBoundary) / m_transferredBytesInThisIrp);
+    WdfSpinLockAcquire(m_spinLock);
+    ULONG     transferredBytesInThisIrp = m_transferredBytesInThisIrp;
+    ULONGLONG qpcPosition = m_qpcPosition;
+    ULONGLONG periodQPCPosition = m_periodQPCPosition;
+    ULONGLONG estimatedQPCPosition = qpcPosition;
 
-    return m_qpcPosition + (m_periodQPCPosition * bytesCopiedUpToBoundary) / m_transferredBytesInThisIrp;
+    if (transferredBytesInThisIrp != 0)
+    {
+        estimatedQPCPosition += ((periodQPCPosition * bytesCopiedUpToBoundary) / transferredBytesInThisIrp);
+    }
+    WdfSpinLockRelease(m_spinLock);
+
+    if (transferredBytesInThisIrp == 0)
+    {
+        TraceEvents(TRACE_LEVEL_WARNING, TRACE_DEVICE, "Skipping QPC position estimation: transferred byte count is zero");
+    }
+    else
+    {
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " %llu + (%llu * %u) / %u = %llu", qpcPosition, periodQPCPosition, bytesCopiedUpToBoundary, transferredBytesInThisIrp, estimatedQPCPosition);
+    }
+
+    return estimatedQPCPosition;
 }
 
 _Use_decl_annotations_
