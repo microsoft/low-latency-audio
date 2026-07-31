@@ -1,6 +1,6 @@
 ﻿<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
 
-  <?define StagingSourceRootFolder=G:\Github\microsoft\low-latency-audio\build\staging ?>
+  <?define StagingSourceRootFolder=$(var.ProjectDir)\..\..\build\staging ?>
   <?define StagingVersionIncludeFile=$(StagingSourceRootFolder)\version\BundleInfo.wxi ?>
 
   <Package
@@ -15,6 +15,7 @@
 
       <StandardDirectory Id="ProgramFiles64Folder">
           <Directory Id="ROOTINSTALLFOLDER" Name="Windows ASIO">
+            <Directory Id="AssetsFolder" Name="Assets" />
           </Directory>
       </StandardDirectory>
         
@@ -40,11 +41,43 @@
         -->
         
         <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\USBAsioControlPanel.exe" Vital="true" />
+        <!-- WinAppSDK / WinUI3 -->
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Microsoft.WindowsAppRuntime.Bootstrap.dll" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\USBAsioControlPanel.pri" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\USBAsioControlPanel.winmd" />
 
+        <!-- WebView2 -->
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Microsoft.Web.WebView2.Core.dll" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Microsoft.Web.WebView2.Core.winmd" />
+
+        <!-- XAML compiled XBF -->
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\AboutPage.xbf" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\App.xbf" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\AsioPage.xbf" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\MainWindow.xbf" />
+
+      </Component>
+
+      <!-- Assets folder files -->
+      <Component Id="AssetsFiles"
+                 Permanent="no"
+                 Bitness="always64"
+                 Directory="AssetsFolder"
+                 Guid="b1f3c0c1-9d22-4b1e-9f5c-8a7c1c0e1234">
+
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Assets\ASIOLogoIcon2.bmp" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Assets\LockScreenLogo.scale-200.png" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Assets\SplashScreen.scale-200.png" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Assets\Square44x44Logo.scale-200.png" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Assets\Square150x150Logo.scale-200.png" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Assets\StoreLogo.png" />
+        <File Source="$(StagingSourceRootFolder)\$(var.Platform)\$(var.Configuration)\Assets\Wide310x150Logo.scale-200.png" />
       </Component>
 
       <Feature Id="UsbAcxAndAsioDriver">
           <ComponentRef Id="Driver" />
+          <ComponentRef Id="AssetsFiles" />
       </Feature>
 
   </Package>

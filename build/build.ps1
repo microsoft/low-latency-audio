@@ -1,6 +1,7 @@
 Write-Host "This must be run in a command prompt with MSBuild and other tools paths set. For example, the Developer Command Prompt for VS2022"
 
-$repoRoot = "G:\Github\microsoft\low-latency-audio\"
+$scriptDir = $PSScriptRoot
+$repoRoot = (Resolve-Path (Split-Path $scriptDir -Parent)).Path.TrimEnd('\') + '\'
 $sourceRoot = $repoRoot + "src\"
 $vsfilesFolder = $sourceRoot + "vsfiles\"
 $vsfilesFolderOut = $vsfilesFolder + "out\"
