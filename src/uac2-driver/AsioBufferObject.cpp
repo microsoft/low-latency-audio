@@ -689,6 +689,11 @@ AsioBufferObject::CopyToAsioFromInputData(
                 ULONG samplesFirst = samples;
                 PBYTE asioBuffer = (PBYTE)m_recBuffer + (m_bufferLength * asioSampleSize * asioCh);
 
+                if (asioWriteStartIndex > asioWriteEndIndex)
+                {
+                    samplesFirst = m_bufferLength - asioWriteStartIndex;
+                }
+
                 // Since asioSampleSize and usbBytesPerSample are usually the same,
                 // zero-clearing is not necessary. However, if asioSampleSize is larger,
                 // we clear the entire buffer once.
@@ -699,7 +704,6 @@ AsioBufferObject::CopyToAsioFromInputData(
                 {
                     if (asioWriteStartIndex > asioWriteEndIndex)
                     {
-                        samplesFirst = m_bufferLength - asioWriteStartIndex;
                         RtlZeroMemory(&(asioBuffer[asioWriteStartIndex * asioSampleSize + asioByteOffset]), samplesFirst * usbBytesPerSample);
                         RtlZeroMemory(&(asioBuffer[asioByteOffset]), (samples - samplesFirst) * usbBytesPerSample);
                     }
@@ -784,6 +788,11 @@ AsioBufferObject::CopyToAsioFromInputData(
             {
                 ULONG samplesFirst = samples;
                 PBYTE asioBuffer = (PBYTE)m_recBuffer + (m_bufferLength * asioSampleSize * asioCh);
+
+                if (asioWriteStartIndex > asioWriteEndIndex)
+                {
+                    samplesFirst = m_bufferLength - asioWriteStartIndex;
+                }
                 if (usbBytesPerSample == 4)
                 {
                     for (ULONG index = 0; index < samplesFirst; ++index)
