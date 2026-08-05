@@ -48,12 +48,13 @@ StreamObject * StreamObject::Create(
     AudioIsochronousEngine * audioIsochronousEngine,
     const StreamStatuses     ioStable,
     const StreamStatuses     ioStreaming,
-    const StreamStatuses     ioSteady
+    const StreamStatuses     ioSteady,
+    const ULONG              maxIrpNumber
 )
 {
     PAGED_CODE();
 
-    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) StreamObject(deviceContext, audioIsochronousEngine, ioStable, ioStreaming, ioSteady);
+    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) StreamObject(deviceContext, audioIsochronousEngine, ioStable, ioStreaming, ioSteady, maxIrpNumber);
 }
 
 _Use_decl_annotations_
@@ -63,9 +64,10 @@ StreamObject::StreamObject(
     AudioIsochronousEngine * audioIsochronousEngine,
     const StreamStatuses     ioStable,
     const StreamStatuses     ioStreaming,
-    const StreamStatuses     ioSteady
+    const StreamStatuses     ioSteady,
+    const ULONG              maxIrpNumber
 )
-    : m_deviceContext(deviceContext), m_audioIsochronousEngine(audioIsochronousEngine), c_ioStable(ioStable), c_ioStreaming(ioStreaming), c_ioSteady(ioSteady)
+    : m_deviceContext(deviceContext), m_audioIsochronousEngine(audioIsochronousEngine), c_ioStable(ioStable), c_ioStreaming(ioStreaming), c_ioSteady(ioSteady), c_maxIrpNumber(maxIrpNumber)
 {
     WDF_OBJECT_ATTRIBUTES attributes;
 
@@ -174,7 +176,7 @@ void StreamObject::SetTransferObject(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    ASSERT(index < UAC_MAX_IRP_NUMBER);
+    ASSERT((ULONG)index < c_maxIrpNumber);
 
     switch (direction)
     {
@@ -224,7 +226,7 @@ StreamObject::GetTransferObject(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    ASSERT(index < UAC_MAX_IRP_NUMBER);
+    ASSERT((ULONG)index < c_maxIrpNumber);
 
     switch (direction)
     {

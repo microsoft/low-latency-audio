@@ -134,7 +134,8 @@ class StreamObject
         _In_ AudioIsochronousEngine * audioIsochronousEngine,
         _In_ const StreamStatuses     ioStable,
         _In_ const StreamStatuses     ioStreaming,
-        _In_ const StreamStatuses     ioSteady
+        _In_ const StreamStatuses     ioSteady,
+        _In_ const ULONG              maxIrpNumber
     );
 
     virtual __drv_maxIRQL(PASSIVE_LEVEL)
@@ -342,7 +343,8 @@ class StreamObject
         _In_ AudioIsochronousEngine * audioIsochronousEngine,
         _In_ const StreamStatuses     ioStable,
         _In_ const StreamStatuses     ioStreaming,
-        _In_ const StreamStatuses     ioSteady
+        _In_ const StreamStatuses     ioSteady,
+        _In_ const ULONG              maxIrpNumber
     );
 
   private:
@@ -647,6 +649,7 @@ class StreamObject
     const StreamStatuses c_ioStable;
     const StreamStatuses c_ioStreaming;
     const StreamStatuses c_ioSteady;
+    const ULONG          c_maxIrpNumber;
 };
 
 #endif

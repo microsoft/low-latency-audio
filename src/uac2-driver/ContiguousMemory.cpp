@@ -38,18 +38,26 @@ Environment:
 _Use_decl_annotations_
 PAGED_CODE_SEG
 ContiguousMemory *
-ContiguousMemory::Create()
+ContiguousMemory::Create(
+    const ULONG maxIrpNumber
+)
 {
     PAGED_CODE();
-    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) ContiguousMemory();
+    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) ContiguousMemory(maxIrpNumber);
 }
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
-ContiguousMemory::ContiguousMemory()
+ContiguousMemory::ContiguousMemory(
+    const ULONG maxIrpNumber
+)
+    : c_maxIrpNumber(maxIrpNumber)
 {
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
+    ASSERT(c_maxIrpNumber <= UAC_MAX_IRP_NUMBER);
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
 
@@ -131,7 +139,7 @@ ContiguousMemory::Allocate(
         m_contiguousMemorySize[direction] = maxPacketSize * maxBurstOverride * maxClassicFramesPerIrp * framesPerMs;
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Max Contiguous Memory Size = %d", m_contiguousMemorySize[direction]);
 
-        for (ULONG index = 0; index < UAC_MAX_IRP_NUMBER; ++index)
+        for (ULONG index = 0; index < c_maxIrpNumber; ++index)
         {
             m_contiguousMemory[direction][index] = (PUCHAR)MmAllocateContiguousMemorySpecifyCache(m_contiguousMemorySize[direction], lowestAcceptableAddress, highestAcceptableAddress, boundaryAddressMultiple, MmNonCached);
             if (m_contiguousMemory[direction][index] == nullptr)
@@ -164,7 +172,7 @@ ContiguousMemory::Free()
 
     for (ULONG direction = 0; direction < toULONG(IsoDirection::NumOfIsoDirection); ++direction)
     {
-        for (ULONG index = 0; index < UAC_MAX_IRP_NUMBER; ++index)
+        for (ULONG index = 0; index < c_maxIrpNumber; ++index)
         {
             if (m_contiguousMemory[direction][index] != nullptr)
             {
@@ -190,7 +198,7 @@ ContiguousMemory::Clear()
 
     for (ULONG direction = 0; direction < toULONG(IsoDirection::NumOfIsoDirection); ++direction)
     {
-        for (ULONG index = 0; index < UAC_MAX_IRP_NUMBER; ++index)
+        for (ULONG index = 0; index < c_maxIrpNumber; ++index)
         {
             if ((m_contiguousMemory[direction][index] != nullptr) && (m_contiguousMemorySize[direction] != 0))
             {
@@ -216,7 +224,7 @@ bool ContiguousMemory::IsValid(
     ASSERT(this != nullptr);
     ASSERT(m_contiguousMemory[static_cast<ULONG>(direction)][index] != nullptr);
 
-    if ((static_cast<ULONG>(direction) < toULONG(IsoDirection::NumOfIsoDirection)) && (index < UAC_MAX_IRP_NUMBER))
+    if ((static_cast<ULONG>(direction) < toULONG(IsoDirection::NumOfIsoDirection)) && ((ULONG)index < c_maxIrpNumber))
     {
         if (m_contiguousMemory[static_cast<ULONG>(direction)][index] != nullptr)
         {
@@ -275,7 +283,7 @@ ContiguousMemory::GetTotalSize(
 
     if (IsValid(0, direction))
     {
-        size = m_contiguousMemorySize[static_cast<ULONG>(direction)] * UAC_MAX_IRP_NUMBER;
+        size = m_contiguousMemorySize[static_cast<ULONG>(direction)] * c_maxIrpNumber;
     }
 
     return size;

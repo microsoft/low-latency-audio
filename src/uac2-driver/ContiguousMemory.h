@@ -31,7 +31,9 @@ class ContiguousMemory
   public:
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    ContiguousMemory();
+    ContiguousMemory(
+        _In_ const ULONG maxIrpNumber
+    );
     virtual __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     ~ContiguousMemory();
@@ -88,7 +90,9 @@ class ContiguousMemory
 
     static __drv_maxIRQL(DISPATCH_LEVEL)
     PAGED_CODE_SEG
-    ContiguousMemory * Create();
+    ContiguousMemory * Create(
+        _In_ const ULONG maxIrpNumber
+    );
 
   private:
     static __drv_maxIRQL(PASSIVE_LEVEL)
@@ -99,8 +103,9 @@ class ContiguousMemory
         _In_ IsoDirection                   direction
     );
 
-    ULONG  m_contiguousMemorySize[toInt(IsoDirection::NumOfIsoDirection)]{0};
-    PUCHAR m_contiguousMemory[toInt(IsoDirection::NumOfIsoDirection)][UAC_MAX_IRP_NUMBER]{};
+    ULONG       m_contiguousMemorySize[toInt(IsoDirection::NumOfIsoDirection)]{0};
+    PUCHAR      m_contiguousMemory[toInt(IsoDirection::NumOfIsoDirection)][UAC_MAX_IRP_NUMBER]{};
+    const ULONG c_maxIrpNumber;
 };
 
 #endif

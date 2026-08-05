@@ -232,7 +232,7 @@ AudioIsochronousEngine::Initialize()
         return status;
     }
 
-    m_contiguousMemory = ContiguousMemory::Create();
+    m_contiguousMemory = ContiguousMemory::Create(m_audioStreamPropertySet.InternalParameters.MaxIrpNumber);
     RETURN_NTSTATUS_IF_TRUE(m_contiguousMemory == nullptr, STATUS_INSUFFICIENT_RESOURCES);
 
     m_rtPacketObject = RtPacketObject::Create(m_deviceContext, this);
@@ -992,15 +992,15 @@ NTSTATUS AudioIsochronousEngine::StartIsoStream()
 
     if ((m_outputInterfaceAndPipe.Pipe != nullptr) && (m_inputInterfaceAndPipe.Pipe == nullptr))
     { // output only
-        m_streamObject = StreamObject::Create(m_deviceContext, this, StreamStatuses::OutputStable, StreamStatuses::OutputStreaming, (StreamStatuses)(toInt(StreamStatuses::OutputStable) | toInt(StreamStatuses::OutputStreaming)));
+        m_streamObject = StreamObject::Create(m_deviceContext, this, StreamStatuses::OutputStable, StreamStatuses::OutputStreaming, (StreamStatuses)(toInt(StreamStatuses::OutputStable) | toInt(StreamStatuses::OutputStreaming)), m_audioStreamPropertySet.InternalParameters.MaxIrpNumber);
     }
     else if ((m_outputInterfaceAndPipe.Pipe == nullptr) && (m_inputInterfaceAndPipe.Pipe != nullptr))
     { // input only
-        m_streamObject = StreamObject::Create(m_deviceContext, this, StreamStatuses::InputStable, StreamStatuses::InputStreaming, (StreamStatuses)(toInt(StreamStatuses::InputStable) | toInt(StreamStatuses::InputStreaming)));
+        m_streamObject = StreamObject::Create(m_deviceContext, this, StreamStatuses::InputStable, StreamStatuses::InputStreaming, (StreamStatuses)(toInt(StreamStatuses::InputStable) | toInt(StreamStatuses::InputStreaming)), m_audioStreamPropertySet.InternalParameters.MaxIrpNumber);
     }
     else
     {
-        m_streamObject = StreamObject::Create(m_deviceContext, this, StreamStatuses::IoStable, StreamStatuses::IoStreaming, StreamStatuses::IoSteady);
+        m_streamObject = StreamObject::Create(m_deviceContext, this, StreamStatuses::IoStable, StreamStatuses::IoStreaming, StreamStatuses::IoSteady, m_audioStreamPropertySet.InternalParameters.MaxIrpNumber);
     }
 
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_streamObject == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, status);
@@ -3148,7 +3148,6 @@ AudioIsochronousEngine::StreamSetDataFormat(
         ACXDATAFORMAT inputDataFormatAfterChange = nullptr;
         ACXDATAFORMAT outputDataFormatAfterChange = nullptr;
         ULONG         formatType, format;
-        bool          streamRunning = false;
         ULONG         desiredBytesPerSampleIn = m_audioStreamPropertySet.InputProperty.BytesPerSample;
         ULONG         desiredValidBitsPerSampleIn = m_audioStreamPropertySet.InputProperty.ValidBitsPerSample;
         ULONG         desiredBytesPerSampleOut = m_audioStreamPropertySet.OutputProperty.BytesPerSample;
@@ -3195,12 +3194,6 @@ AudioIsochronousEngine::StreamSetDataFormat(
 
         if (m_streamObject != nullptr)
         {
-            AcquireAsioWaitLock();
-            if (m_asioBufferObject == nullptr)
-            {
-                streamRunning = true;
-            }
-            ReleaseAsioWaitLock();
             if ((m_startCounterAsio != 0) || (m_startCounterWdmAudio != 0))
             {
                 StopIsoStream();
@@ -3213,7 +3206,7 @@ AudioIsochronousEngine::StreamSetDataFormat(
         status = ActivateAudioInterface(AcxDataFormatGetSampleRate(dataFormat), formatType, format, desiredBytesPerSampleIn, desiredValidBitsPerSampleIn, desiredBytesPerSampleOut, desiredValidBitsPerSampleOut);
         IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
 
-        if (streamRunning && NT_SUCCESS(status))
+        if (NT_SUCCESS(status))
         {
             if ((m_startCounterAsio != 0) || (m_startCounterWdmAudio != 0))
             {
@@ -3732,17 +3725,10 @@ NTSTATUS AudioIsochronousEngine::ChangeSampleRate(
 
     PAGED_CODE();
 
-    bool streamRunning = false;
     AcquireStreamWaitLock();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", m_startCounterAsio, m_startCounterWdmAudio, m_startCounterIsoStream);
     if (m_streamObject != nullptr)
     {
-        AcquireAsioWaitLock();
-        if (m_asioBufferObject != nullptr)
-        {
-            streamRunning = true;
-        }
-        ReleaseAsioWaitLock();
         if ((m_startCounterAsio != 0) || (m_startCounterWdmAudio != 0))
         {
             StopIsoStream();
@@ -3771,7 +3757,7 @@ NTSTATUS AudioIsochronousEngine::ChangeSampleRate(
         USBAudioDataFormat::ConvertFormatToSampleFormat(m_audioStreamPropertySet.AudioProperty.CurrentSampleFormat, desiredFormatType, desiredFormat);
 
         status = ActivateAudioInterface(desiredSampleRate, desiredFormatType, desiredFormat, m_audioStreamPropertySet.InputProperty.BytesPerSample, m_audioStreamPropertySet.InputProperty.ValidBitsPerSample, m_audioStreamPropertySet.OutputProperty.BytesPerSample, m_audioStreamPropertySet.OutputProperty.ValidBitsPerSample);
-        if (streamRunning && NT_SUCCESS(status))
+        if (NT_SUCCESS(status))
         {
             if ((m_startCounterAsio != 0) || (m_startCounterWdmAudio != 0))
             {
@@ -4172,6 +4158,7 @@ NTSTATUS AudioIsochronousEngine::SetBufferPeriod(
 
     if (bufferPeriod != m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod)
     {
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", m_startCounterAsio, m_startCounterWdmAudio, m_startCounterIsoStream);
         if ((m_startCounterAsio != 0) || (m_startCounterWdmAudio != 0))
         {
             StopIsoStream();
@@ -4194,6 +4181,16 @@ NTSTATUS AudioIsochronousEngine::SetBufferPeriod(
         {
             m_asioBufferObject->SetRecDeviceStatus(DeviceStatuses::ResetRequired);
         }
+
+        if (NT_SUCCESS(status))
+        {
+            if ((m_startCounterAsio != 0) || (m_startCounterWdmAudio != 0))
+            {
+                StartIsoStream();
+            }
+        }
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", m_startCounterAsio, m_startCounterWdmAudio, m_startCounterIsoStream);
+
         status = STATUS_SUCCESS;
     }
     else
