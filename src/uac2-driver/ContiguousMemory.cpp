@@ -128,6 +128,11 @@ ContiguousMemory::Allocate(
         {
             continue;
         }
+        if ((static_cast<IsoDirection>(direction) == IsoDirection::Feedback) && !usbAudioStreamInterfaceGroup->HasFeedbackIsochronousInterface())
+        {
+            continue;
+        }
+
         ULONG maxPacketSize = GetMaxPacketSize(usbAudioStreamInterfaceGroup, static_cast<IsoDirection>(direction));
         if (maxPacketSize == 0)
         {
@@ -150,8 +155,6 @@ ContiguousMemory::Allocate(
             TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "[%s][%d] = %p", GetDirectionString((IsoDirection)direction), index, m_contiguousMemory[direction][index]);
 
             RtlZeroMemory(m_contiguousMemory[direction][index], m_contiguousMemorySize[direction]);
-
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "[%s][%d] = %p", GetDirectionString((IsoDirection)direction), index, m_contiguousMemory[direction][index]);
         }
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - m_contiguousMemory[%d], %p", direction, m_contiguousMemory[direction]);
     }

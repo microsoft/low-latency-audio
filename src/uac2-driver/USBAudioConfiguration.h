@@ -2543,6 +2543,10 @@ class USBAudioInterfaceInfo
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    virtual bool HasFeedbackIsochronousEndpoint();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     NTSTATUS SelectAlternateInterface(
         _In_ PDEVICE_CONTEXT       deviceContext,
         _In_ bool                  isInput,
@@ -2639,6 +2643,10 @@ class USBAudioStreamInterfaceGroup
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
     bool HasOutputIsochronousInterface() const;
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    bool HasFeedbackIsochronousInterface() const;
 
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
@@ -2933,6 +2941,7 @@ class USBAudioStreamInterfaceGroup
     const bool                                                                m_isDeviceSplittable;
     bool                                                                      m_isInputIsochronousInterfaceExists{false};
     bool                                                                      m_isOutputIsochronousInterfaceExists{false};
+    bool                                                                      m_isFeedbackIsochronousInterfaceExists{false};
     USBAudioDataFormatManager                                                 m_inputUsbAudioDataFormatManager;
     USBAudioDataFormatManager                                                 m_outputUsbAudioDataFormatManager;
     VariableArray<USBAudioInterfaceInfo *, DEFAULT_SIZE_OF_STREAM_INTERFACES> m_usbAudioStreamInterfaceInfo;

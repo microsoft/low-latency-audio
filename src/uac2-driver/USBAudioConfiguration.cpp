@@ -6687,6 +6687,23 @@ bool USBAudioInterfaceInfo::HasOutputIsochronousEndpoint()
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+bool USBAudioInterfaceInfo::HasFeedbackIsochronousEndpoint()
+{
+    PAGED_CODE();
+
+    for (auto usbAudioInterface : m_usbAudioAlternateInterfaces)
+    {
+        if (usbAudioInterface->HasFeedbackEndpoint())
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 NTSTATUS
 USBAudioInterfaceInfo::SelectAlternateInterface(
     PDEVICE_CONTEXT    deviceContext,
@@ -6876,6 +6893,11 @@ NTSTATUS USBAudioStreamInterfaceGroup::Append(
     if (usbAudioInterfaceInfo->HasOutputIsochronousEndpoint())
     {
         m_isOutputIsochronousInterfaceExists = true;
+    }
+
+    if (usbAudioInterfaceInfo->HasFeedbackIsochronousEndpoint())
+    {
+        m_isFeedbackIsochronousInterfaceExists = true;
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
@@ -7228,6 +7250,13 @@ NONPAGED_CODE_SEG
 bool USBAudioStreamInterfaceGroup::HasOutputIsochronousInterface() const
 {
     return m_isOutputIsochronousInterfaceExists;
+}
+
+_Use_decl_annotations_
+NONPAGED_CODE_SEG
+bool USBAudioStreamInterfaceGroup::HasFeedbackIsochronousInterface() const
+{
+    return m_isFeedbackIsochronousInterfaceExists;
 }
 
 _Use_decl_annotations_
