@@ -125,7 +125,7 @@ foreach($configuration in $configurations)
         #New-Item -Path $stagingTargetFolder -ItemType Directory
 
             # copy output files to staging
-        Copy-Item -Path "$controlPanelOutputFolder*.exe" -Destination $stagingTargetFolder
+        Copy-Item -Path "$controlPanelOutputFolder*" -Destination $stagingTargetFolder -Recurse
 
         Write-Host
 
