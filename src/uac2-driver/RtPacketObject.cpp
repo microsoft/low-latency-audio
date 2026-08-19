@@ -60,8 +60,14 @@ RtPacketObject::RtPacketObject(
     : m_deviceContext(deviceContext)
 
 {
+    WDF_OBJECT_ATTRIBUTES attributes;
+
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+    attributes.ParentObject = deviceContext->Device;
+    WdfWaitLockCreate(&attributes, &m_rtPacketLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
@@ -356,13 +362,22 @@ RtPacketObject::SetRtPackets(
     }
 
     RETURN_NTSTATUS_IF_TRUE(deviceIndex >= numOfDevices, STATUS_INVALID_PARAMETER);
-    RETURN_NTSTATUS_IF_TRUE(rtPacketInfo[deviceIndex].RtPackets != nullptr, STATUS_INVALID_DEVICE_STATE);
+
+    WdfWaitLockAcquire(m_rtPacketLock, nullptr);
+
+    if (rtPacketInfo[deviceIndex].RtPackets != nullptr)
+    {
+        WdfWaitLockRelease(m_rtPacketLock);
+        RETURN_NTSTATUS_IF_TRUE(TRUE, STATUS_INVALID_DEVICE_STATE);
+    }
 
     rtPacketInfo[deviceIndex].RtPackets = rtPackets;
     rtPacketInfo[deviceIndex].RtPacketsCount = rtPacketsCount;
     rtPacketInfo[deviceIndex].RtPacketSize = rtPacketSize;
     rtPacketInfo[deviceIndex].UsbChannel = channel;
     rtPacketInfo[deviceIndex].Channels = numOfChannelsPerDevice;
+
+    WdfWaitLockRelease(m_rtPacketLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit %!STATUS!", status);
 
@@ -394,9 +409,11 @@ void RtPacketObject::UnsetRtPackets(
 
     if (deviceIndex < numOfDevices)
     {
+        WdfWaitLockAcquire(m_rtPacketLock, nullptr);
         rtPacketInfo[deviceIndex].RtPackets = nullptr;
         rtPacketInfo[deviceIndex].RtPacketsCount = 0;
         rtPacketInfo[deviceIndex].RtPacketSize = 0;
+        WdfWaitLockRelease(m_rtPacketLock);
     }
 }
 
@@ -435,6 +452,8 @@ RtPacketObject::CopyFromRtPacketToOutputData(
     ASSERT(m_outputRtPacketInfo[deviceIndex].RtPacketSize != 0);
 
     RT_PACKET_INFO * rtPacketInfo = &(m_outputRtPacketInfo[deviceIndex]);
+
+    WdfWaitLockAcquire(m_rtPacketLock, nullptr);
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - TransferredBytesInThisIrp = %u", transferObject->GetTransferredBytesInThisIrp());
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - m_outputRtPacketInfo[deviceIndex].rtPacketSize = %u", m_outputRtPacketInfo[deviceIndex].RtPacketSize);
@@ -686,6 +705,8 @@ RtPacketObject::CopyFromRtPacketToOutputData(
 CopyFromRtPacketToOutputData_Exit:
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit, RtPacketPosition, bytesCopiedSrcData, bytesCopiedUpToBoundary = %llu, %u, %u", rtPacketInfo->RtPacketPosition, bytesCopiedSrcData, bytesCopiedUpToBoundary);
 
+    WdfWaitLockRelease(m_rtPacketLock);
+
     return status;
 }
 
@@ -724,6 +745,8 @@ RtPacketObject::CopyToRtPacketFromInputData(
     ASSERT(m_inputRtPacketInfo[deviceIndex].RtPacketSize != 0);
 
     RT_PACKET_INFO * rtPacketInfo = &(m_inputRtPacketInfo[deviceIndex]);
+
+    WdfWaitLockAcquire(m_rtPacketLock, nullptr);
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - TransferredBytesInThisIrp = %u", transferObject->GetTransferredBytesInThisIrp());
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - m_inputRtPacketInfo[deviceIndex].rtPacketSize = %u", m_inputRtPacketInfo[deviceIndex].RtPacketSize);
@@ -907,6 +930,8 @@ RtPacketObject::CopyToRtPacketFromInputData(
 
 CopyToRtPacketFromInputData_Exit:
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit, RtPacketPosition, bytesCopiedUpToBoundary, bytesCopiedDstData = %llu, %u, %u", rtPacketInfo->RtPacketPosition, bytesCopiedUpToBoundary, bytesCopiedDstData);
+
+    WdfWaitLockRelease(m_rtPacketLock);
 
     return status;
 }
