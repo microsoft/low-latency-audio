@@ -73,6 +73,7 @@ USBAudio2-ACX.sys  = 1,,
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_041E&PID_3267&MI_03  ; Creative Sound Blaster G3
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_110B&MI_00  ; Apple EarPods USB-C
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_110C&MI_01  ; Apple AirPods Max USB Audio
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_1115&MI_00  ; Apple USB-C to 3.5mm Audio Cable
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_147A&PID_E055&MI_00  ; CMEDIA USB2.0 High-Speed True HD Audio
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_17E9&PID_4305&MI_02  ; Toshiba dynadock U3.0
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_19F7&PID_0054&MI_00  ; RODE NT1 5th Gen
