@@ -139,6 +139,10 @@ class AsioBufferObject
     PAGED_CODE_SEG
     void UpdateCurrentSampleRate();
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    PKEVENT GetOutputReadyEvent() const noexcept;
+
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     AsioBufferObject * Create(

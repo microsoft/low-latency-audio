@@ -127,6 +127,7 @@ void MixingEngineThread::ThreadMain()
 
     PEX_TIMER exTimer = ExAllocateTimer(nullptr, nullptr, EX_TIMER_HIGH_RESOLUTION);
     m_waitEvents[toInt(MixingEngineWaitEventsNumber::TimerEvent)] = exTimer;
+    m_waitEvents[toInt(MixingEngineWaitEventsNumber::OutputReadyEvent)] = nullptr;
     m_waitEventsCount = toInt(MixingEngineWaitEventsNumber::NumOfWaitEventsWithoutOutputReady);
 
     KeSetEvent(&m_threadReadyEvent, EVENT_INCREMENT, FALSE);
@@ -205,4 +206,24 @@ MixingEngineThread::GetStreamObject() const noexcept
     PAGED_CODE();
 
     return m_streamObject;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+void MixingEngineThread::SetOutputReadyEvent(
+    PKEVENT outputReadyEvent
+)
+{
+    PAGED_CODE();
+
+    if (outputReadyEvent != nullptr)
+    {
+        m_waitEvents[toInt(MixingEngineWaitEventsNumber::OutputReadyEvent)] = outputReadyEvent;
+        m_waitEventsCount = toInt(MixingEngineWaitEventsNumber::NumOfWaitEvents);
+    }
+    else
+    {
+        m_waitEvents[toInt(MixingEngineWaitEventsNumber::OutputReadyEvent)] = nullptr;
+        m_waitEventsCount = toInt(MixingEngineWaitEventsNumber::NumOfWaitEventsWithoutOutputReady);
+    }
 }

@@ -6794,21 +6794,21 @@ USBAudioInterfaceInfo::SelectAlternateInterface(
                             if (validAlternateSettingMap == 0)
                             {
                                 /**
-                                * @brief Calculates the physical maximum sample rate (Hz) from descriptor parameters
-                                *
-                                * @param bInterval         bInterval from the Endpoint Descriptor (typically 1 for ISO)
-                                * @param wMaxPacketSize    wMaxPacketSize from the Endpoint Descriptor
-                                *                          - USB 2.0: Bits 10..0 (size) / Bits 12..11 (additional transactions: 0–2)
-                                *                          - USB 3.0: Packet size (e.g., 1024 bytes)
-                                * @param wBytesPerInterval wBytesPerInterval from the SuperSpeed ​​Companion Descriptor (USB 3.0 only / 0–1024)
-                                * @param bNrChannels       Number of channels (e.g., AS Interface)
-                                * @param bSubslotSize      Bytes per sample per channel (e.g., AS Format Type; 24-bit=3, 32-bit=4)
-                                *
-                                * @return uint32_t Theoretical maximum sample rate (Hz). Returns 0 if parameters are invalid.
-                                */
-                                ULONG   interval = currentSettings.Interval;
-                                UCHAR   nrChannels = currentSettings.Channels;
-                                ULONG   subslotSize = currentSettings.BytesPerSample;
+                                 * @brief Calculates the physical maximum sample rate (Hz) from descriptor parameters
+                                 *
+                                 * @param bInterval         bInterval from the Endpoint Descriptor (typically 1 for ISO)
+                                 * @param wMaxPacketSize    wMaxPacketSize from the Endpoint Descriptor
+                                 *                          - USB 2.0: Bits 10..0 (size) / Bits 12..11 (additional transactions: 0–2)
+                                 *                          - USB 3.0: Packet size (e.g., 1024 bytes)
+                                 * @param wBytesPerInterval wBytesPerInterval from the SuperSpeed ​​Companion Descriptor (USB 3.0 only / 0–1024)
+                                 * @param bNrChannels       Number of channels (e.g., AS Interface)
+                                 * @param bSubslotSize      Bytes per sample per channel (e.g., AS Format Type; 24-bit=3, 32-bit=4)
+                                 *
+                                 * @return uint32_t Theoretical maximum sample rate (Hz). Returns 0 if parameters are invalid.
+                                 */
+                                ULONG interval = currentSettings.Interval;
+                                UCHAR nrChannels = currentSettings.Channels;
+                                ULONG subslotSize = currentSettings.BytesPerSample;
 
                                 TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - Calculate max sample rate. interval %u, nrChannels %u, subslotSize %u", interval, nrChannels, subslotSize);
 
@@ -6823,7 +6823,7 @@ USBAudioInterfaceInfo::SelectAlternateInterface(
                                     ULONGLONG max_bandwidth = 0;
 
                                     USHORT wMaxPacketSize = 0;
-                                    USHORT bytesPerInterval = 0;    
+                                    USHORT bytesPerInterval = 0;
                                     for (ULONG endpointIndex = 0; endpointIndex < usbAudioStreamInterface->GetNumEndpoints(); endpointIndex++)
                                     {
                                         UCHAR endpointAddress = 0;
@@ -6865,7 +6865,7 @@ USBAudioInterfaceInfo::SelectAlternateInterface(
                                         // --- USB 1.0 / 1.1 (Full-Speed) ---
                                         // Frame period: 1ms (1000 times/sec)
                                         // p_sec = 1000 / bInterval
-                                        ULONG p_sec = 1000 / interval;
+                                        ULONG  p_sec = 1000 / interval;
                                         USHORT packet_size = wMaxPacketSize & 0x07FF; // Bits 10..0
 
                                         max_bandwidth = (ULONGLONG)p_sec * packet_size;
@@ -6876,7 +6876,6 @@ USBAudioInterfaceInfo::SelectAlternateInterface(
                                     // Theoretical maximum sample rate (Hz)
                                     currentSettings.CalcMaxSampleRate = (ULONG)(max_bandwidth / frame_size);
                                     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - CalcMaxSampleRate %lu.", currentSettings.CalcMaxSampleRate);
-
                                 }
                             }
                         }

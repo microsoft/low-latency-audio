@@ -1611,7 +1611,28 @@ void StreamObject::MixingEngineThreadMain(
     {
         NTSTATUS wakeupReason = STATUS_SUCCESS;
         bool     isProcessIo = false;
+        PKEVENT  outputReadyEvent = nullptr;
+
+        m_audioIsochronousEngine->AcquireAsioWaitLock();
+        if (m_audioIsochronousEngine->GetAsioBufferObject() != nullptr)
+        {
+            outputReadyEvent = m_audioIsochronousEngine->GetAsioBufferObject()->GetOutputReadyEvent();
+            if (outputReadyEvent != nullptr)
+            {
+                ObReferenceObject(outputReadyEvent);
+                m_mixingEngineThread->SetOutputReadyEvent(outputReadyEvent);
+            }
+        }
+        m_audioIsochronousEngine->ReleaseAsioWaitLock();
+
         wakeupReason = Wait();
+
+        if (outputReadyEvent != nullptr)
+        {
+            m_mixingEngineThread->SetOutputReadyEvent(nullptr);
+            ObDereferenceObject(outputReadyEvent);
+            outputReadyEvent = nullptr;
+        }
 
         TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "MaxingEngineThreadMain() WakeUp reason = %d", static_cast<int>(wakeupReason));
 

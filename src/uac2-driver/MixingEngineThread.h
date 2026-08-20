@@ -81,6 +81,12 @@ class MixingEngineThread : public WorkerThread
     PAGED_CODE_SEG
     StreamObject * GetStreamObject() const noexcept;
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void SetOutputReadyEvent(
+        _In_ PKEVENT outputReadyEvent
+    );
+
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     MixingEngineThread * CreateMixingEngineThread(

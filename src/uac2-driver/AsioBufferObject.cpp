@@ -408,6 +408,18 @@ AsioBufferObject::UnsetBuffer()
     m_playBuffer = nullptr;
     m_playBufferSize = 0;
 
+    if (m_outputReadyEvent != nullptr)
+    {
+        ObDereferenceObject(m_outputReadyEvent);
+        m_outputReadyEvent = nullptr;
+    }
+
+    if (m_userNotificationEvent != nullptr)
+    {
+        ObDereferenceObject(m_userNotificationEvent);
+        m_userNotificationEvent = nullptr;
+    }
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ASIO, "%!FUNC! Exit");
 
     return status;
@@ -935,4 +947,13 @@ void AsioBufferObject::UpdateCurrentSampleRate()
     {
         m_recHeader->CurrentSampleRate = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate;
     }
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+PKEVENT AsioBufferObject::GetOutputReadyEvent() const noexcept
+{
+    PAGED_CODE();
+
+    return m_outputReadyEvent;
 }
