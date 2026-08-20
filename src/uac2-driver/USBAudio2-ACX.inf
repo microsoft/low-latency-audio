@@ -71,6 +71,7 @@ USBAudio2-ACX.sys  = 1,,
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_041E&PID_3256&MI_00  ; Creative Sound BlasterX G6
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_041E&PID_3264&MI_03  ; Creative Sound Blaster X3
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_041E&PID_3267&MI_03  ; Creative Sound Blaster G3
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_110A&MI_00  ; Apple USB-C to 3.5mm Headphone Jack Adapter
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_110B&MI_00  ; Apple EarPods USB-C
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_110C&MI_01  ; Apple AirPods Max USB Audio
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_1115&MI_00  ; Apple USB-C to 3.5mm Audio Cable
