@@ -1907,7 +1907,7 @@ void StreamObject::MixingEngineThreadMain(
                 }
                 else
                 {
-                    inRemainder.Buffer = nullptr;
+                    outRemainder.Buffer = nullptr;
                 }
 
                 if (outBuffersCount != 0 || !outProcessRemainder)

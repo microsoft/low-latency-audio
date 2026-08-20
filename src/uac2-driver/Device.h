@@ -154,6 +154,7 @@ typedef struct AUDIO_PROPERTY_
     UCHAR          ChannelNames;
     ULONG          IsoPacketSize;
     ULONG          LockDelay;
+    ULONG          CalcMaxSampleRate;
 } AUDIO_PROPERTY;
 
 typedef struct FEEDBACK_PROPERTY_

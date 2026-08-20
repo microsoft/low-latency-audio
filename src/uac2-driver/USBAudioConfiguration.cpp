@@ -497,7 +497,7 @@ UCHAR USBAudioInterface::GetEndpointAddress()
         {
             if ((m_usbAudioEndpoints[index] != nullptr) && ((m_usbAudioEndpoints[index]->GetDirection() == IsoDirection::In) || (m_usbAudioEndpoints[index]->GetDirection() == IsoDirection::Out)))
             {
-                if (GetEndpointAddress(0, endpointAddress))
+                if (GetEndpointAddress(index, endpointAddress))
                 {
                     return endpointAddress;
                 }
@@ -6738,12 +6738,9 @@ USBAudioInterfaceInfo::SelectAlternateInterface(
             USBAudioStreamInterface * usbAudioStreamInterface = (USBAudioStreamInterface *)usbAudioInterface;
             RETURN_NTSTATUS_IF_FAILED(usbAudioStreamInterface->QueryCurrentAttributeAll(deviceContext));
 
-            if (index != 0)
-            {
-                validAlternateSettingMap = usbAudioStreamInterface->GetCurrentValidAlternateSettingMap();
-            }
+            validAlternateSettingMap = usbAudioStreamInterface->GetCurrentValidAlternateSettingMap();
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - index %u, validAlternateSettingMap 0x%x, is valid alternate setting %u", index, validAlternateSettingMap, USBAudio2StreamInterface::IsValidAlternateSetting(validAlternateSettingMap, (UCHAR)index));
-            if ((validAlternateSettingMap == 0) || ((validAlternateSettingMap >> 8) == 0x01) || USBAudio2StreamInterface::IsValidAlternateSetting(validAlternateSettingMap, (UCHAR)index))
+            if ((index == 0) || (validAlternateSettingMap == 0) || ((validAlternateSettingMap >> 8) == 0x01) || USBAudio2StreamInterface::IsValidAlternateSetting(validAlternateSettingMap, (UCHAR)index))
             {
                 if (!usbAudioStreamInterface->IsEndpointTypeSupported(USB_ENDPOINT_TYPE_ISOCHRONOUS))
                 {
@@ -6791,6 +6788,97 @@ USBAudioInterfaceInfo::SelectAlternateInterface(
                             // currentSettings.MaxSampleRate
                             // currentSettings.MinSampleRate
                             // currentSettings.SamplePerFrame
+
+                            currentSettings.CalcMaxSampleRate = 0;
+                            // Calculated if it cannot be obtained from the device.
+                            if (validAlternateSettingMap == 0)
+                            {
+                                /**
+                                * @brief Calculates the physical maximum sample rate (Hz) from descriptor parameters
+                                *
+                                * @param bInterval         bInterval from the Endpoint Descriptor (typically 1 for ISO)
+                                * @param wMaxPacketSize    wMaxPacketSize from the Endpoint Descriptor
+                                *                          - USB 2.0: Bits 10..0 (size) / Bits 12..11 (additional transactions: 0–2)
+                                *                          - USB 3.0: Packet size (e.g., 1024 bytes)
+                                * @param wBytesPerInterval wBytesPerInterval from the SuperSpeed ​​Companion Descriptor (USB 3.0 only / 0–1024)
+                                * @param bNrChannels       Number of channels (e.g., AS Interface)
+                                * @param bSubslotSize      Bytes per sample per channel (e.g., AS Format Type; 24-bit=3, 32-bit=4)
+                                *
+                                * @return uint32_t Theoretical maximum sample rate (Hz). Returns 0 if parameters are invalid.
+                                */
+                                ULONG   interval = currentSettings.Interval;
+                                UCHAR   nrChannels = currentSettings.Channels;
+                                ULONG   subslotSize = currentSettings.BytesPerSample;
+
+                                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - Calculate max sample rate. interval %u, nrChannels %u, subslotSize %u", interval, nrChannels, subslotSize);
+
+                                // Validation of invalid parameters, such as checks to prevent division by zero.
+                                if (nrChannels != 0 && subslotSize != 0 && interval != 0)
+                                {
+
+                                    // Frame size (bytes) required for one sample (total across all channels)
+                                    ULONG frame_size = (ULONG)nrChannels * subslotSize;
+
+                                    // Calculation of maximum transferable bandwidth per second (Bytes/sec)
+                                    ULONGLONG max_bandwidth = 0;
+
+                                    USHORT wMaxPacketSize = 0;
+                                    USHORT bytesPerInterval = 0;    
+                                    for (ULONG endpointIndex = 0; endpointIndex < usbAudioStreamInterface->GetNumEndpoints(); endpointIndex++)
+                                    {
+                                        UCHAR endpointAddress = 0;
+                                        if (usbAudioStreamInterface->GetEndpointAddress(endpointIndex, endpointAddress) && (endpointAddress == currentSettings.EndpointAddress))
+                                        {
+                                            usbAudioStreamInterface->GetMaxPacketSize(endpointIndex, wMaxPacketSize);
+                                            usbAudioStreamInterface->GetBytesPerInterval(endpointIndex, bytesPerInterval);
+                                            break;
+                                        }
+                                    }
+
+                                    if (deviceContext->IsDeviceSuperSpeed && deviceContext->SuperSpeedCompatible)
+                                    {
+                                        // --- USB 3.0 (SuperSpeed) ---
+                                        // Frame period: 125us (8000 times/sec)
+                                        // p_sec = 8000 / (2 ^ (interval - 1))
+                                        ULONG p_sec = 8000 >> (interval - 1);
+
+                                        max_bandwidth = (ULONGLONG)p_sec * bytesPerInterval;
+
+                                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - Super Speed: max_bandwitch %llu, p_sec %lu, bytesPerInterval %lu.", max_bandwidth, p_sec, bytesPerInterval);
+                                    }
+                                    else if (deviceContext->IsDeviceHighSpeed)
+                                    {
+                                        // --- USB 2.0 (High-Speed) ---
+                                        // Frame period: 125us (8000 times/sec)
+                                        // p_sec = 8000 / (2 ^ (interval - 1))
+                                        ULONG p_sec = 8000 >> (interval - 1);
+                                        // Get the number of additional transactions from the upper bits of wMaxPacketSize (Bits 12..11)
+                                        ULONG packet_size = wMaxPacketSize & 0x07FF;            // Bits 10..0
+                                        UCHAR additional_trans = (wMaxPacketSize >> 11) & 0x03; // Bits 12..11
+
+                                        max_bandwidth = (ULONGLONG)p_sec * packet_size * (1 + additional_trans);
+
+                                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - High Speed: max_bandwitch %llu, p_sec %lu, packet_size %lu, additional_trans %u.", max_bandwidth, p_sec, packet_size, additional_trans);
+                                    }
+                                    else
+                                    {
+                                        // --- USB 1.0 / 1.1 (Full-Speed) ---
+                                        // Frame period: 1ms (1000 times/sec)
+                                        // p_sec = 1000 / bInterval
+                                        ULONG p_sec = 1000 / interval;
+                                        USHORT packet_size = wMaxPacketSize & 0x07FF; // Bits 10..0
+
+                                        max_bandwidth = (ULONGLONG)p_sec * packet_size;
+
+                                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - Full Speed: max_bandwitch %llu, p_sec %lu, packet_size %lu.", max_bandwidth, p_sec, packet_size);
+                                    }
+
+                                    // Theoretical maximum sample rate (Hz)
+                                    currentSettings.CalcMaxSampleRate = (ULONG)(max_bandwidth / frame_size);
+                                    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - CalcMaxSampleRate %lu.", currentSettings.CalcMaxSampleRate);
+
+                                }
+                            }
                         }
                     }
                     currentSettings.IsDeviceAdaptive = usbAudioStreamInterface->IsEndpointTypeIsochronousSynchronizationSupported(USB_ENDPOINT_TYPE_ISOCHRONOUS_SYNCHRONIZATION_ADAPTIVE);
@@ -7038,6 +7126,7 @@ NTSTATUS USBAudioStreamInterfaceGroup::SelectAlternateInterface(
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - InputPacketsPerSec %u, %u", audioStreamPropertySet.InputProperty.PacketsPerSec, currentSettings.Interval);
         audioStreamPropertySet.InputProperty.UsbChannels = currentSettings.Channels;
         audioStreamPropertySet.InputProperty.ChannelNames = currentSettings.ChannelNames;
+        audioStreamPropertySet.InputProperty.CalcMaxSampleRate = currentSettings.CalcMaxSampleRate;
     }
     else
     {
@@ -7064,6 +7153,7 @@ NTSTATUS USBAudioStreamInterfaceGroup::SelectAlternateInterface(
         audioStreamPropertySet.IsDeviceSynchronous = currentSettings.IsDeviceSynchronous;
         audioStreamPropertySet.OutputProperty.UsbChannels = currentSettings.Channels;
         audioStreamPropertySet.OutputProperty.ChannelNames = currentSettings.ChannelNames;
+        audioStreamPropertySet.OutputProperty.CalcMaxSampleRate = currentSettings.CalcMaxSampleRate;
     }
     if (currentSettings.FeedbackInterfaceNumber != 0)
     {
@@ -7162,6 +7252,27 @@ Return Value:
 
     // Determines the output interface and alternate settings.
     RETURN_NTSTATUS_IF_FAILED(SelectAlternateInterface(false, audioStreamPropertySet, desiredFormatType, desiredFormat, outputDesiredBytesPerSample, outputDesiredValidBitsPerSample));
+
+    // Check if the sampleRate exceeds the upper limit
+    ULONG calcMaxSampleRate = min(audioStreamPropertySet.InputProperty.CalcMaxSampleRate, audioStreamPropertySet.OutputProperty.CalcMaxSampleRate);
+    if (calcMaxSampleRate != 0)
+    {
+        if (sampleRate > calcMaxSampleRate)
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - The desired sampling rate %u Hz exceeds the calculated upper limit %u Hz", sampleRate, calcMaxSampleRate);
+            RETURN_NTSTATUS_IF_FAILED(STATUS_INVALID_PARAMETER);
+        }
+        // Rebuild the valid range of sample rates
+        for (ULONG sampleRateListIndex = 0; sampleRateListIndex < c_SampleRateCount; ++sampleRateListIndex)
+        {
+            if (calcMaxSampleRate < c_SampleRateList[sampleRateListIndex])
+            {
+                TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - Not supported %u Hz", c_SampleRateList[sampleRateListIndex]);
+
+                audioStreamPropertySet.AudioProperty.SupportedSampleRate &= ~(1 << sampleRateListIndex);
+            }
+        }
+    }
 
     audioStreamPropertySet.AudioProperty.SampleRate = sampleRate;
 
@@ -8408,7 +8519,7 @@ USBAudioConfiguration::ParseEndpointCompanionDescriptor(PUSB_SUPERSPEED_ENDPOINT
     RETURN_NTSTATUS_IF_TRUE(lastInterface == nullptr, STATUS_SUCCESS);
     RETURN_NTSTATUS_IF_TRUE(descriptor->bLength != NS_USBAudio::SIZE_OF_USB_SSENDPOINT_COMPANION_DESCRIPTOR, STATUS_DEVICE_DATA_ERROR);
 
-    if ((lastInterface != nullptr) && (descriptor->bLength >= NS_USBAudio::SIZE_OF_USB_ENDPOINT_DESCRIPTOR))
+    if ((lastInterface != nullptr) && (descriptor->bLength >= NS_USBAudio::SIZE_OF_USB_SSENDPOINT_COMPANION_DESCRIPTOR))
     {
         status = lastInterface->SetEndpointCompanion(descriptor);
 
@@ -8656,7 +8767,7 @@ USBAudioConfiguration::ParseDescriptors(PUSB_CONFIGURATION_DESCRIPTOR usbConfigu
                 case USB_ENDPOINT_DESCRIPTOR_TYPE:
                     status = ParseEndpointDescriptor((PUSB_ENDPOINT_DESCRIPTOR)commonDescriptor, lastInterface);
                     break;
-                case EUSB2_ISOCH_ENDPOINT_COMPANION_DESCRIPTOR_TYPE:
+                case USB_SUPERSPEED_ENDPOINT_COMPANION_DESCRIPTOR_TYPE:
                     status = ParseEndpointCompanionDescriptor((PUSB_SUPERSPEED_ENDPOINT_COMPANION_DESCRIPTOR)commonDescriptor, lastInterface);
                     break;
                 case NS_USBAudio0200::CS_INTERFACE:

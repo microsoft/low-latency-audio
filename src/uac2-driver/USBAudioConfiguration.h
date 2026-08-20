@@ -95,6 +95,7 @@ typedef struct _CURRENT_SETTINGS
     ULONG MaxPacketSize{0};
     ULONG Interval{0};
     UCHAR TerminalLink{0};
+    ULONG CalcMaxSampleRate{0};
     bool  IsDeviceAdaptive;
     bool  IsDeviceSynchronous;
 } CURRENT_SETTINGS, *PCURRENT_SETTINGS;
