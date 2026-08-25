@@ -2231,6 +2231,7 @@ Codec_AllocateElements(
                 RETURN_NTSTATUS_IF_FAILED(Codec_CreateVolumeElement(AudioIsochronousEngine, Device, Circuit, element, unitID, 0));
                 RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
                 currentElement = element;
+                circuitContext->NumOfVolumeElements++;
             }
             break;
             case AudioNodeKind::MuteElement: { // Feature Unit (FU_MUTE_CONTROL) : KSNODETYPE_MUTE
