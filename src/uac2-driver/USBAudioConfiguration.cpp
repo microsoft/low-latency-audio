@@ -6817,10 +6817,10 @@ USBAudioInterfaceInfo::SelectAlternateInterface(
                                 {
 
                                     // Frame size (bytes) required for one sample (total across all channels)
-                                    ULONG frame_size = (ULONG)nrChannels * subslotSize;
+                                    ULONG frameSize = (ULONG)nrChannels * subslotSize;
 
                                     // Calculation of maximum transferable bandwidth per second (Bytes/sec)
-                                    ULONGLONG max_bandwidth = 0;
+                                    ULONGLONG maxBandwidth = 0;
 
                                     USHORT wMaxPacketSize = 0;
                                     USHORT bytesPerInterval = 0;
@@ -6839,42 +6839,42 @@ USBAudioInterfaceInfo::SelectAlternateInterface(
                                     {
                                         // --- USB 3.0 (SuperSpeed) ---
                                         // Frame period: 125us (8000 times/sec)
-                                        // p_sec = 8000 / (2 ^ (interval - 1))
-                                        ULONG p_sec = 8000 >> (interval - 1);
+                                        // transfersPerSecond = 8000 / (2 ^ (interval - 1))
+                                        ULONG transfersPerSecond = 8000 >> (interval - 1);
 
-                                        max_bandwidth = (ULONGLONG)p_sec * bytesPerInterval;
+                                        maxBandwidth = (ULONGLONG)transfersPerSecond * bytesPerInterval;
 
-                                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - Super Speed: max_bandwitch %llu, p_sec %lu, bytesPerInterval %lu.", max_bandwidth, p_sec, bytesPerInterval);
+                                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - Super Speed: maxBandwidth %llu, transfersPerSecond %lu, bytesPerInterval %lu.", maxBandwidth, transfersPerSecond, bytesPerInterval);
                                     }
                                     else if (deviceContext->IsDeviceHighSpeed)
                                     {
                                         // --- USB 2.0 (High-Speed) ---
                                         // Frame period: 125us (8000 times/sec)
-                                        // p_sec = 8000 / (2 ^ (interval - 1))
-                                        ULONG p_sec = 8000 >> (interval - 1);
+                                        // transfersPerSecond = 8000 / (2 ^ (interval - 1))
+                                        ULONG transfersPerSecond = 8000 >> (interval - 1);
                                         // Get the number of additional transactions from the upper bits of wMaxPacketSize (Bits 12..11)
-                                        ULONG packet_size = wMaxPacketSize & 0x07FF;            // Bits 10..0
-                                        UCHAR additional_trans = (wMaxPacketSize >> 11) & 0x03; // Bits 12..11
+                                        ULONG packetSize = wMaxPacketSize & 0x07FF;                   // Bits 10..0
+                                        UCHAR additionalTransactions = (wMaxPacketSize >> 11) & 0x03; // Bits 12..11
 
-                                        max_bandwidth = (ULONGLONG)p_sec * packet_size * (1 + additional_trans);
+                                        maxBandwidth = (ULONGLONG)transfersPerSecond * packetSize * (1 + additionalTransactions);
 
-                                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - High Speed: max_bandwitch %llu, p_sec %lu, packet_size %lu, additional_trans %u.", max_bandwidth, p_sec, packet_size, additional_trans);
+                                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - High Speed: maxBandwidth %llu, transfersPerSecond %lu, packetSize %lu, additionalTransactions %u.", maxBandwidth, transfersPerSecond, packetSize, additionalTransactions);
                                     }
                                     else
                                     {
                                         // --- USB 1.0 / 1.1 (Full-Speed) ---
                                         // Frame period: 1ms (1000 times/sec)
-                                        // p_sec = 1000 / bInterval
-                                        ULONG  p_sec = 1000 / interval;
-                                        USHORT packet_size = wMaxPacketSize & 0x07FF; // Bits 10..0
+                                        // transfersPerSecond = 1000 / bInterval
+                                        ULONG transfersPerSecond = 1000 / interval;
+                                        ULONG packetSize = wMaxPacketSize & 0x07FF; // Bits 10..0
 
-                                        max_bandwidth = (ULONGLONG)p_sec * packet_size;
+                                        maxBandwidth = (ULONGLONG)transfersPerSecond * packetSize;
 
-                                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - Full Speed: max_bandwitch %llu, p_sec %lu, packet_size %lu.", max_bandwidth, p_sec, packet_size);
+                                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - Full Speed: maxBandwidth %llu, transfersPerSecond %lu, packetSize %lu.", maxBandwidth, transfersPerSecond, packetSize);
                                     }
 
                                     // Theoretical maximum sample rate (Hz)
-                                    currentSettings.CalcMaxSampleRate = (ULONG)(max_bandwidth / frame_size);
+                                    currentSettings.CalcMaxSampleRate = (ULONG)(maxBandwidth / frameSize);
                                     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - CalcMaxSampleRate %lu.", currentSettings.CalcMaxSampleRate);
                                 }
                             }
