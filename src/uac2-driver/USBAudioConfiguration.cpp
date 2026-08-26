@@ -9989,15 +9989,25 @@ bool USBAudioConfiguration::IsEnableASIO()
     PAGED_CODE();
 
     bool enableASIO = true;
-    // const ULONG sampleFormatsTypeIII = USBAudioDataFormat::GetSampleFormatsTypeIII();
 
     //
     // If the device supports USB Audio Data Format Type III, ASIO is treated as unsupported.
     //
-    // TBD 202603
-    if (/* ((m_deviceContext->AudioProperty.SupportedSampleFormats & sampleFormatsTypeIII) != 0) || */ IsMultipleClockSources())
+    if (IsMultipleClockSources())
     {
         enableASIO = false;
+    }
+    else
+    {
+        const ULONG sampleFormatsTypeIII = USBAudioDataFormat::GetSampleFormatsTypeIII();
+        for (auto usbAudioStreamInterfaceGroup : m_usbAudioStreamInterfaceGroups)
+        {
+            if ((usbAudioStreamInterfaceGroup->GetSupportedSampleFormats() & sampleFormatsTypeIII) != 0)
+            {
+                enableASIO = false;
+                break;
+            }
+        }
     }
 
     return enableASIO;

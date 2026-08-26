@@ -39,6 +39,10 @@ Environment:
 #define UAC_DEFAULT_MAX_PACKET_SIZE         1024 // The minimum size is USB3 packet size * UAC_MAX_CLASSIC_FRAMES_PER_IRP * FramesPerMs.
 #define UAC_DEFAULT_LOCK_DELAY              10
 
+#if (UAC_DEFAULT_MAX_IRP_NUMBER > UAC_MAX_IRP_NUMBER)
+#error "Invalid configuration: UAC_DEFAULT_MAX_IRP_NUMBER is greater than UAC_MAX_IRP_NUMBER."
+#endif
+
 class CStreamEngine;
 class ContiguousMemory;
 class WorkerThread;
@@ -225,11 +229,11 @@ typedef struct _INTERNAL_PARAMETERS
     ULONG BufferFlags;
 
     // ASIO buffer size
-	// The actual buffer size is determined by multiplying this period based on the device's sample rate:
-	// 2x for sample rates >= 50 kHz and < 100 kHz,
-	// 4x for >= 100 kHz and < 200 kHz,
-	// 8x for >= 200 kHz and < 400 kHz,
-	// and 16x for >= 400 kHz.
+    // The actual buffer size is determined by multiplying this period based on the device's sample rate:
+    // 2x for sample rates >= 50 kHz and < 100 kHz,
+    // 4x for >= 100 kHz and < 200 kHz,
+    // 8x for >= 200 kHz and < 400 kHz,
+    // and 16x for >= 400 kHz.
     ULONG SuggestedBufferPeriod;
 } INTERNAL_PARAMETERS;
 
