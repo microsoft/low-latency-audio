@@ -6798,9 +6798,9 @@ USBAudioInterfaceInfo::SelectAlternateInterface(
                                  *
                                  * @param bInterval         bInterval from the Endpoint Descriptor (typically 1 for ISO)
                                  * @param wMaxPacketSize    wMaxPacketSize from the Endpoint Descriptor
-                                 *                          - USB 2.0: Bits 10..0 (size) / Bits 12..11 (additional transactions: 0–2)
+                                 *                          - USB 2.0: Bits 10..0 (size) / Bits 12..11 (additional transactions: 0-2)
                                  *                          - USB 3.0: Packet size (e.g., 1024 bytes)
-                                 * @param wBytesPerInterval wBytesPerInterval from the SuperSpeed ​​Companion Descriptor (USB 3.0 only / 0–1024)
+                                 * @param wBytesPerInterval wBytesPerInterval from the SuperSpeed Companion Descriptor (USB 3.0 only / 0-1024)
                                  * @param bNrChannels       Number of channels (e.g., AS Interface)
                                  * @param bSubslotSize      Bytes per sample per channel (e.g., AS Format Type; 24-bit=3, 32-bit=4)
                                  *

@@ -351,7 +351,7 @@ void CUSBAsio::getErrorMessage(char * errorMessage)
     size = min(size, ERROR_MESSAGE_LENGTH);
 
 #ifdef _UNICODE
-    // TCHAR is wchar_t → convert wide char to multibyte
+    // TCHAR is wchar_t -> convert wide char to multibyte
     WideCharToMultiByte(CP_ACP, 0, m_errorMessage, -1, errorMessage, ERROR_MESSAGE_LENGTH, NULL, NULL);
 #else
     // The buffer size for errorMessage is determined by the host DAW.
@@ -368,7 +368,7 @@ void CUSBAsio::getErrorMessage(char * errorMessage)
     // ERROR_MESSAGE_LENGTH and the length of m_errorMessage when copying
     // the string.
     //
-    // TCHAR is char → direct copy
+    // TCHAR is char -> direct copy
     strcpy_s(errorMessage, ERROR_MESSAGE_LENGTH, m_errorMessage);
 #endif
 }
