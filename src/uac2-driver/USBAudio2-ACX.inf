@@ -149,7 +149,7 @@ AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_RenderDevice000%,  USBAudio2-ACX_Dev
 AddInterface=%KSCATEGORY_RENDER%,   %KSNAME_RenderDevice000%,  USBAudio2-ACX_Device.I.RenderDevice
 AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_RenderDevice000%,  USBAudio2-ACX_Device.I.RenderDevice
 
-; Interfaces for capture endpoint 
+; Interfaces for capture endpoint
 AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_CaptureDevice000%, USBAudio2-ACX_Device.I.CaptureDevice
 AddInterface=%KSCATEGORY_CAPTURE%,  %KSNAME_CaptureDevice000%, USBAudio2-ACX_Device.I.CaptureDevice
 AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_CaptureDevice000%, USBAudio2-ACX_Device.I.CaptureDevice
