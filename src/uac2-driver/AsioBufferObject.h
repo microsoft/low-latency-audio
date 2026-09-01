@@ -28,13 +28,16 @@ Environment:
 #include <acx.h>
 #include "UAC_User.h"
 
+class AudioIsochronousEngine;
+
 class AsioBufferObject
 {
   public:
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     AsioBufferObject(
-        _In_ PDEVICE_CONTEXT deviceContext
+        _In_ PDEVICE_CONTEXT          deviceContext,
+        _In_ AudioIsochronousEngine * audioIsochronousEngine
     );
 
     virtual __drv_maxIRQL(PASSIVE_LEVEL)
@@ -67,6 +70,10 @@ class AsioBufferObject
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     bool IsUserSpaceThreadOutputReady() const;
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    bool IsInitialized() const;
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -132,10 +139,15 @@ class AsioBufferObject
     PAGED_CODE_SEG
     void UpdateCurrentSampleRate();
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    PKEVENT GetOutputReadyEvent() const noexcept;
+
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     AsioBufferObject * Create(
-        _In_ PDEVICE_CONTEXT deviceContext
+        _In_ PDEVICE_CONTEXT          deviceContext,
+        _In_ AudioIsochronousEngine * audioIsochronousEngine
     );
 
   protected:
@@ -161,6 +173,7 @@ class AsioBufferObject
     );
 
     const PDEVICE_CONTEXT                 m_deviceContext;
+    AudioIsochronousEngine *              m_audioIsochronousEngine{nullptr};
     bool                                  m_isReady{false};
     PMDL                                  m_recMdl{nullptr};
     bool                                  m_recMdlLocked{false};

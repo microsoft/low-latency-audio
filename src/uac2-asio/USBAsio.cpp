@@ -55,7 +55,7 @@ static constexpr double c_TwoRaisedTo32Reciprocal = 1. / c_TwoRaisedTo32;
 #define DRIVER_NAME _T(DRIVER_NAME_8b)
 
 static const TCHAR * c_ServiceName = _T("USBAudio2-ACX");
-static const TCHAR * c_ReferenceName = _T("RenderDevice0");
+static const TCHAR * c_ReferenceName = _T("RenderDevice");
 
 #define DSD_ZERO_BYTE 0x96
 #define DSD_ZERO_WORD 0x9696
@@ -331,7 +331,7 @@ void CUSBAsio::getDriverName(char * name)
 {
     //
     // name uses multibyte character sets,
-    // so sprintf_s is used.
+    // so strcpy_s is used.
     //
     strcpy_s(name, DRIVER_NAME_LENGTH, DRIVER_NAME_8b);
 }
@@ -346,15 +346,29 @@ _Use_decl_annotations_
 void CUSBAsio::getErrorMessage(char * errorMessage)
 {
     info_print_(_T("getErrorMessage\n"));
-    // >>comment-001<<
+
     size_t size = _tcslen(m_errorMessage) + 1;
     size = min(size, ERROR_MESSAGE_LENGTH);
 
 #ifdef _UNICODE
-    // TCHAR is wchar_t → convert wide char to multibyte
+    // TCHAR is wchar_t -> convert wide char to multibyte
     WideCharToMultiByte(CP_ACP, 0, m_errorMessage, -1, errorMessage, ERROR_MESSAGE_LENGTH, NULL, NULL);
 #else
-    // TCHAR is char → direct copy
+    // The buffer size for errorMessage is determined by the host DAW.
+    //
+    // To detect this issue, debug builds of this driver intentionally rely on
+    // the runtime checks provided by strcpy_s(). Passing a size value that
+    // exceeds the actual buffer size supplied by the DAW can trigger a buffer
+    // overrun detection.
+    //
+    // If a buffer overrun is detected, a STATUS_STACK_BUFFER_OVERRUN exception
+    // is raised, causing the application to terminate.
+    //
+    // To minimize the risk of this issue, use the smaller value of
+    // ERROR_MESSAGE_LENGTH and the length of m_errorMessage when copying
+    // the string.
+    //
+    // TCHAR is char -> direct copy
     strcpy_s(errorMessage, ERROR_MESSAGE_LENGTH, m_errorMessage);
 #endif
 }
@@ -466,13 +480,13 @@ ASIOError CUSBAsio::getLatencies(long * inputLatency, long * outputLatency)
         return ASE_InvalidParameter;
     }
 
-    if (GetAudioProperty(m_usbDeviceHandle, &m_audioProperty))
+    if (!GetLatency())
     {
-        info_print_(_T("Obtained latency offset in-%d out-%d\n"), m_audioProperty.InputLatencyOffset, m_audioProperty.OutputLatencyOffset);
+        return ASE_NotPresent;
     }
 
-    *inputLatency = m_blockFrames + m_audioProperty.InputLatencyOffset;
-    *outputLatency = m_blockFrames + m_audioProperty.OutputLatencyOffset;
+    *inputLatency = m_inputLatency;
+    *outputLatency = m_outputLatency;
 
     // >>comment-002<<
     return ASE_OK;
@@ -688,11 +702,13 @@ ASIOError CUSBAsio::getClockSources(ASIOClockSource * clocks, long * numSources)
             clocks[i].associatedGroup = -1;
             clocks[i].isCurrentSource = clockInfo->ClockSource[i].IsCurrentSource ? ASIOTrue : ASIOFalse;
 
+            static_assert(sizeof(((ASIOClockSource *)0)->name) == CLOCK_SOURCE_NAME_LENGTH, "ASIOClockSource::name size mismatch");
+            static_assert(CLOCK_SOURCE_NAME_LENGTH == UAC_MAX_CLOCK_SOURCE_NAME_LENGTH, "CLOCK_SOURCE_NAME_LENGTH and UAC_MAX_CLOCK_SOURCE_NAME_LENGTH must be identical");
             //
             // ASIOClockSource::name uses multibyte character sets,
-            // so sprintf_s is used.
+            // so _snprintf_s is used.
             //
-            sprintf_s(clocks[i].name, CLOCK_SOURCE_NAME_LENGTH, "%S", clockInfo->ClockSource[i].Name);
+            _snprintf_s(clocks[i].name, CLOCK_SOURCE_NAME_LENGTH, _TRUNCATE, "%S", clockInfo->ClockSource[i].Name);
         }
         *numSources = clockInfo->NumClockSource;
     }
@@ -833,17 +849,19 @@ ASIOError CUSBAsio::getChannelInfo(ASIOChannelInfo * info)
             }
         }
 
+        static_assert(sizeof(((ASIOChannelInfo *)0)->name) == CHANNEL_INFO_NAME_LENGTH, "ASIOChannelInfo::name size mismatch");
+        static_assert(CHANNEL_INFO_NAME_LENGTH == UAC_MAX_CHANNEL_NAME_LENGTH, "CHANNEL_INFO_NAME_LENGTH and UAC_MAX_CHANNEL_NAME_LENGTH must be identical");
         //
         // ASIOChannelInfo::name uses multibyte character sets,
-        // so sprintf_s is used.
+        // so _snprintf_s is used.
         //
         if (ch == m_channelInfo->NumChannels)
         {
-            sprintf_s(info->name, DRIVER_NAME_LENGTH, "channel %u", info->channel);
+            _snprintf_s(info->name, CHANNEL_INFO_NAME_LENGTH, _TRUNCATE, "channel %u", info->channel);
         }
         else
         {
-            sprintf_s(info->name, DRIVER_NAME_LENGTH, "%S", m_channelInfo->Channel[ch].Name);
+            _snprintf_s(info->name, CHANNEL_INFO_NAME_LENGTH, _TRUNCATE, "%S", m_channelInfo->Channel[ch].Name);
         }
     }
 #ifdef _UNICODE
@@ -969,9 +987,17 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
             if (bufferSize != m_blockFrames)
             {
                 info_print_(_T("createBuffers : requested buffer size %u differs from preferred %u.\n"), bufferSize, m_blockFrames);
+#if false
                 m_blockFrames = bufferSize;
                 m_isRequireAsioReset = true;
                 SetEvent(m_asioResetEvent);
+#else
+                //
+                // Return an error if the specified ASIO buffer size differs from the kernel driver setting, to support applications that cannot handle kAsioResetRequest immediately after ASIOCreateBuffers().
+                //
+                error = ASE_InvalidMode;
+                return error;
+#endif
             }
 
             ULONG bytesPerSample = 0;
@@ -1486,6 +1512,12 @@ bool CUSBAsio::GetLatency()
     {
         return result;
     }
+
+    //
+    // m_blockFrames is already adjusted using sample rate-dependent coefficients.
+    //
+    m_inputLatency += m_blockFrames;
+    m_outputLatency += m_blockFrames;
 
     info_print_(_T("latency is in:%d, out:%d samples.\n"), m_inputLatency, m_outputLatency);
 

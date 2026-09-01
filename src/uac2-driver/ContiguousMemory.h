@@ -24,12 +24,16 @@ Environment:
 #ifndef _CONTIGUOUSMEMORY_H_
 #define _CONTIGUOUSMEMORY_H_
 
+class USBAudioStreamInterfaceGroup;
+
 class ContiguousMemory
 {
   public:
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    ContiguousMemory();
+    ContiguousMemory(
+        _In_ const ULONG maxIrpNumber
+    );
     virtual __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     ~ContiguousMemory();
@@ -38,10 +42,10 @@ class ContiguousMemory
     PAGED_CODE_SEG
     NTSTATUS
     Allocate(
-        _In_ USBAudioConfiguration * usbAudioConfiguration,
-        _In_ ULONG                   maxBurstOverride,
-        _In_ ULONG                   maxClassicFramesPerIrp,
-        _In_ ULONG                   framesPerMs
+        _In_ USBAudioStreamInterfaceGroup * usbAudioStreamInterfaceGroup,
+        _In_ ULONG                          maxBurstOverride,
+        _In_ ULONG                          maxClassicFramesPerIrp,
+        _In_ ULONG                          framesPerMs
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -86,19 +90,22 @@ class ContiguousMemory
 
     static __drv_maxIRQL(DISPATCH_LEVEL)
     PAGED_CODE_SEG
-    ContiguousMemory * Create();
+    ContiguousMemory * Create(
+        _In_ const ULONG maxIrpNumber
+    );
 
   private:
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     ULONG
     GetMaxPacketSize(
-        _In_ USBAudioConfiguration * usbAudioConfiguration,
-        _In_ IsoDirection            direction
+        _In_ USBAudioStreamInterfaceGroup * usbAudioStreamInterfaceGroup,
+        _In_ IsoDirection                   direction
     );
 
-    ULONG  m_contiguousMemorySize[toInt(IsoDirection::NumOfIsoDirection)]{0};
-    PUCHAR m_contiguousMemory[toInt(IsoDirection::NumOfIsoDirection)][UAC_MAX_IRP_NUMBER]{};
+    ULONG       m_contiguousMemorySize[toInt(IsoDirection::NumOfIsoDirection)]{0};
+    PUCHAR      m_contiguousMemory[toInt(IsoDirection::NumOfIsoDirection)][UAC_MAX_IRP_NUMBER]{};
+    const ULONG c_maxIrpNumber;
 };
 
 #endif
