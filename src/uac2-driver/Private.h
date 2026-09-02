@@ -95,20 +95,24 @@ DEFINE_GUID(SYSTEM_CONTAINER_GUID, 0xa11c91bc, 0x6c56, 0x44a4, 0x83, 0x2d, 0x40,
 DEFINE_GUID(DEVICE_CONTAINER_GUID, 0x99a15cbb, 0x8ecf, 0x4ed5, 0xa3, 0xa1, 0xd2, 0x99, 0x26, 0xa1, 0xe0, 0x3e);
 
 // AudioCodec driver tag:
-#define DRIVER_TAG        (ULONG)'DaAU'
+#define DRIVER_TAG         (ULONG)'DaAU'
 
-#define MIXINGENGINE_TAG  (ULONG)'EmAU'
+#define MIXINGENGINE_TAG   (ULONG)'EmAU'
 
 // The idle timeout in msec for power policy structure:
-#define IDLE_TIMEOUT_MSEC (ULONG)10000
+#define IDLE_TIMEOUT_MSEC  (ULONG)10000
 
 // The WPP control GUID defined in Trace.h should also be updated to be unique.
 
+#define CIRCUITNAMELENGTH  128
+
 // This string must match the string defined in AudioCodec.inf for the microphone name:
-DECLARE_CONST_UNICODE_STRING(captureCircuitName, L"CaptureDevice0");
+#define CAPTURECIRCUITNAME L"CaptureDevice%03x"
+DECLARE_CONST_UNICODE_STRING(captureCircuitName, CAPTURECIRCUITNAME);
 
 // This string must match the string defined in AudioCodec.inf for the speaker name:
-DECLARE_CONST_UNICODE_STRING(renderCircuitName, L"RenderDevice0");
+#define RENDERCIRCUITNAME L"RenderDevice%03x"
+DECLARE_CONST_UNICODE_STRING(renderCircuitName, RENDERCIRCUITNAME);
 
 // Diverted from Acx/Samples/AudioCodec/Driver/DriverSettings.h  End
 
@@ -152,8 +156,10 @@ typedef int BOOL;
 #define RGB(r, g, b) (DWORD)(r << 16 | g << 8 | b)
 #endif
 
-#define ALL_CHANNELS_ID     UINT32_MAX
-#define MAX_CHANNELS        32
+#define ALL_CHANNELS_ID UINT32_MAX
+
+class USBAudioDataFormatManager;
+class AudioIsochronousEngine;
 
 //
 // Ks support.
@@ -200,7 +206,9 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(RENDER_DEVICE_CONTEXT, GetRenderDeviceContext
 //
 typedef struct _ELEMENT_CONTEXT
 {
-    BOOLEAN Dummy;
+    ULONG AudioNodeKind;
+    ULONG PinID;
+    UCHAR UnitID;
 } ELEMENT_CONTEXT, *PELEMENT_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ELEMENT_CONTEXT, GetElementContext)
@@ -211,7 +219,8 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ELEMENT_CONTEXT, GetElementContext)
 typedef struct _MUTE_ELEMENT_CONTEXT
 {
     WDFDEVICE Device;
-    bool      MuteState[MAX_CHANNELS];
+    WDFMEMORY MuteStatesMemory;
+    bool *    MuteStates;
     UCHAR     EntityID;
     ULONG     NumberOfChannels;
 } MUTE_ELEMENT_CONTEXT, *PMUTE_ELEMENT_CONTEXT;
@@ -224,7 +233,8 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(MUTE_ELEMENT_CONTEXT, GetMuteElementContext)
 typedef struct _VOLUME_ELEMENT_CONTEXT
 {
     WDFDEVICE Device;
-    LONG      VolumeLevel[MAX_CHANNELS];
+    WDFMEMORY VolumeLevelsMemory;
+    LONG *    VolumeLevels;
     UCHAR     EntityID;
     ULONG     NumberOfChannels;
 } VOLUME_ELEMENT_CONTEXT, *PVOLUME_ELEMENT_CONTEXT;
@@ -234,6 +244,40 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(VOLUME_ELEMENT_CONTEXT, GetVolumeElementConte
 #define VOLUME_STEPPING      0x8000
 #define VOLUME_LEVEL_MAXIMUM 0x00000000
 #define VOLUME_LEVEL_MINIMUM (-96 * 0x10000)
+
+//
+// Define circuit/stream element context.
+//
+typedef struct _MUX_ELEMENT_CONTEXT
+{
+    WDFDEVICE Device;
+    UCHAR     EntityID;
+    UCHAR     ConnectPinIndex;
+    ULONG     NumberOfChannels;
+    ULONG     NumberOfInputPins;
+} MUX_ELEMENT_CONTEXT, *PMUX_ELEMENT_CONTEXT;
+
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(MUX_ELEMENT_CONTEXT, GetMuxElementContext)
+
+typedef struct _AGC_ELEMENT_CONTEXT
+{
+    WDFDEVICE Device;
+    UCHAR     EntityID;
+    ULONG     NumberOfChannels;
+} AGC_ELEMENT_CONTEXT, *PAGC_ELEMENT_CONTEXT;
+
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(AGC_ELEMENT_CONTEXT, GetAgcElementContext)
+
+typedef struct _SUPERMIX_ELEMENT_CONTEXT
+{
+    WDFDEVICE Device;
+    UCHAR     EntityID;
+    UCHAR     ConnectPinIndex;
+    ULONG     NumberOfInputChannels;
+    ULONG     NumberOfOutputChannels;
+} SUPERMIX_ELEMENT_CONTEXT, *PSUPERMIX_ELEMENT_CONTEXT;
+
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(SUPERMIX_ELEMENT_CONTEXT, GetSuperMixElementContext)
 
 //
 // Define mute timer context.
@@ -336,12 +380,16 @@ typedef enum _CODEC_PIN_TYPE
 
 typedef struct _CODEC_PIN_CONTEXT
 {
-    WDFDEVICE      Device;
-    CODEC_PIN_TYPE CodecPinType;
-    ULONG          DeviceIndex;
-    ULONG          Channel;
-    ULONG          NumOfChannelsPerDevice;
-    ACXJACK        jack;
+    bool                     IsInput;
+    WDFDEVICE                Device;
+    CODEC_PIN_TYPE           CodecPinType;
+    ULONG                    DeviceIndex;
+    ULONG                    Channel;
+    ULONG                    NumOfChannelsPerDevice;
+    UCHAR                    ChannelNames;
+    UCHAR                    TerminalID;
+    ACXJACK                  jack;
+    AudioIsochronousEngine * AudioIsochronousEngine;
 } CODEC_PIN_CONTEXT, *PCODEC_PIN_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_PIN_CONTEXT, GetCodecPinContext)
@@ -393,18 +441,6 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(DSP_PIN_CONTEXT, GetDspPinContext)
 //
 // Define render circuit context.
 //
-typedef struct _CODEC_RENDER_CIRCUIT_CONTEXT
-{
-    WDFMEMORY      VolumeElementsMemory;
-    ACXVOLUME *    VolumeElements;
-    WDFMEMORY      MuteElementsMemory;
-    ACXMUTE *      MuteElements;
-    ACXAUDIOENGINE AudioEngineElement;
-    ULONG          NumOfDevices;
-} CODEC_RENDER_CIRCUIT_CONTEXT, *PCODEC_RENDER_CIRCUIT_CONTEXT;
-
-WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_RENDER_CIRCUIT_CONTEXT, GetRenderCircuitContext)
-
 typedef enum
 {
     CodecRenderHostPin = 0,
@@ -419,6 +455,94 @@ typedef enum
     RenderElementCount = 2
 } CODEC_RENDER_ELEMENTS;
 
+// Common callbackes.
+PAGED_CODE_SEG
+EVT_ACX_PIN_SET_DATAFORMAT Codec_EvtAcxPinSetDataFormat;
+
+PAGED_CODE_SEG
+EVT_ACX_MUTE_ASSIGN_STATE Codec_EvtMuteAssignState;
+
+PAGED_CODE_SEG
+EVT_ACX_MUTE_RETRIEVE_STATE Codec_EvtMuteRetrieveState;
+
+PAGED_CODE_SEG
+EVT_WDF_DEVICE_CONTEXT_CLEANUP Codec_EvtMuteElementContextCleanup;
+
+PAGED_CODE_SEG
+EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL Codec_EvtRampedVolumeAssignLevel;
+
+PAGED_CODE_SEG
+EVT_ACX_VOLUME_RETRIEVE_LEVEL Codec_EvtVolumeRetrieveLevel;
+
+PAGED_CODE_SEG
+EVT_WDF_DEVICE_CONTEXT_CLEANUP Codec_EvtVolumeElementContextCleanup;
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_CreateVolumeElement(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID,
+    _In_ UCHAR                    NumOfChannelsPerDevice
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_CreateMuteElement(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID,
+    _In_ UCHAR                    NumOfChannelsPerDevice
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_CreateMuxElement(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_CreateAgcElement(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_CreateSuperMixElement(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXELEMENT &          Element,
+    _In_ UCHAR                    UnitID
+);
+
+NONPAGED_CODE_SEG
+EVT_WDF_DEVICE_CONTEXT_CLEANUP Codec_EvtPinContextCleanup;
+
+PAGED_CODE_SEG
+NTSTATUS
+Codec_AllocateSupportedFormats(
+    _In_ WDFDEVICE                   Device,
+    _In_ ACXPIN                      Pin,
+    _In_ ACXCIRCUIT                  Circuit,
+    _In_ const ULONG                 SupportedSampleRate,
+    _In_ const ULONG                 Channels,
+    _In_ USBAudioDataFormatManager * UsbAudioDataFormatManager
+);
+
 // Render callbacks.
 
 PAGED_CODE_SEG
@@ -431,22 +555,11 @@ PAGED_CODE_SEG
 EVT_ACX_STREAM_SET_RENDER_PACKET CodecR_EvtStreamSetRenderPacket;
 // EVT_ACX_STREAM_GET_CAPTURE_PACKET   CodecR_EvtStreamGetLoopbackPacket;
 
-PAGED_CODE_SEG
-EVT_ACX_PIN_SET_DATAFORMAT CodecR_EvtAcxPinSetDataFormat;
-
-NONPAGED_CODE_SEG
-EVT_WDF_DEVICE_CONTEXT_CLEANUP CodecR_EvtPinContextCleanup;
-
-PAGED_CODE_SEG
-EVT_ACX_MUTE_ASSIGN_STATE CodecR_EvtMuteAssignState;
-
-PAGED_CODE_SEG
-EVT_ACX_MUTE_RETRIEVE_STATE CodecR_EvtMuteRetrieveState;
 // EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecR_EvtVolumeAssignLevel;
+
 PAGED_CODE_SEG
-EVT_ACX_VOLUME_RETRIEVE_LEVEL CodecR_EvtVolumeRetrieveLevel;
-PAGED_CODE_SEG
-EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL CodecR_EvtRampedVolumeAssignLevel;
+EVT_ACX_PIN_RETRIEVE_NAME CodecR_EvtAcxPinRetrieveName;
+
 // EVT_ACX_AUDIOENGINE_RETRIEVE_BUFFER_SIZE_LIMITS CodecR_EvtAcxAudioEngineRetrieveBufferSizeLimits;
 // EVT_ACX_AUDIOENGINE_RETRIEVE_EFFECTS_STATE      CodecR_EvtAcxAudioEngineRetrieveEffectsState;
 // EVT_ACX_AUDIOENGINE_ASSIGN_EFFECTS_STATE        CodecR_EvtAcxAudioEngineAssignEffectsState;
@@ -463,34 +576,13 @@ EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL CodecR_EvtRampedVolumeAssignLevel;
 PAGED_CODE_SEG
 NTSTATUS
 CodecR_CreateRenderCircuit(
-    _In_ WDFDEVICE              Device,
-    _In_ const GUID *           ComponentGuid,
-    _In_ const UNICODE_STRING * CircuitName,
-    _In_ const ULONG            SupportedSampleRate,
-    _Out_ ACXCIRCUIT *          Circuit
+    _In_ WDFDEVICE                Device,
+    _In_ const GUID *             ComponentGuid,
+    _In_ const UNICODE_STRING *   CircuitName,
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ const ULONG              SupportedSampleRate,
+    _Out_ ACXCIRCUIT *            Circuit
 );
-
-PAGED_CODE_SEG
-NTSTATUS
-CodecR_VolumeChangeLevelNotification(
-    _In_ ACXCIRCUIT Circuit,
-    _In_ UCHAR      EntityID
-);
-
-PAGED_CODE_SEG
-NTSTATUS
-CodecR_MuteChangeStateNotification(
-    _In_ ACXCIRCUIT Circuit,
-    _In_ UCHAR      EntityID
-);
-
-PAGED_CODE_SEG
-NTSTATUS
-CodecR_ConnectorChangeStateNotification(
-    _In_ ACXCIRCUIT Circuit,
-    _In_ UCHAR      EntityID
-);
-
 /////////////////////////////////////////////////////////
 //
 // Codec Capture (microphone) definitions
@@ -499,17 +591,6 @@ CodecR_ConnectorChangeStateNotification(
 //
 // Define capture circuit context.
 //
-typedef struct _CODEC_CAPTURE_CIRCUIT_CONTEXT
-{
-    WDFMEMORY   VolumeElementsMemory;
-    ACXVOLUME * VolumeElements;
-    WDFMEMORY   MuteElementsMemory;
-    ACXMUTE *   MuteElements;
-    ULONG       NumOfDevices;
-    // ACXKEYWORDSPOTTER KeywordSpotter;
-} CODEC_CAPTURE_CIRCUIT_CONTEXT, *PCODEC_CAPTURE_CIRCUIT_CONTEXT;
-
-WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_CAPTURE_CIRCUIT_CONTEXT, GetCaptureCircuitContext)
 
 typedef enum
 {
@@ -540,31 +621,12 @@ PAGED_CODE_SEG
 EVT_ACX_VOLUME_ASSIGN_LEVEL CodecC_EvtVolumeAssignLevelCallback;
 
 PAGED_CODE_SEG
-EVT_ACX_VOLUME_RETRIEVE_LEVEL CodecC_EvtVolumeRetrieveLevelCallback;
-// EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecC_EvtBoostAssignLevelCallback;
-// EVT_ACX_VOLUME_RETRIEVE_LEVEL       CodecC_EvtBoostRetrieveLevelCallback;
-PAGED_CODE_SEG
 EVT_ACX_STREAM_GET_CAPTURE_PACKET CodecC_EvtStreamGetCapturePacket;
-
-PAGED_CODE_SEG
-EVT_ACX_PIN_SET_DATAFORMAT CodecC_EvtAcxPinSetDataFormat;
 
 PAGED_CODE_SEG
 EVT_ACX_PIN_RETRIEVE_NAME CodecC_EvtAcxPinRetrieveName;
 
-NONPAGED_CODE_SEG
-EVT_WDF_DEVICE_CONTEXT_CLEANUP CodecC_EvtPinContextCleanup;
-
-PAGED_CODE_SEG
-EVT_ACX_MUTE_ASSIGN_STATE CodecC_EvtMuteAssignState;
-
-PAGED_CODE_SEG
-EVT_ACX_MUTE_RETRIEVE_STATE CodecC_EvtMuteRetrieveState;
 // EVT_ACX_VOLUME_ASSIGN_LEVEL         CodecC_EvtVolumeAssignLevel;
-PAGED_CODE_SEG
-EVT_ACX_VOLUME_RETRIEVE_LEVEL CodecC_EvtVolumeRetrieveLevel;
-PAGED_CODE_SEG
-EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL CodecC_EvtRampedVolumeAssignLevel;
 
 // EVT_ACX_KEYWORDSPOTTER_RETRIEVE_ARM     CodecC_EvtAcxKeywordSpotterRetrieveArm;
 // EVT_ACX_KEYWORDSPOTTER_ASSIGN_ARM       CodecC_EvtAcxKeywordSpotterAssignArm;
@@ -574,33 +636,203 @@ EVT_ACX_RAMPED_VOLUME_ASSIGN_LEVEL CodecC_EvtRampedVolumeAssignLevel;
 PAGED_CODE_SEG
 NTSTATUS
 CodecC_CreateCaptureCircuit(
-    _In_ WDFDEVICE              Device,
-    _In_ const GUID *           ComponentGuid,
-    _In_ const GUID *           MicCustomName,
-    _In_ const UNICODE_STRING * CircuitName,
-    _In_ const ULONG            SupportedSampleRate,
-    _Out_ ACXCIRCUIT *          Circuit
+    _In_ WDFDEVICE                Device,
+    _In_ const GUID *             ComponentGuid,
+    _In_ const GUID *             MicCustomName,
+    _In_ const UNICODE_STRING *   CircuitName,
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ const ULONG              SupportedSampleRate,
+    _Out_ ACXCIRCUIT *            Circuit
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateRenderPin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXPIN &              Pin,
+    _In_ ULONG                    Id,
+    _In_ ULONG                    DeviceIndex,
+    _In_ ULONG                    Channel,
+    _In_ ULONG                    ChannelsCount
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateBridgePin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXPIN &              Pin,
+    _In_ ULONG                    Id,
+    _In_ ULONG                    DeviceIndex,
+    _In_ ULONG                    Channel,
+    _In_ ULONG                    ChannelsCount,
+    _In_ USHORT                   TerminalType,
+    _In_ UCHAR                    TerminalID
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateCaptureStreamingPin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXPIN &              Pin,
+    _In_ ULONG                    Id,
+    _In_ ULONG                    DeviceIndex,
+    _In_ ULONG                    Channel,
+    _In_ ULONG                    ChannelsCount
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateCaptureEndpointPin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _Inout_ ACXPIN &              Pin,
+    _In_ ULONG                    Id,
+    _In_ ULONG                    DeviceIndex,
+    _In_ ULONG                    Channel,
+    _In_ ULONG                    ChannelsCount,
+    _In_ USHORT                   TerminalType,
+    _In_ UCHAR                    TerminalID
+);
+
+/////////////////////////////////////////////////////////
+//
+// Codec Capture/Render common definitions
+//
+typedef struct _CODEC_CIRCUIT_CONTEXT
+{
+    ULONG                    NumOfDevices;
+    AudioIsochronousEngine * AudioIsochronousEngine;
+    ULONG                    NumOfVolumeElements;
+    WDFMEMORY                VolumeElementsMemory;
+    ACXVOLUME *              VolumeElements;
+    ULONG                    NumOfMuteElements;
+    WDFMEMORY                MuteElementsMemory;
+    ACXMUTE *                MuteElements;
+    ULONG                    NumOfAgcElements;
+    WDFMEMORY                AgcElementsMemory;
+    ACXELEMENT *             AgcElements;
+} CODEC_CIRCUIT_CONTEXT, *PCODEC_CIRCUIT_CONTEXT;
+WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(CODEC_CIRCUIT_CONTEXT, GetCircuitContext)
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_AddAudioJackToBridgePin(
+    _In_ ACXPIN Pin,
+    _In_ ULONG  SpeakerPositions
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_AddAudioDummyJackToBridgePin(
+    _In_ ACXPIN Pin
 );
 
 PAGED_CODE_SEG
 NTSTATUS
-CodecC_VolumeChangeLevelNotification(
+Codec_VolumeChangeLevelNotification(
     _In_ ACXCIRCUIT Circuit,
     _In_ UCHAR      EntityID
 );
 
 PAGED_CODE_SEG
 NTSTATUS
-CodecC_MuteChangeStateNotification(
+Codec_MuteChangeStateNotification(
     _In_ ACXCIRCUIT Circuit,
     _In_ UCHAR      EntityID
 );
 
 PAGED_CODE_SEG
 NTSTATUS
-CodecC_ConnectorChangeStateNotification(
+Codec_ConnectorChangeStateNotification(
     _In_ ACXCIRCUIT Circuit,
     _In_ UCHAR      EntityID
+);
+
+PAGED_CODE_SEG
+EVT_ACX_PIN_RETRIEVE_NAME Codec_EvtAcxPinRetrieveName;
+
+PAGED_CODE_SEG
+EVT_ACX_OBJECT_PROCESS_REQUEST Codec_EvtUSBAudioAcxDriverMuxProcessRequest;
+
+PAGED_CODE_SEG
+EVT_ACX_OBJECT_PROCESS_REQUEST Codec_EvtUSBAudioAcxDriverAgcProcessRequest;
+
+PAGED_CODE_SEG
+EVT_ACX_OBJECT_PROCESS_REQUEST Codec_EvtUSBAudioAcxDriverMixLevelCapsProcessRequest;
+
+PAGED_CODE_SEG
+EVT_ACX_OBJECT_PROCESS_REQUEST Codec_EvtUSBAudioAcxDriverJackDescriptionProcessRequest;
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateRenderHostPin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _In_ ULONG                    PinID,
+    _Inout_ ACXPIN &              Pin,
+    _In_ UCHAR                    UnitID,
+    _In_ const ULONG              SupportedSampleRate
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateRenderBridgePin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _In_ ULONG                    PinID,
+    _Inout_ ACXPIN &              Pin,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateCaptureHostPin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _In_ ULONG                    PinID,
+    _Inout_ ACXPIN &              Pin,
+    _In_ UCHAR                    UnitID,
+    _In_ const ULONG              SupportedSampleRate
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_CreateCaptureBridgePin(
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _In_ ULONG                    PinID,
+    _Inout_ ACXPIN &              Pin,
+    _In_ UCHAR                    UnitID
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_ConnectElement(
+    _In_ ACXCIRCUIT          Circuit,
+    _Inout_ ACX_CONNECTION & Connection,
+    _In_ ACXELEMENT &        FromElement,
+    _In_ ACXELEMENT &        ToElement
+);
+
+PAGED_CODE_SEG
+_Success_(NT_SUCCESS(return))
+NTSTATUS Codec_AllocateElements(
+    _In_ WDFDEVICE                Device,
+    _In_ ACXCIRCUIT               Circuit,
+    _In_ bool                     IsInput,
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+    _In_ const ULONG              SupportedSampleRate
 );
 
 /* make internal prototypes usable from C++ */
@@ -614,5 +846,8 @@ extern UNICODE_STRING g_RegistryPath;
 // List of sample rates supported by this driver
 extern const ULONG c_SampleRateList[];
 extern const ULONG c_SampleRateCount;
+
+extern ACX_PROPERTY_ITEM s_CircuitPropertyItems[];
+extern const ULONG       s_CircuitPropertyCount;
 
 #endif // _PRIVATE_H_

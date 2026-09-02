@@ -38,18 +38,26 @@ Environment:
 _Use_decl_annotations_
 PAGED_CODE_SEG
 ContiguousMemory *
-ContiguousMemory::Create()
+ContiguousMemory::Create(
+    const ULONG maxIrpNumber
+)
 {
     PAGED_CODE();
-    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) ContiguousMemory();
+    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) ContiguousMemory(maxIrpNumber);
 }
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
-ContiguousMemory::ContiguousMemory()
+ContiguousMemory::ContiguousMemory(
+    const ULONG maxIrpNumber
+)
+    : c_maxIrpNumber(maxIrpNumber)
 {
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
+    ASSERT(c_maxIrpNumber <= UAC_MAX_IRP_NUMBER);
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
 
@@ -76,7 +84,7 @@ Routine Description:
 
 Arguments:
 
-    usbAudioConfiguration - USB Audio Configuration class
+    usbAudioStreamInterfaceGroup - USB Audio Stream Interface Group class
 
     maxBurstOverride -
 
@@ -90,10 +98,10 @@ Return Value:
 
 --*/
 ContiguousMemory::Allocate(
-    USBAudioConfiguration * usbAudioConfiguration,
-    ULONG                   maxBurstOverride,
-    ULONG                   maxClassicFramesPerIrp,
-    ULONG                   framesPerMs
+    USBAudioStreamInterfaceGroup * usbAudioStreamInterfaceGroup,
+    ULONG                          maxBurstOverride,
+    ULONG                          maxClassicFramesPerIrp,
+    ULONG                          framesPerMs
 )
 {
     NTSTATUS         status = STATUS_SUCCESS;
@@ -112,15 +120,20 @@ ContiguousMemory::Allocate(
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - this, m_contiguousMemory, %p, %p", this, m_contiguousMemory);
     for (ULONG direction = 0; direction < toULONG(IsoDirection::NumOfIsoDirection); ++direction)
     {
-        if ((static_cast<IsoDirection>(direction) == IsoDirection::In) && !usbAudioConfiguration->HasInputIsochronousInterface())
+        if ((static_cast<IsoDirection>(direction) == IsoDirection::In) && !usbAudioStreamInterfaceGroup->HasInputIsochronousInterface())
         {
             continue;
         }
-        if ((static_cast<IsoDirection>(direction) == IsoDirection::Out) && !usbAudioConfiguration->HasOutputIsochronousInterface())
+        if ((static_cast<IsoDirection>(direction) == IsoDirection::Out) && !usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface())
         {
             continue;
         }
-        ULONG maxPacketSize = GetMaxPacketSize(usbAudioConfiguration, static_cast<IsoDirection>(direction));
+        if ((static_cast<IsoDirection>(direction) == IsoDirection::Feedback) && !usbAudioStreamInterfaceGroup->HasFeedbackIsochronousInterface())
+        {
+            continue;
+        }
+
+        ULONG maxPacketSize = GetMaxPacketSize(usbAudioStreamInterfaceGroup, static_cast<IsoDirection>(direction));
         if (maxPacketSize == 0)
         {
             return STATUS_UNSUCCESSFUL;
@@ -131,7 +144,7 @@ ContiguousMemory::Allocate(
         m_contiguousMemorySize[direction] = maxPacketSize * maxBurstOverride * maxClassicFramesPerIrp * framesPerMs;
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Max Contiguous Memory Size = %d", m_contiguousMemorySize[direction]);
 
-        for (ULONG index = 0; index < UAC_MAX_IRP_NUMBER; ++index)
+        for (ULONG index = 0; index < c_maxIrpNumber; ++index)
         {
             m_contiguousMemory[direction][index] = (PUCHAR)MmAllocateContiguousMemorySpecifyCache(m_contiguousMemorySize[direction], lowestAcceptableAddress, highestAcceptableAddress, boundaryAddressMultiple, MmNonCached);
             if (m_contiguousMemory[direction][index] == nullptr)
@@ -142,8 +155,6 @@ ContiguousMemory::Allocate(
             TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "[%s][%d] = %p", GetDirectionString((IsoDirection)direction), index, m_contiguousMemory[direction][index]);
 
             RtlZeroMemory(m_contiguousMemory[direction][index], m_contiguousMemorySize[direction]);
-
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "[%s][%d] = %p", GetDirectionString((IsoDirection)direction), index, m_contiguousMemory[direction][index]);
         }
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - m_contiguousMemory[%d], %p", direction, m_contiguousMemory[direction]);
     }
@@ -164,7 +175,7 @@ ContiguousMemory::Free()
 
     for (ULONG direction = 0; direction < toULONG(IsoDirection::NumOfIsoDirection); ++direction)
     {
-        for (ULONG index = 0; index < UAC_MAX_IRP_NUMBER; ++index)
+        for (ULONG index = 0; index < c_maxIrpNumber; ++index)
         {
             if (m_contiguousMemory[direction][index] != nullptr)
             {
@@ -190,7 +201,7 @@ ContiguousMemory::Clear()
 
     for (ULONG direction = 0; direction < toULONG(IsoDirection::NumOfIsoDirection); ++direction)
     {
-        for (ULONG index = 0; index < UAC_MAX_IRP_NUMBER; ++index)
+        for (ULONG index = 0; index < c_maxIrpNumber; ++index)
         {
             if ((m_contiguousMemory[direction][index] != nullptr) && (m_contiguousMemorySize[direction] != 0))
             {
@@ -216,7 +227,7 @@ bool ContiguousMemory::IsValid(
     ASSERT(this != nullptr);
     ASSERT(m_contiguousMemory[static_cast<ULONG>(direction)][index] != nullptr);
 
-    if ((static_cast<ULONG>(direction) < toULONG(IsoDirection::NumOfIsoDirection)) && (index < UAC_MAX_IRP_NUMBER))
+    if ((static_cast<ULONG>(direction) < toULONG(IsoDirection::NumOfIsoDirection)) && ((ULONG)index < c_maxIrpNumber))
     {
         if (m_contiguousMemory[static_cast<ULONG>(direction)][index] != nullptr)
         {
@@ -275,7 +286,7 @@ ContiguousMemory::GetTotalSize(
 
     if (IsValid(0, direction))
     {
-        size = m_contiguousMemorySize[static_cast<ULONG>(direction)] * UAC_MAX_IRP_NUMBER;
+        size = m_contiguousMemorySize[static_cast<ULONG>(direction)] * c_maxIrpNumber;
     }
 
     return size;
@@ -285,20 +296,20 @@ _Use_decl_annotations_
 PAGED_CODE_SEG
 ULONG
 ContiguousMemory::GetMaxPacketSize(
-    USBAudioConfiguration * usbAudioConfiguration,
-    IsoDirection            direction
+    USBAudioStreamInterfaceGroup * usbAudioStreamInterfaceGroup,
+    IsoDirection                   direction
 )
 {
     PAGED_CODE();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    if (usbAudioConfiguration == nullptr)
+    if (usbAudioStreamInterfaceGroup == nullptr)
     {
         return 0;
     }
 
-    ULONG maxPacketSize = usbAudioConfiguration->GetMaxPacketSize(direction);
+    ULONG maxPacketSize = usbAudioStreamInterfaceGroup->GetMaxPacketSize(direction);
 
     if (maxPacketSize < UAC_DEFAULT_MAX_PACKET_SIZE)
     {

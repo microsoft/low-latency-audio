@@ -76,7 +76,11 @@ class USBAudioDataFormat
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    bool operator==(_In_ USBAudioDataFormat const & format) const;
+    bool operator==(_In_ USBAudioDataFormat const & rhs) const;
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    bool operator<(_In_ USBAudioDataFormat const & rhs) const;
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -84,7 +88,7 @@ class USBAudioDataFormat
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    USBAudioDataFormat * Append(
+    USBAudioDataFormat * SetNext(
         _In_ USBAudioDataFormat * nextUSBAudioDataFormat
     );
 
@@ -232,6 +236,17 @@ class USBAudioDataFormatManager
     );
 
   protected:
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    NTSTATUS
+    InsertUSBAudioDataFormat(
+        _In_ UCHAR                  formatType,
+        _In_reads_(4) UCHAR         formats[4],
+        _In_ UCHAR                  subslotSize,
+        _In_ UCHAR                  bitResolution,
+        _Out_ USBAudioDataFormat *& usbAudioDataFormat
+    );
+
     USBAudioDataFormat * m_usbAudioDataFormat{nullptr};
     ULONG                m_numOfFormats{0};
 };
