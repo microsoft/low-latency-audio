@@ -694,7 +694,7 @@ NTSTATUS ConvertAudioDataFormat(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
-ULONG ConverSpeakerPositions(
+ULONG ConvertSpeakerPositions(
     ULONG channelConfig
 )
 {

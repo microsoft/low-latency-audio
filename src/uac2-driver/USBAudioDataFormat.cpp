@@ -864,6 +864,7 @@ USBAudioDataFormatManager::InsertUSBAudioDataFormat(
         {
             if (usbAudioDataFormat->IsEqualFormat(formatType, formats, subslotSize, bitResolution))
             {
+				createdUsbAudioDataFormat = usbAudioDataFormat;
                 return STATUS_SUCCESS;
             }
             if (USBAudioDataFormat(formatType, formats, subslotSize, bitResolution) < *usbAudioDataFormat)

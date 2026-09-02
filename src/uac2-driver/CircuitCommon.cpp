@@ -1881,7 +1881,7 @@ NTSTATUS Codec_CreateRenderBridgePin(
 
     if (isEnableConnector)
     {
-        RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioJackToBridgePin(pin, ConverSpeakerPositions(connectorState.bmChannelConfig)));
+        RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioJackToBridgePin(pin, ConvertSpeakerPositions(connectorState.bmChannelConfig)));
     }
     else
     {
@@ -2035,7 +2035,7 @@ NTSTATUS Codec_CreateCaptureBridgePin(
 
     if (isEnableConnector)
     {
-        RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioJackToBridgePin(pin, ConverSpeakerPositions(connectorState.bmChannelConfig)));
+        RETURN_NTSTATUS_IF_FAILED(Codec_AddAudioJackToBridgePin(pin, ConvertSpeakerPositions(connectorState.bmChannelConfig)));
     }
     else
     {

@@ -91,8 +91,7 @@ class VariableArray final
             }
             if (NT_SUCCESS(status))
             {
-                m_numOfArray++;
-                if ((arrayOld != nullptr))
+				if (arrayOld != nullptr)
                 {
                     if (m_array != nullptr)
                     {
@@ -107,12 +106,13 @@ class VariableArray final
                     // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, "delete arrayOld");
                 }
                 m_array[index] = data;
+				m_numOfArray = (m_numOfArray > (index + 1)) ? m_numOfArray : (index + 1);
             }
         }
         else
         {
             m_array[index] = data;
-            m_numOfArray++;
+			m_numOfArray = (m_numOfArray > (index + 1)) ? m_numOfArray : (index + 1);
         }
         return status;
     }

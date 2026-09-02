@@ -589,9 +589,8 @@ CRenderStreamEngine::PrepareHardware()
     RETURN_NTSTATUS_IF_FAILED(status);
 
     //
-    // For the reason why sample rate changes are not performed here,
-    // please refer to the comments in CStreamEngine::Run().
-    //
+	// Configure the stream data format here so the device is set up before Run().
+	//
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, "this = %p, m_streamFormat = %p", this, m_streamFormat);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - %u, %llu, %u, %u, %u, %u, %u, %u, %u", AcxDataFormatGetChannelsCount(m_streamFormat), AcxDataFormatGetChannelMask(m_streamFormat), AcxDataFormatGetSampleSize(m_streamFormat), AcxDataFormatGetBitsPerSample(m_streamFormat), AcxDataFormatGetValidBitsPerSample(m_streamFormat), AcxDataFormatGetSamplesPerBlock(m_streamFormat), AcxDataFormatGetBlockAlign(m_streamFormat), AcxDataFormatGetSampleRate(m_streamFormat), AcxDataFormatGetAverageBytesPerSec(m_streamFormat));
 
@@ -780,9 +779,8 @@ CCaptureStreamEngine::PrepareHardware()
     }
 
     //
-    // For the reason why sample rate changes are not performed here,
-    // please refer to the comments in CStreamEngine::Run().
-    //
+	// Configure the stream data format here so the device is set up before Run().
+	//
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, "this = %p, m_streamFormat = %p", this, m_streamFormat);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_CIRCUIT, " - %u, %llu, %u, %u, %u, %u, %u, %u, %u", AcxDataFormatGetChannelsCount(m_streamFormat), AcxDataFormatGetChannelMask(m_streamFormat), AcxDataFormatGetSampleSize(m_streamFormat), AcxDataFormatGetBitsPerSample(m_streamFormat), AcxDataFormatGetValidBitsPerSample(m_streamFormat), AcxDataFormatGetSamplesPerBlock(m_streamFormat), AcxDataFormatGetBlockAlign(m_streamFormat), AcxDataFormatGetSampleRate(m_streamFormat), AcxDataFormatGetAverageBytesPerSec(m_streamFormat));
     status = m_audioIsochronousEngine->StreamSetDataFormat(m_input, m_deviceIndex, m_streamFormat);
