@@ -486,7 +486,7 @@ RtPacketObject::CopyFromRtPacketToOutputData(
                         {
                             *outSample = -0x8000;
                         }
-
+                        else
                         {
                             *outSample = (SHORT)thisSample;
                         }
