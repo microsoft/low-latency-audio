@@ -4007,7 +4007,7 @@ NTSTATUS AudioIsochronousEngine::SetAsioBuffer(
                         , Exit);
 
     m_asioBufferObject = AsioBufferObject::Create(m_deviceContext, this);
-    IF_TRUE_ACTION_JUMP(m_asioBufferObject == nullptr, STATUS_INSUFFICIENT_RESOURCES, Exit);
+    IF_TRUE_ACTION_JUMP(m_asioBufferObject == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, Exit);
 
     status = m_asioBufferObject->SetBuffer(recBufferLength, recBuffer, recBufferOffset, playBufferLength, playBuffer, playBufferOffset);
 Exit:
