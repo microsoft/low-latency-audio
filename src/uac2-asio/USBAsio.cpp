@@ -705,8 +705,8 @@ ASIOError CUSBAsio::getClockSources(ASIOClockSource * clocks, long * numSources)
             static_assert(sizeof(((ASIOClockSource *)0)->name) == CLOCK_SOURCE_NAME_LENGTH, "ASIOClockSource::name size mismatch");
             static_assert(CLOCK_SOURCE_NAME_LENGTH == UAC_MAX_CLOCK_SOURCE_NAME_LENGTH, "CLOCK_SOURCE_NAME_LENGTH and UAC_MAX_CLOCK_SOURCE_NAME_LENGTH must be identical");
             //
-            // ASIOClockSource::name uses multibyte character sets,
-            // so _snprintf_s is used.
+            // ASIOClockSource::name uses multibyte character sets. Device-provided
+            // names can exceed the fixed ASIO buffer, so truncate them safely.
             //
             _snprintf_s(clocks[i].name, CLOCK_SOURCE_NAME_LENGTH, _TRUNCATE, "%S", clockInfo->ClockSource[i].Name);
         }
@@ -852,8 +852,8 @@ ASIOError CUSBAsio::getChannelInfo(ASIOChannelInfo * info)
         static_assert(sizeof(((ASIOChannelInfo *)0)->name) == CHANNEL_INFO_NAME_LENGTH, "ASIOChannelInfo::name size mismatch");
         static_assert(CHANNEL_INFO_NAME_LENGTH == UAC_MAX_CHANNEL_NAME_LENGTH, "CHANNEL_INFO_NAME_LENGTH and UAC_MAX_CHANNEL_NAME_LENGTH must be identical");
         //
-        // ASIOChannelInfo::name uses multibyte character sets,
-        // so _snprintf_s is used.
+        // ASIOChannelInfo::name uses multibyte character sets. Device-provided
+        // names can exceed the fixed ASIO buffer, so truncate them safely.
         //
         if (ch == m_channelInfo->NumChannels)
         {
@@ -862,6 +862,7 @@ ASIOError CUSBAsio::getChannelInfo(ASIOChannelInfo * info)
         else
         {
             _snprintf_s(info->name, CHANNEL_INFO_NAME_LENGTH, _TRUNCATE, "%S", m_channelInfo->Channel[ch].Name);
+
         }
     }
 #ifdef _UNICODE
