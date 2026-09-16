@@ -2261,37 +2261,49 @@ NTSTATUS USBAudio2ControlInterface::SetMixerUnit(const NS_USBAudio::PCS_GENERIC_
 
     RETURN_NTSTATUS_IF_TRUE(descriptor == nullptr, STATUS_INVALID_PARAMETER);
     RETURN_NTSTATUS_IF_TRUE((descriptor->bDescriptorType != NS_USBAudio0200::CS_INTERFACE) || (descriptor->bDescriptorSubtype != NS_USBAudio0200::MIXER_UNIT), STATUS_INVALID_PARAMETER);
-    RETURN_NTSTATUS_IF_TRUE(descriptor->bLength < NS_USBAudio0200::SIZE_OF_MINIMUM_CS_AC_MIXER_UNIT_DESCRIPTOR, STATUS_DEVICE_DATA_ERROR);
+
+    //
+    // Validate the fixed portion of the descriptor before accessing bNrInPins.
+    // USBAudioConfiguration::ParseDescriptors validates that the range specified by bLength is fully contained within the configuration descriptor's wTotalLength.
+    //
+    RETURN_NTSTATUS_IF_TRUE(descriptor->bLength < sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON), STATUS_DEVICE_DATA_ERROR);
 
     mixerUnitDescriptor = (NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)descriptor;
 
-    if ((descriptor->bLength >= sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)) && (descriptor->bDescriptorSubtype == NS_USBAudio0200::MIXER_UNIT))
+    //
+    // Validate the minimum possible Mixer Unit descriptor size.
+    // The exact size of bmMixerControls depends on the total number of logical input channels and is not evaluated at this stage.
+    //
+    constexpr ULONG minimumMixerControlsSize = sizeof(UCHAR);
+
+    const ULONG minimumMixerUnitDescriptorSize = sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) +
+                                                 sizeof(UCHAR) * mixerUnitDescriptor->bNrInPins + // baSourceID[p]
+                                                 sizeof(UCHAR) +                                  // bNrChannels
+                                                 sizeof(UCHAR) * 4 +                              // bmChannelConfig[4]
+                                                 sizeof(UCHAR) +                                  // iChannelNames
+                                                 minimumMixerControlsSize +                       // bmMixerControls[N]
+                                                 sizeof(UCHAR) +                                  // bmControls
+                                                 sizeof(UCHAR);                                   // iMixer
+
+    if (descriptor->bLength < minimumMixerUnitDescriptorSize)
     {
-        ULONG descriptorSize = sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + mixerUnitDescriptor->bNrInPins + 1 /* bNrChannels */ + 4 /* bmChannelConfig[4] */ + 1 /* iChannelNames */ + 1 /* bmControls */ + 1 /* iMixer */;
-        ULONG mixerControlsSize = 1; // minimum
-        descriptorSize += mixerControlsSize;
-
-                                     // Do not evaluate the size based on the number of input/output channels here.
-        for (ULONG pin = 0; pin < mixerUnitDescriptor->bNrInPins; pin++)
-        {
-            UCHAR sourceID = *(((UCHAR *)mixerUnitDescriptor) + sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + pin);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - AC Mixer Unit : source ID [%u] 0x%02x", pin, sourceID);
-        }
-
-        if (mixerUnitDescriptor->bLength >= descriptorSize)
-        {
-            status = m_acMixerUnits.Append(m_parentObject, mixerUnitDescriptor);
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - AC  Mixer :  ID 0x%02x", mixerUnitDescriptor->bUnitID);
-        }
-        else
-        {
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - bLength = %d, descriptor size = %d", mixerUnitDescriptor->bLength, descriptorSize);
-            status = STATUS_DEVICE_DATA_ERROR;
-        }
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DESCRIPTOR, " - bLength = %u, minimum descriptor size = %lu", mixerUnitDescriptor->bLength, minimumMixerUnitDescriptorSize);
+        status = STATUS_DEVICE_DATA_ERROR;
     }
     else
     {
-        status = STATUS_DEVICE_DATA_ERROR;
+        const UCHAR * sourceIDs = (const UCHAR *)mixerUnitDescriptor + sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON);
+        for (ULONG pin = 0; pin < mixerUnitDescriptor->bNrInPins; pin++)
+        {
+            const UCHAR sourceID = sourceIDs[pin];
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - AC Mixer Unit : source ID [%u] 0x%02x", pin, sourceID);
+        }
+
+        status = m_acMixerUnits.Append(m_parentObject, mixerUnitDescriptor);
+        if (NT_SUCCESS(status))
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - AC  Mixer :  ID 0x%02x", mixerUnitDescriptor->bUnitID);
+        }
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
@@ -2312,6 +2324,8 @@ NTSTATUS USBAudio2ControlInterface::SetSelectorUnit(const NS_USBAudio::PCS_GENER
 
     RETURN_NTSTATUS_IF_TRUE(descriptor == nullptr, STATUS_INVALID_PARAMETER);
     RETURN_NTSTATUS_IF_TRUE((descriptor->bDescriptorType != NS_USBAudio0200::CS_INTERFACE) || (descriptor->bDescriptorSubtype != NS_USBAudio0200::SELECTOR_UNIT), STATUS_INVALID_PARAMETER);
+
+    // USBAudioConfiguration::ParseDescriptors validates that the range specified by bLength is fully contained within the configuration descriptor's wTotalLength.
     RETURN_NTSTATUS_IF_TRUE(descriptor->bLength < NS_USBAudio0200::SIZE_OF_MINIMUM_CS_AC_SELECTOR_UNIT_DESCRIPTOR, STATUS_DEVICE_DATA_ERROR);
 
     selectorUnitDescriptor = (NS_USBAudio0200::PCS_AC_SELECTOR_UNIT_DESCRIPTOR)descriptor;
@@ -2347,6 +2361,8 @@ NTSTATUS USBAudio2ControlInterface::SetFeatureUnit(const NS_USBAudio::PCS_GENERI
 
     RETURN_NTSTATUS_IF_TRUE(descriptor == nullptr, STATUS_INVALID_PARAMETER);
     RETURN_NTSTATUS_IF_TRUE((descriptor->bDescriptorType != NS_USBAudio0200::CS_INTERFACE) || (descriptor->bDescriptorSubtype != NS_USBAudio0200::FEATURE_UNIT), STATUS_INVALID_PARAMETER);
+
+    // USBAudioConfiguration::ParseDescriptors validates that the range specified by bLength is fully contained within the configuration descriptor's wTotalLength.
     RETURN_NTSTATUS_IF_TRUE(descriptor->bLength < NS_USBAudio0200::SIZE_OF_MINIMUM_CS_AC_FEATURE_UNIT_DESCRIPTOR, STATUS_DEVICE_DATA_ERROR);
 
     featureUnitDescriptor = (NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR)descriptor;
@@ -2409,6 +2425,8 @@ NTSTATUS USBAudio2ControlInterface::SetClockSelector(const NS_USBAudio::PCS_GENE
 
     RETURN_NTSTATUS_IF_TRUE(descriptor == nullptr, STATUS_INVALID_PARAMETER);
     RETURN_NTSTATUS_IF_TRUE((descriptor->bDescriptorType != NS_USBAudio0200::CS_INTERFACE) || (descriptor->bDescriptorSubtype != NS_USBAudio0200::CLOCK_SELECTOR), STATUS_INVALID_PARAMETER);
+
+    // USBAudioConfiguration::ParseDescriptors validates that the range specified by bLength is fully contained within the configuration descriptor's wTotalLength.
     RETURN_NTSTATUS_IF_TRUE(descriptor->bLength < NS_USBAudio0200::SIZE_OF_MINIMUM_CS_AC_CLOCK_SELECTOR_DESCRIPTOR, STATUS_DEVICE_DATA_ERROR);
 
     clockSelectorDescriptor = (NS_USBAudio0200::PCS_AC_CLOCK_SELECTOR_DESCRIPTOR)descriptor;
@@ -8742,6 +8760,10 @@ USBAudioConfiguration::ParseDescriptors(PUSB_CONFIGURATION_DESCRIPTOR usbConfigu
         }
     }
 
+    //
+    // Ensure that each descriptor is fully contained within the configuration descriptor's wTotalLength.
+    // Each Parse function validates that accesses to descriptor-specific fields remain within the descriptor's bLength.
+    //
     while ((current < totalLength) && NT_SUCCESS(status))
     {
         if ((totalLength - current) >= NS_USBAudio::SIZE_OF_USB_DESCRIPTOR_HEADER)
