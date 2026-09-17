@@ -833,6 +833,7 @@ TransferObject::SendIsochronousRequest(
 
     requestContext->DeviceContext = m_deviceContext;
     requestContext->AudioIsochronousEngine = m_audioIsochronousEngine;
+    requestContext->AudioIsochronousEngine->AddRef();
     requestContext->StreamObject = const_cast<StreamObject *>(m_streamObject);
     requestContext->TransferObject = this;
     requestContext->UrbMemory = m_urbMemory;

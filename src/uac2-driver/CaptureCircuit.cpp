@@ -158,6 +158,11 @@ VOID CodecC_EvtCircuitCleanup(
         circuitContext->AgcElements = nullptr;
         circuitContext->NumOfAgcElements = 0;
     }
+    if (circuitContext->AudioIsochronousEngine != nullptr)
+    {
+        circuitContext->AudioIsochronousEngine->Release();
+        circuitContext->AudioIsochronousEngine = nullptr;
+    }
     circuitContext->NumOfDevices = 0;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
@@ -350,7 +355,7 @@ Return Value:
 
         circuitContext->NumOfDevices = 1;
         circuitContext->AudioIsochronousEngine = AudioIsochronousEngine;
-
+        circuitContext->AudioIsochronousEngine->AddRef();
         circuitInitScope.release();
     }
 

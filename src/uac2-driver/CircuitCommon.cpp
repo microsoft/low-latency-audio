@@ -1436,7 +1436,7 @@ Codec_AllocateSupportedFormats(
 _Use_decl_annotations_
 NONPAGED_CODE_SEG
 VOID Codec_EvtPinContextCleanup(
-    WDFOBJECT /* WdfPin */
+    WDFOBJECT WdfPin
 )
 /*++
 
@@ -1454,6 +1454,15 @@ Return Value:
 
 --*/
 {
+
+    CODEC_PIN_CONTEXT * pinContext = GetCodecPinContext(WdfPin);
+    ASSERT(pinContext);
+
+    if (pinContext->AudioIsochronousEngine != nullptr)
+    {
+        pinContext->AudioIsochronousEngine->Release();
+        pinContext->AudioIsochronousEngine = nullptr;
+    }
 }
 
 _Use_decl_annotations_
@@ -1506,6 +1515,7 @@ NTSTATUS Codec_CreateRenderPin(
     pinContext->Channel = Channel;
     pinContext->NumOfChannelsPerDevice = ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->AudioIsochronousEngine->AddRef();
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
@@ -1588,6 +1598,7 @@ NTSTATUS Codec_CreateBridgePin(
     pinContext->Channel = Channel;
     pinContext->NumOfChannelsPerDevice = ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->AudioIsochronousEngine->AddRef();
     pinContext->ChannelNames = channelNames;
     pinContext->TerminalID = TerminalID;
 
@@ -1645,6 +1656,7 @@ NTSTATUS Codec_CreateCaptureStreamingPin(
     pinContext->Channel = Channel;
     pinContext->NumOfChannelsPerDevice = ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->AudioIsochronousEngine->AddRef();
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_CIRCUIT, "%!FUNC! Exit");
@@ -1710,6 +1722,7 @@ NTSTATUS Codec_CreateCaptureEndpointPin(
     pinContext->Channel = Channel;
     pinContext->NumOfChannelsPerDevice = ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->AudioIsochronousEngine->AddRef();
     pinContext->ChannelNames = channelNames;
     pinContext->TerminalID = TerminalID;
 
@@ -1777,6 +1790,7 @@ NTSTATUS Codec_CreateRenderHostPin(
     pinContext->Channel = 0;                            // Channel;
     pinContext->NumOfChannelsPerDevice = numOfChannels; // ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->AudioIsochronousEngine->AddRef();
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
     RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::RenderHostPin, UnitID, PinID));
@@ -1874,6 +1888,7 @@ NTSTATUS Codec_CreateRenderBridgePin(
     pinContext->Channel = 0;     // Channel;
     pinContext->NumOfChannelsPerDevice = numOfChannels;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->AudioIsochronousEngine->AddRef();
     pinContext->ChannelNames = channelNames;
     pinContext->TerminalID = UnitID;
 
@@ -1950,6 +1965,7 @@ NTSTATUS Codec_CreateCaptureHostPin(
     pinContext->Channel = 0;                            // Channel;
     pinContext->NumOfChannelsPerDevice = numOfChannels; // ChannelsCount;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->AudioIsochronousEngine->AddRef();
     pinContext->TerminalID = USBAudioConfiguration::InvalidID;
 
     RETURN_NTSTATUS_IF_FAILED(AllocateElementContext((ACXELEMENT)Pin, AudioNodeKind::CaptureHostPin, UnitID, PinID));
@@ -2028,6 +2044,7 @@ NTSTATUS Codec_CreateCaptureBridgePin(
     pinContext->Channel = 0;     // Channel;
     pinContext->NumOfChannelsPerDevice = numOfChannels;
     pinContext->AudioIsochronousEngine = AudioIsochronousEngine;
+    pinContext->AudioIsochronousEngine->AddRef();
     pinContext->ChannelNames = channelNames;
     pinContext->TerminalID = UnitID;
 

@@ -703,6 +703,8 @@ Return Value:
                 //
                 // The driver uses this DDI to delete a circuit from the current device.
                 //
+                // Release the device's reference to the engine. Additional references held by circuit, pin, and request contexts ensure that the object remains alive until all users have completed their cleanup.
+                //
                 deviceContext->AudioIsochronousEngines[index]->RemoveRenderCircuit(device);
                 deviceContext->AudioIsochronousEngines[index]->RemoveCaptureCircuit(device);
                 deviceContext->AudioIsochronousEngines[index]->CleanupBeforeDestroy();
@@ -2738,8 +2740,12 @@ Return Value:
     ASSERT(streamObject);
     ASSERT(transferObject);
 
-    audioTransferEngine->IsoRequestCompletionRoutine(completionParams, streamObject, transferObject);
-
+    if (audioTransferEngine != nullptr)
+    {
+        audioTransferEngine->IsoRequestCompletionRoutine(completionParams, streamObject, transferObject);
+        audioTransferEngine->Release();
+        requestContext->AudioIsochronousEngine = nullptr;
+    }
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
     return;

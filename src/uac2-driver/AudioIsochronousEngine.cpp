@@ -1604,7 +1604,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferIn failed %!STATUS!", status);
 
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                    goto IsoRequestCompletionRoutine_Exit;
                 }
                 // Since the URB is referenced in ProcessTransferIn, the parent request is released here.
                 status = transferObject->FreeRequest();
@@ -1612,14 +1612,14 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
 
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                    goto IsoRequestCompletionRoutine_Exit;
                 }
                 status = InitializeIsoUrbIn(streamObject, transferObject, transferObject->GetNumPackets());
                 if (!NT_SUCCESS(status))
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbIn failed %!STATUS!", status);
 
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                    goto IsoRequestCompletionRoutine_Exit;
                 }
             }
             break;
@@ -1629,7 +1629,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferOut failed %!STATUS!", status);
 
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                    goto IsoRequestCompletionRoutine_Exit;
                 }
 
                 streamObject->SetOutputStreaming(transferObject->GetIndex(), transferObject->GetLockDelayCount());
@@ -1640,14 +1640,14 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
 
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                    goto IsoRequestCompletionRoutine_Exit;
                 }
                 status = InitializeIsoUrbOut(streamObject, transferObject, transferObject->GetNumPackets());
                 if (!NT_SUCCESS(status))
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbOut failed %!STATUS!", status);
 
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                    goto IsoRequestCompletionRoutine_Exit;
                 }
             }
             break;
@@ -1657,7 +1657,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferFeedback failed %!STATUS!", status);
 
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                    goto IsoRequestCompletionRoutine_Exit;
                 }
                 // Since the URB is referenced in ProcessTransferFeedback, the parent request is released here.
                 status = transferObject->FreeRequest();
@@ -1665,7 +1665,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
 
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                    goto IsoRequestCompletionRoutine_Exit;
                 }
 
                 status = InitializeIsoUrbFeedback(streamObject, transferObject, transferObject->GetNumPackets());
@@ -1673,7 +1673,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbFeedback failed %!STATUS!", status);
 
-                    goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                    goto IsoRequestCompletionRoutine_Exit;
                 }
             }
             break;
@@ -1686,7 +1686,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
             {
                 TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "SendIsochronousRequest failed %!STATUS!", status);
 
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                goto IsoRequestCompletionRoutine_Exit;
             }
         }
         else
@@ -1696,13 +1696,13 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
             {
                 TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "FreeRequest failed %!STATUS!", status);
 
-                goto USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit;
+                goto IsoRequestCompletionRoutine_Exit;
             }
         }
         //		WdfWaitLockRelease(m_deviceContext->StreamWaitLock);
     }
 
-USBAudioAcxDriverEvtIsoRequestCompletionRoutine_Exit:
+IsoRequestCompletionRoutine_Exit:
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
