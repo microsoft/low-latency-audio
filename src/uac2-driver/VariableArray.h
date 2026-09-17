@@ -29,6 +29,15 @@ Environment:
 template <class T, ULONG I>
 class VariableArray final
 {
+    enum
+    {
+        //
+        // Maximum capacity derived from USB configuration descriptors.
+        // The maximum number of units is 0x100, and 0x100 * 0x100 is used to account for connection paths between units.
+        //
+        MAX_CAPACITY = 0x10000
+    };
+
   public:
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -66,7 +75,7 @@ class VariableArray final
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     NTSTATUS Set(
-        _In_ WDFOBJECT parentObject,
+        _In_ WDFOBJECT parentObject, // The specified parentObject must outlive this class instance.
         _In_ ULONG     index,
         _In_ T         data
     )
@@ -75,12 +84,20 @@ class VariableArray final
 
         PAGED_CODE();
 
+        if (index > (MAX_CAPACITY - I))
+        {
+            return STATUS_INVALID_PARAMETER;
+        }
+
         if (index >= m_capacity)
         {
             WDFMEMORY memoryOld = m_memory;
             T *       arrayOld = m_array;
             ULONG     capacityOld = m_capacity;
-            m_array = nullptr;
+
+            //
+            // Allocate() updates m_array, m_memory, and m_capacity only on success.
+            //
             if (index < I)
             {
                 status = Allocate(parentObject, I);
@@ -91,7 +108,7 @@ class VariableArray final
             }
             if (NT_SUCCESS(status))
             {
-				if (arrayOld != nullptr)
+                if (arrayOld != nullptr)
                 {
                     if (m_array != nullptr)
                     {
@@ -106,13 +123,19 @@ class VariableArray final
                     // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, "delete arrayOld");
                 }
                 m_array[index] = data;
-				m_numOfArray = (m_numOfArray > (index + 1)) ? m_numOfArray : (index + 1);
+                m_numOfArray = (m_numOfArray > (index + 1)) ? m_numOfArray : (index + 1);
+            }
+            else
+            {
+                m_memory = memoryOld;
+                m_array = arrayOld;
+                m_capacity = capacityOld;
             }
         }
         else
         {
             m_array[index] = data;
-			m_numOfArray = (m_numOfArray > (index + 1)) ? m_numOfArray : (index + 1);
+            m_numOfArray = (m_numOfArray > (index + 1)) ? m_numOfArray : (index + 1);
         }
         return status;
     }
