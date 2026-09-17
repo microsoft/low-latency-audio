@@ -689,10 +689,10 @@ ASIOError CUSBAsio::getClockSources(ASIOClockSource * clocks, long * numSources)
             clocks[i].isCurrentSource = clockInfo->ClockSource[i].IsCurrentSource ? ASIOTrue : ASIOFalse;
 
             //
-            // ASIOClockSource::name uses multibyte character sets,
-            // so sprintf_s is used.
+            // ASIOClockSource::name uses multibyte character sets. Device-provided
+            // names can exceed the fixed ASIO buffer, so truncate them safely.
             //
-            sprintf_s(clocks[i].name, CLOCK_SOURCE_NAME_LENGTH, "%S", clockInfo->ClockSource[i].Name);
+            _snprintf_s(clocks[i].name, CLOCK_SOURCE_NAME_LENGTH, _TRUNCATE, "%S", clockInfo->ClockSource[i].Name);
         }
         *numSources = clockInfo->NumClockSource;
     }
@@ -834,16 +834,16 @@ ASIOError CUSBAsio::getChannelInfo(ASIOChannelInfo * info)
         }
 
         //
-        // ASIOChannelInfo::name uses multibyte character sets,
-        // so sprintf_s is used.
+        // ASIOChannelInfo::name uses multibyte character sets. Device-provided
+        // names can exceed the fixed ASIO buffer, so truncate them safely.
         //
         if (ch == m_channelInfo->NumChannels)
         {
-            sprintf_s(info->name, DRIVER_NAME_LENGTH, "channel %u", info->channel);
+            _snprintf_s(info->name, DRIVER_NAME_LENGTH, _TRUNCATE, "channel %u", info->channel);
         }
         else
         {
-            sprintf_s(info->name, DRIVER_NAME_LENGTH, "%S", m_channelInfo->Channel[ch].Name);
+            _snprintf_s(info->name, DRIVER_NAME_LENGTH, _TRUNCATE, "%S", m_channelInfo->Channel[ch].Name);
         }
     }
 #ifdef _UNICODE
