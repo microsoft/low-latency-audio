@@ -770,14 +770,18 @@ class AudioIsochronousEngine
     NONPAGED_CODE_SEG
     StreamObject * GetStreamObject() const noexcept;
 
+    // Caller must hold m_streamEngineWaitLock while calling this method and while dereferencing the returned pointer.
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
+    _Requires_lock_held_(m_streamEngineWaitLock)
     CStreamEngine * GetRenderStreamEngine(
         _In_range_(0, m_numOfOutputDevices - 1) ULONG deviceIndex
     ) const noexcept;
 
+    // Caller must hold m_streamEngineWaitLock while calling this method and while dereferencing the returned pointer.
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
+    _Requires_lock_held_(m_streamEngineWaitLock)
     CStreamEngine * GetCaptureStreamEngine(
         _In_range_(0, m_numOfInputDevices - 1) ULONG deviceIndex
     ) const noexcept;
