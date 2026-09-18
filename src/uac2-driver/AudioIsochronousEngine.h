@@ -802,12 +802,12 @@ class AudioIsochronousEngine
         _Inout_ bool &               hasMoreData
     );
 
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
     LONG AddRef();
 
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
     LONG Release();
 
     __drv_maxIRQL(PASSIVE_LEVEL)

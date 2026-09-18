@@ -5053,23 +5053,19 @@ NTSTATUS AudioIsochronousEngine::WalkNextUnit(
     }
 }
 
-PAGED_CODE_SEG
+NONPAGED_CODE_SEG
 _Use_decl_annotations_
 LONG AudioIsochronousEngine::AddRef(
 )
 {
-    PAGED_CODE();
-
     return InterlockedIncrement(&m_referenceCounter);
 }
 
-PAGED_CODE_SEG
+NONPAGED_CODE_SEG
 _Use_decl_annotations_
 LONG AudioIsochronousEngine::Release(
 )
 {
-    PAGED_CODE();
-
     LONG counter = InterlockedDecrement(&m_referenceCounter);
     if (counter == 0)
     {
