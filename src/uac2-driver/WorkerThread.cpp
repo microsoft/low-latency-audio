@@ -79,7 +79,10 @@ WorkerThread::~WorkerThread()
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
-WorkerThread::CreateThread(WORKER_THREAD_FUNCTION workerThreadFunction, KPRIORITY priority)
+WorkerThread::CreateThread(
+    WORKER_THREAD_FUNCTION workerThreadFunction,
+    KPRIORITY              priority
+)
 {
     NTSTATUS status = STATUS_SUCCESS;
     HANDLE   thread = nullptr;
@@ -181,7 +184,7 @@ void WorkerThread::ThreadMain()
 
     // ======================================================================
     ASSERT(m_workerThreadFunction != nullptr);
-    m_workerThreadFunction(m_deviceContext);
+    m_workerThreadFunction(m_deviceContext, this);
 
 ThreadMain_Exit:
 

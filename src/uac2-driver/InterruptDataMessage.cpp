@@ -33,6 +33,7 @@ Environment:
 #include "USBAudioConfiguration.h"
 #include "ErrorStatistics.h"
 #include "WorkerThread.h"
+#include "AudioIsochronousEngine.h"
 
 #ifndef __INTELLISENSE__
 #include "InterruptDataMessage.tmh"
@@ -51,7 +52,8 @@ Environment:
 static __drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
 void InterruptMessageWorkerThreadFunction(
-    _In_ PDEVICE_CONTEXT deviceContext
+    _In_ PDEVICE_CONTEXT deviceContext,
+    _In_ WorkerThread *  thisThread
 );
 
 PAGED_CODE_SEG
@@ -187,7 +189,8 @@ USBAudioAcxDriverEvtInterruptDataMessageCompletionRoutineFailed(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 void InterruptMessageWorkerThreadFunction(
-    _In_ PDEVICE_CONTEXT deviceContext
+    _In_ PDEVICE_CONTEXT deviceContext,
+    _In_ WorkerThread * /* thisThread */
 )
 {
     PAGED_CODE();
@@ -214,13 +217,15 @@ void InterruptMessageWorkerThreadFunction(
             {
                 TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_INTERRUPTTRANSFER, "UpdateVolumeEntity(0x%02x)", entityID);
 
-                if (deviceContext->Render != nullptr)
+                if (deviceContext->AudioIsochronousEngines != nullptr)
                 {
-                    CodecR_VolumeChangeLevelNotification(deviceContext->Render, entityID);
-                }
-                if (deviceContext->Capture != nullptr)
-                {
-                    CodecC_VolumeChangeLevelNotification(deviceContext->Capture, entityID);
+                    for (ULONG index = 0; index < deviceContext->NumberOfAudioIsochronousEngines; index++)
+                    {
+                        if (deviceContext->AudioIsochronousEngines[index] != nullptr)
+                        {
+                            deviceContext->AudioIsochronousEngines[index]->VolumeChangeLevelNotification(entityID);
+                        }
+                    }
                 }
             }
         }
@@ -230,13 +235,16 @@ void InterruptMessageWorkerThreadFunction(
             if (deviceContext->UsbAudioConfiguration->GetUpdatedMuteEntity(entityID))
             {
                 TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_INTERRUPTTRANSFER, "UpdateMuteEntity(0x%02x)", entityID);
-                if (deviceContext->Render != nullptr)
+
+                if (deviceContext->AudioIsochronousEngines != nullptr)
                 {
-                    CodecR_MuteChangeStateNotification(deviceContext->Render, entityID);
-                }
-                if (deviceContext->Capture != nullptr)
-                {
-                    CodecC_MuteChangeStateNotification(deviceContext->Capture, entityID);
+                    for (ULONG index = 0; index < deviceContext->NumberOfAudioIsochronousEngines; index++)
+                    {
+                        if (deviceContext->AudioIsochronousEngines[index] != nullptr)
+                        {
+                            deviceContext->AudioIsochronousEngines[index]->MuteChangeStateNotification(entityID);
+                        }
+                    }
                 }
             }
         }
@@ -246,9 +254,16 @@ void InterruptMessageWorkerThreadFunction(
             if (deviceContext->UsbAudioConfiguration->GetUpdatedInputConnectorEntity(entityID))
             {
                 TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_INTERRUPTTRANSFER, "UpdateInputConnectorEntity(0x%02x)", entityID);
-                if (deviceContext->Capture != nullptr)
+
+                if (deviceContext->AudioIsochronousEngines != nullptr)
                 {
-                    CodecC_ConnectorChangeStateNotification(deviceContext->Capture, entityID);
+                    for (ULONG index = 0; index < deviceContext->NumberOfAudioIsochronousEngines; index++)
+                    {
+                        if (deviceContext->AudioIsochronousEngines[index] != nullptr)
+                        {
+                            deviceContext->AudioIsochronousEngines[index]->ConnectorChangeStateNotification(entityID);
+                        }
+                    }
                 }
             }
         }
@@ -258,9 +273,16 @@ void InterruptMessageWorkerThreadFunction(
             if (deviceContext->UsbAudioConfiguration->GetUpdatedOutputConnectorEntity(entityID))
             {
                 TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_INTERRUPTTRANSFER, "UpdateOutputConnectorEntity(0x%02x)", entityID);
-                if (deviceContext->Render != nullptr)
+
+                if (deviceContext->AudioIsochronousEngines != nullptr)
                 {
-                    CodecR_ConnectorChangeStateNotification(deviceContext->Render, entityID);
+                    for (ULONG index = 0; index < deviceContext->NumberOfAudioIsochronousEngines; index++)
+                    {
+                        if (deviceContext->AudioIsochronousEngines[index] != nullptr)
+                        {
+                            deviceContext->AudioIsochronousEngines[index]->ConnectorChangeStateNotification(entityID);
+                        }
+                    }
                 }
             }
         }

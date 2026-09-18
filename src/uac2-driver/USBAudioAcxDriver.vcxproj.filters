@@ -107,6 +107,12 @@
     <ClInclude Include="WorkerThread.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="AudioIsochronousEngine.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="VariableArray.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Device.cpp">
@@ -164,6 +170,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="WorkerThread.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="AudioIsochronousEngine.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="CircuitCommon.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

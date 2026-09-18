@@ -39,6 +39,10 @@ Environment:
 #define UAC_DEFAULT_MAX_PACKET_SIZE         1024 // The minimum size is USB3 packet size * UAC_MAX_CLASSIC_FRAMES_PER_IRP * FramesPerMs.
 #define UAC_DEFAULT_LOCK_DELAY              10
 
+#if (UAC_DEFAULT_MAX_IRP_NUMBER > UAC_MAX_IRP_NUMBER)
+#error "Invalid configuration: UAC_DEFAULT_MAX_IRP_NUMBER is greater than UAC_MAX_IRP_NUMBER."
+#endif
+
 class CStreamEngine;
 class ContiguousMemory;
 class WorkerThread;
@@ -49,6 +53,7 @@ class TransferObject;
 class AsioBufferObject;
 class ErrorStatistics;
 class USBAudioConfiguration;
+class AudioIsochronousEngine;
 
 EXTERN_C_START
 #include "usbdi.h"
@@ -134,71 +139,135 @@ typedef struct _UAC_DRIVER_FLAGS
     UAC_DRIVER_PARAMETER Parameter;
 } UAC_DRIVER_FLAGS;
 
+typedef struct AUDIO_PROPERTY_
+{
+    UCHAR          InterfaceNumber;     // Currently selected input interface number
+    UCHAR          AlternateSetting;    // Currently selected input alternate setting number
+    UCHAR          EndpointNumber;      // Currently selected input endpoint number
+    ULONG          BytesPerBlock;       // Bytes per block for input (usually InChannels * BytesPerSample)
+    ULONG          MaxSamplesPerPacket; // Number of frames transferable per micro frame for input
+    ULONG          FormatType;
+    ULONG          Format;
+    ULONG          BytesPerSample;      // Bytes per sample
+    ULONG          ValidBitsPerSample;  // Valid bits per sample
+    volatile ULONG MeasuredSampleRate;  // Measured input sampling rate (1-second average)
+    ULONG          PacketsPerSec;       // ISO (Micro) Frames per second
+    ULONG          SamplesPerPacket;    // Number of samples per ISO Frame (truncated)
+    ULONG          DeviceLatency;
+    ULONG          UsbChannels;
+    UCHAR          ChannelNames;
+    ULONG          IsoPacketSize;
+    ULONG          LockDelay;
+    ULONG          CalcMaxSampleRate;
+} AUDIO_PROPERTY;
+
+typedef struct FEEDBACK_PROPERTY_
+{
+    UCHAR FeedbackInterfaceNumber;
+    UCHAR FeedbackAlternateSetting;
+    UCHAR FeedbackEndpointNumber;
+    UCHAR FeedbackInterval;
+} FEEDBACK_PROPERTY;
+
+typedef struct _INTERNAL_PARAMETERS
+{
+    // Number of frames from the first ISO transfer request to the start of the transfer
+    // Value range: 0~1000
+    ULONG FirstPacketLatency;
+
+    // Number of USB frames processed per IRP port on a USB 1.1 device
+    // Value range: 1~16
+    ULONG ClassicFramesPerIrp;
+
+    // Number of USB frames processed per IRP on a USB 2.0 device
+    // Value range: 1~16
+    ULONG ClassicFramesPerIrp2;
+
+    // Number of IRPs issued simultaneously
+    // Value range: 2~8
+    ULONG MaxIrpNumber;
+
+    // offset of the buffer boundary timing of the output and the notification timing to the ASIO driver [samples].
+    // Value range: 0~1000
+    ULONG PreSendFrames;
+
+    // If it is 0, the input and output frame numbers are the same at the time of IRP issuance. If it is not 0, the output frame number is delayed by the specified number of input frames.
+    // Value range: 0~16
+    LONG OutputFrameDelay;
+
+    // When it is 0, input and output processing is performed independently, and a buffer switch is generated based on the completion of output processing.
+    // In case 1, when input processing is complete, input/output processing is performed collectively, and a buffer switch is generated when input/output processing is complete.
+    // For 1, the OutputFrameDelay must be at least 1 and (ClassicFramesPerIrp-1) or less.
+    // Value range: 0~1
+    ULONG DelayedOutputBufferSwitch;
+    ULONG Reserved;
+
+    // When processing input buffers in a thread, the target is the current frame position read from the USB controller to the position after this value is subtracted, and the value is read from the buffer.
+    // When a value containing the OperationFlags::UseKernelOffset flag (0x10000000) and OR is written, the offset is calculated by the kernel driver based on the device model and connection status, and the value specified in this parameter is added and used.
+    // If a value is written with the OperationFlags::UseKernelLatency flag (0x80000000) and OR, the latency value used by the ASIO driver is calculated in the kernel.
+    // When using dropout detection, you need to specify this flag.
+    // Value range: 0~128 and OperationFlags::UseKernelOffset flags (0x10000000), OperationFlags::UseKernelLatency flags (0x80000000)
+    ULONG InputBufferOperationOffset;
+
+    // When the OperationFlags::UseKernelOffset is specified in OutBufferOperationOffset, and when a hub is detected or its presence is unknown, the kernel driver internally adds this value to the value of InBufferOperationOffset.
+    // The kernel driver adds the output latency correction value by fs/1000 and reports it to the ASIO driver.
+    // Value range: 0~128
+    ULONG InputHubOffset;
+
+    // When performing output buffer processing on a thread, the buffer is written to the buffer with the current frame position read from the USB controller plus this value as the processing target.
+    // When a value containing the OperationFlags::UseKernelOffset flag (0x10000000) and OR is written, the offset is calculated by the kernel driver based on the device model and connection status, and the value specified in this parameter is added and used.
+    // If a value is written with the OperationFlags::UseKernelLatency flag (0x80000000) and OR, the latency value used by the ASIO driver is calculated in the kernel.
+    // When using dropout detection, you need to specify this flag.
+    // Value range: 0~128 and OperationFlags::UseKernelOffset flags (0x10000000), OperationFlags::UseKernelLatency flags (0x80000000)
+    ULONG OutputBufferOperationOffset;
+
+    // When the OperationFlags::UseKernelOffset is specified in OutBufferOperationOffset, and when a hub is detected or the presence or absence of a hub is unknown, the kernel driver internally adds this value to the OutBufferOperationOffset value.
+    // The kernel driver adds the output latency correction value by fs/1000 and reports it to the ASIO driver.
+    // Value range: 0~128
+    ULONG OutputHubOffset;
+    ULONG BufferThreadPriority;
+    ULONG BufferFlags;
+
+    // ASIO buffer size
+    // The actual buffer size is determined by multiplying this period based on the device's sample rate:
+    // 2x for sample rates >= 50 kHz and < 100 kHz,
+    // 4x for >= 100 kHz and < 200 kHz,
+    // 8x for >= 200 kHz and < 400 kHz,
+    // and 16x for >= 400 kHz.
+    ULONG SuggestedBufferPeriod;
+} INTERNAL_PARAMETERS;
+
+typedef struct _AUDIO_STREAM_PROPERTY_SET
+{
+    UAC_AUDIO_PROPERTY  AudioProperty;
+    AUDIO_PROPERTY      InputProperty;
+    AUDIO_PROPERTY      OutputProperty;
+    FEEDBACK_PROPERTY   FeedbackProperty;
+    INTERNAL_PARAMETERS InternalParameters;
+    UACSampleFormat     SampleFormatBackup;
+    UACSampleFormat     DesiredSampleFormat;
+    ULONG               ClassicFramesPerIrp;
+    bool                IsDeviceAdaptive;    // True if the output Endpoint is Adaptive
+    bool                IsDeviceSynchronous; // True if the output Endpoint is Synchronous
+} AUDIO_STREAM_PROPERTY_SET, *PAUDIO_STREAM_PROPERTY_SET;
+
+typedef struct _SELECTED_INTERFACE_AND_PIPE
+{
+    PUSB_INTERFACE_DESCRIPTOR InterfaceDescriptor;
+    WDFUSBINTERFACE           UsbInterface;
+    UCHAR                     SelectedAlternateSetting;
+    UCHAR                     NumberConfiguredPipes;
+    ULONG                     MaximumTransferSize;
+    WDFUSBPIPE                Pipe;
+    WDF_USB_PIPE_INFORMATION  PipeInfo;
+} SELECTED_INTERFACE_AND_PIPE, *PSELECTED_INTERFACE_AND_PIPE;
+
 //
 // The device context performs the same job as
 // a WDM device extension in the driver frameworks
 //
 typedef struct _DEVICE_CONTEXT
 {
-    struct SelectedInterfaceAndPipe
-    {
-        PUSB_INTERFACE_DESCRIPTOR InterfaceDescriptor;
-        WDFUSBINTERFACE           UsbInterface;
-        UCHAR                     SelectedAlternateSetting;
-        UCHAR                     NumberConfiguredPipes;
-        ULONG                     MaximumTransferSize;
-        WDFUSBPIPE                Pipe;
-        WDF_USB_PIPE_INFORMATION  PipeInfo;
-    };
-
-    typedef struct INTERNAL_PARAMETERS_
-    {
-        ULONG FirstPacketLatency;
-        ULONG ClassicFramesPerIrp;
-        ULONG MaxIrpNumber;
-        ULONG PreSendFrames;
-        LONG  OutputFrameDelay;
-        ULONG DelayedOutputBufferSwitch;
-        ULONG Reserved;
-        ULONG InputBufferOperationOffset;
-        ULONG InputHubOffset;
-        ULONG OutputBufferOperationOffset;
-        ULONG OutputHubOffset;
-        ULONG BufferThreadPriority;
-        ULONG BufferFlags;
-        ULONG ClassicFramesPerIrp2;
-        ULONG SuggestedBufferPeriod;
-    } INTERNAL_PARAMETERS;
-
-    typedef struct AUDIO_PROPERTY_
-    {
-        UCHAR          InterfaceNumber;     // Currently selected input interface number
-        UCHAR          AlternateSetting;    // Currently selected input alternate setting number
-        UCHAR          EndpointNumber;      // Currently selected input endpoint number
-        ULONG          BytesPerBlock;       // Bytes per block for input (usually InChannels * BytesPerSample)
-        ULONG          MaxSamplesPerPacket; // Number of frames transferable per micro frame for input
-        ULONG          FormatType;
-        ULONG          Format;
-        ULONG          BytesPerSample;      // Bytes per sample
-        ULONG          ValidBitsPerSample;  // Valid bits per sample
-        volatile ULONG MeasuredSampleRate;  // Measured input sampling rate (1-second average)
-        ULONG          PacketsPerSec;       // ISO (Micro) Frames per second
-        ULONG          SamplesPerPacket;    // Number of samples per ISO Frame (truncated)
-        ULONG          DeviceLatency;
-        ULONG          UsbChannels;
-        UCHAR          ChannelNames;
-        ULONG          IsoPacketSize;
-        ULONG          LockDelay;
-    } AUDIO_PROPERTY;
-
-    typedef struct FEEDBACK_PROPERTY_
-    {
-        UCHAR FeedbackInterfaceNumber;
-        UCHAR FeedbackAlternateSetting;
-        UCHAR FeedbackEndpointNumber;
-        UCHAR FeedbackInterval;
-    } FEEDBACK_PROPERTY;
-
     typedef struct INTERRUPT_MESSAGE_PROPERTY_
     {
         bool  IsValid;
@@ -207,10 +276,12 @@ typedef struct _DEVICE_CONTEXT
         UCHAR Interval;
     } INTERRUPT_MESSAGE_PROPERTY;
 
-    ACXCIRCUIT                         Render;
-    ACXCIRCUIT                         Capture;
+    USHORT                             VendorId;                                 // Vendor ID obtained from USB
+    USHORT                             ProductId;                                // Product ID obtained from USB
+    USHORT                             DeviceRelease;                            // Device Release Number obtained from USB
+    WCHAR                              ProductName[UAC_MAX_PRODUCT_NAME_LENGTH]; // iProduct string obtained from USB
     WDF_TRI_STATE                      ExcludeD3Cold;
-    ULONG                              PrivateDeviceData; // just a placeholder
+    ULONG                              PrivateDeviceData;                        // just a placeholder
     USB_DEVICE_DESCRIPTOR              UsbDeviceDescriptor;
     PUSB_CONFIGURATION_DESCRIPTOR      UsbConfigurationDescriptor;
     WDFMEMORY                          UsbConfigurationDescriptorHandle;
@@ -219,74 +290,42 @@ typedef struct _DEVICE_CONTEXT
     bool                               IsDeviceRemoteWakeable;
     bool                               IsDeviceHighSpeed;
     bool                               IsDeviceSuperSpeed;
-    SelectedInterfaceAndPipe           InputInterfaceAndPipe;
-    SelectedInterfaceAndPipe           OutputInterfaceAndPipe;
-    SelectedInterfaceAndPipe           FeedbackInterfaceAndPipe;
-    SelectedInterfaceAndPipe           InterruptInterfaceAndPipe;
+    SELECTED_INTERFACE_AND_PIPE        InterruptInterfaceAndPipe;
     WdfUsbTargetDeviceSelectConfigType SelectConfigType;
     PWDF_USB_INTERFACE_SETTING_PAIR    Pairs;
     UCHAR                              NumberOfConfiguredInterfaces;
     USBAudioConfiguration *            UsbAudioConfiguration;
-    ContiguousMemory *                 ContiguousMemory;
-    RtPacketObject *                   RtPacketObject;
-    WDFWAITLOCK                        StreamWaitLock;
-    WDFWAITLOCK                        StreamEngineWaitLock;
-    WDFWAITLOCK                        AsioWaitLock;
-    CStreamEngine **                   RenderStreamEngine;
-    CStreamEngine **                   CaptureStreamEngine;
-    ULONG                              NumOfInputDevices;
-    ULONG                              NumOfOutputDevices;
-    WDFMEMORY                          RenderStreamEngineMemory;
-    WDFMEMORY                          CaptureStreamEngineMemory;
+    AudioIsochronousEngine **          AudioIsochronousEngines;
+    WDFMEMORY                          AudioIsochronousEnginesMemory;
+    ULONG                              NumberOfAudioIsochronousEngines;
     LARGE_INTEGER                      PerformanceCounterFrequency;
     PWSTR                              DeviceName;
     WDFMEMORY                          DeviceNameMemory;
     PWSTR                              SerialNumber;
     WDFMEMORY                          SerialNumberMemory;
-    UAC_AUDIO_PROPERTY                 AudioProperty;
     UAC_SUPPORTED_CONTROL_LIST         SupportedControl;
-    AUDIO_PROPERTY                     InputProperty;
-    AUDIO_PROPERTY                     OutputProperty;
-    FEEDBACK_PROPERTY                  FeedbackProperty;
     INTERRUPT_MESSAGE_PROPERTY         InterruptMessageProperty;
     WorkerThread *                     InterruptMessageWorkerThread;
-    ULONG                              FramesPerMs;         // Number of (micro)frames per ms. 1 or 8
-    ULONG                              ClassicFramesPerIrp;
-    bool                               IsDeviceAdaptive;    // True if the output Endpoint is Adaptive
-    bool                               IsDeviceSynchronous; // True if the output Endpoint is Synchronous
+    ULONG                              FramesPerMs; // Number of (micro)frames per ms. 1 or 8
     UCHAR                              DeviceClass;
     UCHAR                              DeviceProtocol;
-    LONG                               StartCounterAsio;
-    LONG                               StartCounterWdmAudio;
-    LONG                               StartCounterIsoStream;
     LONG                               IsIdleStopSucceeded;
     LARGE_INTEGER                      LastVendorRequestTime;
-    NTSTATUS                           LastActivationStatus;
     bool                               IsPrepareHardwareSucceeded;
-    WCHAR                              InputAsioChannelName[UAC_MAX_ASIO_CHANNEL][UAC_MAX_CHANNEL_NAME_LENGTH];
-    WCHAR                              OutputAsioChannelName[UAC_MAX_ASIO_CHANNEL][UAC_MAX_CHANNEL_NAME_LENGTH];
-    bool                               SuperSpeedCompatible;
-    StreamObject *                     StreamObject;
-    AsioBufferObject *                 AsioBufferObject;
-    WDFFILEOBJECT                      AsioBufferOwner;
-    WDFFILEOBJECT                      AsioOwner;
-    WDFFILEOBJECT                      ResetRequestOwner;
-    UACSampleFormat                    SampleFormatBackup;
-    ErrorStatistics *                  ErrorStatistics;
-    UAC_USB_LATENCY                    UsbLatency;
-    UACSampleFormat                    DesiredSampleFormat;
-    UCHAR                              ClockSelectorId;
-    ULONG                              AcClockSources;
-    AC_CLOCK_SOURCE_INFO               AcClockSourceInfo[UAC_MAX_CLOCK_SOURCE];
-    WCHAR                              ClockSourceName[UAC_MAX_CLOCK_SOURCE][UAC_MAX_CLOCK_SOURCE_NAME_LENGTH];
-    ULONG                              CurrentClockSource;
-    KEVENT                             ClockObservationThreadKillEvent;
-    PKTHREAD                           ClockObservationThread;
-    LARGE_INTEGER                      ResetEnableTime;
-    UCHAR                              AudioControlInterfaceNumber; // Audio Control interface number
-    INTERNAL_PARAMETERS                Params;
-    const UAC_LATENCY_OFFSET_LIST *    LatencyOffsetList;
-    ULONG                              HubCount;
+
+    bool              SuperSpeedCompatible;
+    ErrorStatistics * ErrorStatistics;
+    // UCHAR                              ClockSelectorId;
+    // ULONG                              AcClockSources;
+    // AC_CLOCK_SOURCE_INFO               AcClockSourceInfo[UAC_MAX_CLOCK_SOURCE];
+    // WCHAR                              ClockSourceName[UAC_MAX_CLOCK_SOURCE][UAC_MAX_CLOCK_SOURCE_NAME_LENGTH];
+    // ULONG                              CurrentClockSource;
+    // KEVENT                             ClockObservationThreadKillEvent;
+    // PKTHREAD                           ClockObservationThread;
+    LARGE_INTEGER                   ResetEnableTime;
+    UCHAR                           AudioControlInterfaceNumber; // Audio Control interface number
+    const UAC_LATENCY_OFFSET_LIST * LatencyOffsetList;
+    ULONG                           HubCount;
 } DEVICE_CONTEXT, *PDEVICE_CONTEXT;
 
 //
@@ -313,7 +352,7 @@ typedef struct _PIPE_CONTEXT
 
     ULONG TransferSizePerFrame;
 
-    DEVICE_CONTEXT::SelectedInterfaceAndPipe * SelectedInterfaceAndPipe;
+    SELECTED_INTERFACE_AND_PIPE * SelectedInterfaceAndPipe;
 } PIPE_CONTEXT, *PPIPE_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(PIPE_CONTEXT, GetPipeContext)
@@ -356,13 +395,14 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ISOCHRONOUS_TEST_REQUEST_CONTEXT, GetIsochron
 //
 typedef struct _ISOCHRONOUS_REQUEST_CONTEXT
 {
-    PDEVICE_CONTEXT  DeviceContext;
-    StreamObject *   StreamObject;
-    TransferObject * TransferObject;
-    PVOID            IrpBuffer;
-    PMDL             IrpMdl;
-    PIRP             Irp;
-    WDFMEMORY        UrbMemory;
+    PDEVICE_CONTEXT          DeviceContext;
+    AudioIsochronousEngine * AudioIsochronousEngine;
+    StreamObject *           StreamObject;
+    TransferObject *         TransferObject;
+    PVOID                    IrpBuffer;
+    PMDL                     IrpMdl;
+    PIRP                     Irp;
+    WDFMEMORY                UrbMemory;
 } ISOCHRONOUS_REQUEST_CONTEXT, *PISOCHRONOUS_REQUEST_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ISOCHRONOUS_REQUEST_CONTEXT, GetIsochronousRequestContext)
@@ -398,6 +438,13 @@ EVT_WDF_OBJECT_CONTEXT_CLEANUP  USBAudioAcxDriverEvtPipeContextCleanup;       //
 EVT_WDF_OBJECT_CONTEXT_CLEANUP  USBAudioAcxDriverEvtIsoRequestContextCleanup; // IRQL <= DISPATCH_LEVEL, https://learn.microsoft.com/ja-jp/windows-hardware/drivers/ddi/wdfobject/nc-wdfobject-evt_wdf_object_context_cleanup
 EVT_WDF_DEVICE_CONTEXT_CLEANUP  Codec_EvtDeviceContextCleanup;                // IRQL <= DISPATCH_LEVEL, Conditionally IRQL = PASSIVE_LEVEL
 EVT_WDF_OBJECT_CONTEXT_CLEANUP  USBAudioAcxDriverEvtFileCleanup;              // PASSIVE_LEVEL
+
+__drv_maxIRQL(PASSIVE_LEVEL)
+PAGED_CODE_SEG
+NTSTATUS
+RetrieveDeviceInformation(
+    _In_ WDFDEVICE device
+);
 
 __drv_maxIRQL(DISPATCH_LEVEL)
 NONPAGED_CODE_SEG
@@ -439,270 +486,62 @@ USBAudioAcxDriverStreamGetCurrentTimeUs(
     _Out_opt_ PULONGLONG qpcPosition
 );
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamPrepareHardware(
-    _In_ bool            isInput,
-    _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ CStreamEngine * streamEngine
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetAudioProperty;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamReleaseHardware(
-    _In_ bool            isInput,
-    _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetChannelInfo;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamSetDataFormat(
-    _In_ bool            isInput,
-    _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ ACXDATAFORMAT   dataFormat
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetClockInfo;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamSetRtPackets(
-    _In_ bool                                                               isInput,
-    _In_ ULONG                                                              deviceIndex,
-    _In_ PDEVICE_CONTEXT                                                    deviceContext,
-    _Inout_updates_(packetsCount) _Inout_updates_bytes_(packetSize) PVOID * packets,
-    _In_ ULONG                                                              packetsCount,
-    _In_ ULONG                                                              packetSize,
-    _In_ ULONG                                                              channel,
-    _In_ ULONG                                                              numOfChannelsPerDevice
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetLatencyOffsetOfSampleRate;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-void USBAudioAcxDriverStreamUnsetRtPackets(
-    _In_ bool            isInput,
-    _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverSetClockSource;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamRun(
-    _In_ bool            isInput,
-    _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverSetSampleFormat;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamPause(
-    _In_ bool            isInput,
-    _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverChangeSampleRate;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamGetCurrentPacket(
-    _In_ bool            isInput,
-    _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _Out_ PULONG         currentPacket
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetAsioOwnership;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamResetCurrentPacket(
-    _In_ bool            isInput,
-    _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverStartAsioStream;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamResetInternal(
-    _In_ bool            isInput,
-    _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverStopAsioStream;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamGetCapturePacket(
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _In_ ULONG           deviceIndex,
-    _Out_ PULONG         lastCapturePacket,
-    _Out_ PULONGLONG     qpcPacketStart
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverSetAsioBuffer;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS
-USBAudioAcxDriverStreamGetPresentationPosition(
-    _In_ bool            isInput,
-    _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext,
-    _Out_ PULONGLONG     positionInBlocks,
-    _Out_ PULONGLONG     qpcPosition
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverUnsetAsioBuffer;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-NTSTATUS USBAudioAcxDriverGetCurrentDataFormat(
-    _In_ PDEVICE_CONTEXT  deviceContext,
-    _In_ bool             isInput,
-    _Out_ ACXDATAFORMAT & dataFormat
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverReleaseAsioOwnership;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-bool USBAudioAcxDriverHasAsioOwnership(
-    _In_ PDEVICE_CONTEXT deviceContext
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetBufferPeriod;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetAudioProperty(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverSetBufferPeriod;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetChannelInfo(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetInputLatency;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetClockInfo(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetOutputLatency;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetLatencyOffsetOfSampleRate(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverSetAsioDevice;
 
-__drv_maxIRQL(PASSIVE_LEVEL)
 PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverSetClockSource(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverSetSampleFormat(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverChangeSampleRate(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetAsioOwnership(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverStartAsioStream(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverStopAsioStream(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverSetAsioBuffer(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverUnsetAsioBuffer(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverReleaseAsioOwnership(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetBufferPeriod(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverSetBufferPeriod(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetInputLatency(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetOutputLatency(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverSetAsioDevice(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
-
-__drv_maxIRQL(PASSIVE_LEVEL)
-PAGED_CODE_SEG
-VOID EvtUSBAudioAcxDriverGetAsioDevice(
-    _In_ WDFOBJECT  object,
-    _In_ WDFREQUEST request
-);
+EVT_ACX_OBJECT_PROCESS_REQUEST EvtUSBAudioAcxDriverGetAsioDevice;
 
 __drv_maxIRQL(DISPATCH_LEVEL)
 NONPAGED_CODE_SEG

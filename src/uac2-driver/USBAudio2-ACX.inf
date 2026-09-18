@@ -35,31 +35,54 @@ USBAudio2-ACX.sys  = 1,,
 %ManufacturerName%=Standard,NT$ARCH$.10.0...16299 ; %13% support introduced in build 16299
 
 [Standard.NT$ARCH$.10.0...16299]
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1509        ; Steinberg UR22
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1730        ; Steinberg UR44C
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1760        ; Steinberg IXO22
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1509&MI_00  ; Steinberg UR22
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1730&MI_00  ; Steinberg UR44C
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1760&MI_00  ; Steinberg IXO22
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1761&MI_00  ; Steinberg IXO12
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1770&MI_00  ; Yamaha URX44
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_8211&MI_00  ; Focusrite Scarlett Solo
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_8212&MI_00  ; Focusrite Scarlett 4i4
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_8217&MI_00  ; Focusrite Vocaster Two
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_8219&MI_00  ; Focusrite Scarlett 2i2 4th Gen
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_821B&MI_00  ; Focusrite Scarlett 16i16
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_060D&MI_00  ; PreSonus Quantum HD 2
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_821D&MI_00  ; Focusrite Scarlett 18i20 4th Gen
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0109&MI_00  ; PreSonus Studio 24C
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_040B&MI_00  ; PreSonus AudioBox GO
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0423&MI_00  ; PreSonus Revelator IO 24
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0423&MI_03  ; PreSonus Revelator IO 24 Stream Mix A
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0423&MI_06  ; PreSonus Revelator IO 24 Stream Mix B
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0609&MI_00  ; PreSonus Quantum ES 2
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_060D&MI_00  ; PreSonus Quantum HD 2
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2B5A&PID_0021&MI_00  ; UA Volt 2
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2B5A&PID_0023&MI_00  ; UA Volt 276
-
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1C75&PID_AF72&MI_00  ; Arturia Minifuse 4
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2B5A&PID_0020&MI_00  ; UA Volt 1
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1397&PID_0508&MI_00  ; Behringer UMC204HD
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_07FD&PID_000B&MI_00  ; MOTU M4
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0A73&PID_001F&MI_00  ; Mackie Onyx Performer 2+2
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0109&MI_00  ; PreSonus Studio 24C
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0644&PID_8064&MI_00  ; TASCAM SERIES 102i
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0644&PID_8070&MI_00  ; Tascam US 2x2HR
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1686&PID_074F&MI_00  ; Zoom UAC 232
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1686&PID_067F&MI_00  ; ZOOM AMS-24
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1686&PID_06B5&MI_00  ; ZOOM F3 (PCM 24bit)
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1686&PID_06E5&MI_00  ; ZOOM F3 (Float 32bit)
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1686&PID_074F&MI_00  ; ZOOM UAC 232
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2708&PID_0009&MI_00  ; Audient ID4
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_8006&MI_00  ; Focusrite Scarlett 2i2 1st (or 2nd?) Gen
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_821D&MI_00  ; Focusrite Scarlett 18i20 4th Gen
 %USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_17C8&PID_7010&MI_00  ; Bitwig Connect
-
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_041E&PID_3256&MI_00  ; Creative Sound BlasterX G6
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_041E&PID_3264&MI_03  ; Creative Sound Blaster X3
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_041E&PID_3267&MI_03  ; Creative Sound Blaster G3
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_110A&MI_00  ; Apple USB-C to 3.5mm Headphone Jack Adapter
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_110B&MI_00  ; Apple EarPods USB-C
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_110C&MI_01  ; Apple AirPods Max USB Audio
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_05AC&PID_1115&MI_00  ; Apple USB-C to 3.5mm Audio Cable
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_147A&PID_E055&MI_00  ; CMEDIA USB2.0 High-Speed True HD Audio
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_17E9&PID_4305&MI_02  ; Toshiba dynadock U3.0
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_19F7&PID_0054&MI_00  ; RODE NT1 5th Gen
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_29C2&PID_0005&MI_00  ; Lewitt CONNECT 6
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2A39&PID_3FD1&MI_00  ; RME Fireface UFX+
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2A39&PID_3FD2&MI_00  ; RME ADI-2 Pro
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_31E9&PID_0002&MI_00  ; Solid State Logic SSL 2+
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_3302&PID_338F&MI_00  ; FRANSUN CX31993 HiFi-Audio
 
 [USBAudio2-ACX_Device.NT]
 CopyFiles=File_Copy
@@ -122,21 +145,22 @@ HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
 ;
 [USBAudio2-ACX_Device.NT.Interfaces]
 ; Interfaces for render endpoint.
-AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_RenderDevice%,  USBAudio2-ACX_Device.I.RenderDevice
-AddInterface=%KSCATEGORY_RENDER%,   %KSNAME_RenderDevice%,  USBAudio2-ACX_Device.I.RenderDevice
-AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_RenderDevice%,  USBAudio2-ACX_Device.I.RenderDevice
+AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_RenderDevice000%,  USBAudio2-ACX_Device.I.RenderDevice
+AddInterface=%KSCATEGORY_RENDER%,   %KSNAME_RenderDevice000%,  USBAudio2-ACX_Device.I.RenderDevice
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_RenderDevice000%,  USBAudio2-ACX_Device.I.RenderDevice
 
-; Interfaces for mic capture endpoint 
-AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_CaptureDevice%, USBAudio2-ACX_Device.I.CaptureDevice
-AddInterface=%KSCATEGORY_CAPTURE%,  %KSNAME_CaptureDevice%, USBAudio2-ACX_Device.I.CaptureDevice
-AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_CaptureDevice%, USBAudio2-ACX_Device.I.CaptureDevice
+; Interfaces for capture endpoint
+AddInterface=%KSCATEGORY_AUDIO%,    %KSNAME_CaptureDevice000%, USBAudio2-ACX_Device.I.CaptureDevice
+AddInterface=%KSCATEGORY_CAPTURE%,  %KSNAME_CaptureDevice000%, USBAudio2-ACX_Device.I.CaptureDevice
+AddInterface=%KSCATEGORY_REALTIME%, %KSNAME_CaptureDevice000%, USBAudio2-ACX_Device.I.CaptureDevice
+
 
 [Strings]
 ;
 ;Non-localizable
 ;
-KSNAME_RenderDevice="RenderDevice0"
-KSNAME_CaptureDevice="CaptureDevice0"
+KSNAME_RenderDevice000="RenderDevice000"
+KSNAME_CaptureDevice000="CaptureDevice000"
 
 SPSVCINST_ASSOCSERVICE= 0x00000002
 ProviderName = "Microsoft Corporation"
