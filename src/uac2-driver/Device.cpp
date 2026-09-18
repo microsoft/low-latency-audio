@@ -489,6 +489,7 @@ Return Value:
     }
 
     deviceContext->UsbAudioConfiguration = USBAudioConfiguration::Create(deviceContext, &deviceContext->UsbDeviceDescriptor);
+    RETURN_NTSTATUS_IF_TRUE(deviceContext->UsbAudioConfiguration == nullptr, STATUS_INSUFFICIENT_RESOURCES);
 
     GetHubCount(deviceContext, deviceContext->HubCount);
 
@@ -558,7 +559,11 @@ Return Value:
         deviceContext->LatencyOffsetList = &(g_LatencyOffsetList[0]);
     }
 
-    if (deviceContext->VendorId == 0)
+    //
+    // UsbAudioConfiguration is recreated on every EvtDevicePrepareHardware call and destroyed in EvtDeviceReleaseHardware.
+    //
+    // Therefore, ParseDescriptors() must be executed for every PrepareHardware/ReleaseHardware cycle.
+    //
     {
         ULONG       retryCount = 0;
         const ULONG maxRetry = 30;
@@ -715,6 +720,7 @@ Return Value:
         WdfObjectDelete(deviceContext->AudioIsochronousEnginesMemory);
         deviceContext->AudioIsochronousEnginesMemory = nullptr;
         deviceContext->AudioIsochronousEngines = nullptr;
+        deviceContext->NumberOfAudioIsochronousEngines = 0;
     }
 
     if (deviceContext->UsbAudioConfiguration != nullptr)
@@ -755,6 +761,11 @@ Return Value:
         delete[] deviceContext->Pairs;
         deviceContext->Pairs = nullptr;
     }
+
+    deviceContext->VendorId = 0;
+    deviceContext->ProductId = 0;
+    deviceContext->DeviceRelease = 0;
+    deviceContext->ProductName[0] = 0x00;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
