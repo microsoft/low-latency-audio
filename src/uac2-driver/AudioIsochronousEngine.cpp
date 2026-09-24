@@ -3909,13 +3909,19 @@ NTSTATUS AudioIsochronousEngine::GetAsioOwnership(
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
-NTSTATUS AudioIsochronousEngine::StartAsioStream()
+NTSTATUS AudioIsochronousEngine::StartAsioStream(
+    WDFFILEOBJECT fileObject
+)
 {
     NTSTATUS status = STATUS_SUCCESS;
 
     PAGED_CODE();
 
     AcquireStreamWaitLock();
+
+    IF_TRUE_ACTION_JUMP(m_asioOwner == nullptr, status = STATUS_INVALID_DEVICE_STATE;, Exit_BeforeWaitLockRelease);
+    IF_TRUE_ACTION_JUMP(m_asioOwner != fileObject, status = STATUS_ACCESS_DENIED;, Exit_BeforeWaitLockRelease);
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", m_startCounterAsio, m_startCounterWdmAudio, m_startCounterIsoStream);
     if (m_startCounterAsio == 0)
     {
@@ -3947,18 +3953,26 @@ NTSTATUS AudioIsochronousEngine::StartAsioStream()
     {
         status = STATUS_SUCCESS;
     }
+
+Exit_BeforeWaitLockRelease:
+
     ReleaseStreamWaitLock();
     return status;
 }
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
-NTSTATUS AudioIsochronousEngine::StopAsioStream()
+NTSTATUS AudioIsochronousEngine::StopAsioStream(
+    WDFFILEOBJECT fileObject
+)
 {
     NTSTATUS status = STATUS_SUCCESS;
 
     PAGED_CODE();
     AcquireStreamWaitLock();
+
+    IF_TRUE_ACTION_JUMP(m_asioOwner == nullptr, status = STATUS_INVALID_DEVICE_STATE;, Exit_BeforeWaitLockRelease);
+    IF_TRUE_ACTION_JUMP(m_asioOwner != fileObject, status = STATUS_ACCESS_DENIED;, Exit_BeforeWaitLockRelease);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - start counter asio %ld, start counter acx audio %ld, start counter iso stream %ld", m_startCounterAsio, m_startCounterWdmAudio, m_startCounterIsoStream);
     if (m_startCounterAsio)
@@ -3978,6 +3992,7 @@ NTSTATUS AudioIsochronousEngine::StopAsioStream()
     {
         status = STATUS_SUCCESS;
     }
+Exit_BeforeWaitLockRelease:
 
     ReleaseStreamWaitLock();
 
@@ -3987,12 +4002,13 @@ NTSTATUS AudioIsochronousEngine::StopAsioStream()
 PAGED_CODE_SEG
 _Use_decl_annotations_
 NTSTATUS AudioIsochronousEngine::SetAsioBuffer(
-    ULONG recBufferLength,
-    PBYTE recBuffer,
-    ULONG recBufferOffset,
-    ULONG playBufferLength,
-    PBYTE playBuffer,
-    ULONG playBufferOffset
+    WDFFILEOBJECT fileObject,
+    ULONG         recBufferLength,
+    PBYTE         recBuffer,
+    ULONG         recBufferOffset,
+    ULONG         playBufferLength,
+    PBYTE         playBuffer,
+    ULONG         playBufferOffset
 )
 {
     NTSTATUS status = STATUS_SUCCESS;
@@ -4002,15 +4018,22 @@ NTSTATUS AudioIsochronousEngine::SetAsioBuffer(
 
     AcquireAsioWaitLock();
 
-    IF_TRUE_ACTION_JUMP((m_asioBufferOwner != nullptr) || (m_asioBufferObject != nullptr),
-                        status = STATUS_DEVICE_BUSY;
-                        , Exit);
+    IF_TRUE_ACTION_JUMP(m_asioOwner == nullptr, status = STATUS_INVALID_DEVICE_STATE;, Exit_BeforeWaitLockRelease);
+    IF_TRUE_ACTION_JUMP(m_asioOwner != fileObject, status = STATUS_ACCESS_DENIED;, Exit_BeforeWaitLockRelease);
+    IF_TRUE_ACTION_JUMP(m_asioBufferObject != nullptr, status = STATUS_DEVICE_BUSY;, Exit_BeforeWaitLockRelease);
 
     m_asioBufferObject = AsioBufferObject::Create(m_deviceContext, this);
-    IF_TRUE_ACTION_JUMP(m_asioBufferObject == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, Exit);
+    IF_TRUE_ACTION_JUMP(m_asioBufferObject == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, Exit_BeforeWaitLockRelease);
 
     status = m_asioBufferObject->SetBuffer(recBufferLength, recBuffer, recBufferOffset, playBufferLength, playBuffer, playBufferOffset);
-Exit:
+
+Exit_BeforeWaitLockRelease:
+    if (!NT_SUCCESS(status) && (m_asioBufferObject != nullptr))
+    {
+        delete m_asioBufferObject;
+        m_asioBufferObject = nullptr;
+    }
+
     ReleaseAsioWaitLock();
 
     return status;
@@ -4018,13 +4041,18 @@ Exit:
 
 PAGED_CODE_SEG
 _Use_decl_annotations_
-NTSTATUS AudioIsochronousEngine::UnsetAsioBuffer()
+NTSTATUS AudioIsochronousEngine::UnsetAsioBuffer(
+    WDFFILEOBJECT fileObject
+)
 {
     NTSTATUS status = STATUS_SUCCESS;
 
     PAGED_CODE();
 
     AcquireAsioWaitLock();
+    IF_TRUE_ACTION_JUMP(m_asioOwner == nullptr, status = STATUS_INVALID_DEVICE_STATE;, Exit_BeforeWaitLockRelease);
+    IF_TRUE_ACTION_JUMP(m_asioOwner != fileObject, status = STATUS_ACCESS_DENIED;, Exit_BeforeWaitLockRelease);
+
     if (m_asioBufferObject != nullptr)
     {
         status = m_asioBufferObject->UnsetBuffer();
@@ -4035,6 +4063,8 @@ NTSTATUS AudioIsochronousEngine::UnsetAsioBuffer()
     {
         status = STATUS_SUCCESS;
     }
+
+Exit_BeforeWaitLockRelease:
     ReleaseAsioWaitLock();
 
     return status;
@@ -4052,74 +4082,85 @@ NTSTATUS AudioIsochronousEngine::ReleaseAsioOwnership(
 
     AcquireStreamWaitLock();
 
+    //
+    // If ownership has already been released, return STATUS_SUCCESS without taking any action.
+    //
     if (m_asioOwner != nullptr)
     {
         if (m_asioOwner == fileObject)
         {
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "clear asio owner");
             m_asioOwner = nullptr;
+            status = STATUS_SUCCESS;
+        }
+        else
+        {
+            status = STATUS_ACCESS_DENIED;
+        }
+        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+
+        //
+        // Ownership is released before restoring the audio interface state. Subsequent restoration failures do not transfer ownership back to the previous file object.
+        //
+        if ((m_audioStreamPropertySet.AudioProperty.SupportedSampleFormats & (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT))) && (m_audioStreamPropertySet.SampleFormatBackup != m_audioStreamPropertySet.AudioProperty.CurrentSampleFormat))
+        {
+            ULONG         desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
+            ULONG         desiredFormat = NS_USBAudio0200::PCM;
+            ULONG         inputBytesPerSample = 0;
+            ULONG         inputValidBitsPerSample = 0;
+            ULONG         outputBytesPerSample = 0;
+            ULONG         outputValidBitsPerSample = 0;
+            ACXDATAFORMAT inputDataFormatBeforeChange = nullptr;
+            ACXDATAFORMAT outputDataFormatBeforeChange = nullptr;
+            ACXDATAFORMAT inputDataFormatAfterChange = nullptr;
+            ACXDATAFORMAT outputDataFormatAfterChange = nullptr;
+
+            if (m_usbAudioStreamInterfaceGroup->HasInputIsochronousInterface())
+            {
+                status = GetCurrentDataFormat(true, inputDataFormatBeforeChange);
+                IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+            }
+            if (m_usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface())
+            {
+                status = GetCurrentDataFormat(false, outputDataFormatBeforeChange);
+                IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+            }
+            status = USBAudioDataFormat::ConvertFormatToSampleFormat(m_audioStreamPropertySet.SampleFormatBackup, desiredFormatType, desiredFormat);
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+
+            if (m_usbAudioStreamInterfaceGroup->HasInputIsochronousInterface())
+            {
+                status = m_usbAudioStreamInterfaceGroup->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample);
+                IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+            }
+            if (m_usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface())
+            {
+                status = m_usbAudioStreamInterfaceGroup->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample);
+                IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+            }
+            status = ActivateAudioInterface(m_audioStreamPropertySet.AudioProperty.SampleRate, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample, outputBytesPerSample, outputValidBitsPerSample);
+            IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+
+            if (m_usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface() && (outputDataFormatBeforeChange != nullptr))
+            {
+                status = GetCurrentDataFormat(false, outputDataFormatAfterChange);
+                IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+
+                status = NotifyAllPinsDataFormatChange(false, outputDataFormatBeforeChange, outputDataFormatAfterChange);
+                IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+            }
+            if (m_usbAudioStreamInterfaceGroup->HasInputIsochronousInterface() && (inputDataFormatBeforeChange != nullptr))
+            {
+                status = GetCurrentDataFormat(true, inputDataFormatAfterChange);
+                IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+
+                status = NotifyAllPinsDataFormatChange(true, inputDataFormatBeforeChange, inputDataFormatAfterChange);
+                IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
+            }
         }
     }
-    status = STATUS_SUCCESS;
 
-    if ((m_audioStreamPropertySet.AudioProperty.SupportedSampleFormats & (1 << toULong(UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT))) && (m_audioStreamPropertySet.SampleFormatBackup != m_audioStreamPropertySet.AudioProperty.CurrentSampleFormat))
-    {
-        ULONG         desiredFormatType = NS_USBAudio0200::FORMAT_TYPE_I;
-        ULONG         desiredFormat = NS_USBAudio0200::PCM;
-        ULONG         inputBytesPerSample = 0;
-        ULONG         inputValidBitsPerSample = 0;
-        ULONG         outputBytesPerSample = 0;
-        ULONG         outputValidBitsPerSample = 0;
-        ACXDATAFORMAT inputDataFormatBeforeChange = nullptr;
-        ACXDATAFORMAT outputDataFormatBeforeChange = nullptr;
-        ACXDATAFORMAT inputDataFormatAfterChange = nullptr;
-        ACXDATAFORMAT outputDataFormatAfterChange = nullptr;
-
-        if (m_usbAudioStreamInterfaceGroup->HasInputIsochronousInterface())
-        {
-            status = GetCurrentDataFormat(true, inputDataFormatBeforeChange);
-            IF_FAILED_JUMP(status, Exit);
-        }
-        if (m_usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface())
-        {
-            status = GetCurrentDataFormat(false, outputDataFormatBeforeChange);
-            IF_FAILED_JUMP(status, Exit);
-        }
-        status = USBAudioDataFormat::ConvertFormatToSampleFormat(m_audioStreamPropertySet.SampleFormatBackup, desiredFormatType, desiredFormat);
-        IF_FAILED_JUMP(status, Exit);
-
-        if (m_usbAudioStreamInterfaceGroup->HasInputIsochronousInterface())
-        {
-            status = m_usbAudioStreamInterfaceGroup->GetMaxSupportedValidBitsPerSample(true, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample);
-            IF_FAILED_JUMP(status, Exit);
-        }
-        if (m_usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface())
-        {
-            status = m_usbAudioStreamInterfaceGroup->GetMaxSupportedValidBitsPerSample(false, desiredFormatType, desiredFormat, outputBytesPerSample, outputValidBitsPerSample);
-            IF_FAILED_JUMP(status, Exit);
-        }
-        status = ActivateAudioInterface(m_audioStreamPropertySet.AudioProperty.SampleRate, desiredFormatType, desiredFormat, inputBytesPerSample, inputValidBitsPerSample, outputBytesPerSample, outputValidBitsPerSample);
-        IF_FAILED_JUMP(status, Exit);
-
-        if (m_usbAudioStreamInterfaceGroup->HasOutputIsochronousInterface() && (outputDataFormatBeforeChange != nullptr))
-        {
-            status = GetCurrentDataFormat(false, outputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit);
-
-            status = NotifyAllPinsDataFormatChange(false, outputDataFormatBeforeChange, outputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit);
-        }
-        if (m_usbAudioStreamInterfaceGroup->HasInputIsochronousInterface() && (inputDataFormatBeforeChange != nullptr))
-        {
-            status = GetCurrentDataFormat(true, inputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit);
-
-            status = NotifyAllPinsDataFormatChange(true, inputDataFormatBeforeChange, inputDataFormatAfterChange);
-            IF_FAILED_JUMP(status, Exit);
-        }
-    }
-
-Exit:
+Exit_BeforeWaitLockRelease:
     ReleaseStreamWaitLock();
 
     return status;
@@ -4165,10 +4206,10 @@ NTSTATUS AudioIsochronousEngine::SetBufferPeriod(
         }
 
         status = UpdateFramesPerIrp(bufferPeriod);
-        IF_FAILED_JUMP(status, Exit);
+        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
 
         status = UpdateBufferOperationOffset(bufferPeriod);
-        IF_FAILED_JUMP(status, Exit);
+        IF_FAILED_JUMP(status, Exit_BeforeWaitLockRelease);
 
         m_audioStreamPropertySet.InternalParameters.SuggestedBufferPeriod = bufferPeriod;
 
@@ -4199,7 +4240,7 @@ NTSTATUS AudioIsochronousEngine::SetBufferPeriod(
         status = STATUS_SUCCESS;
     }
 
-Exit:
+Exit_BeforeWaitLockRelease:
 
     ReleaseStreamWaitLock();
 

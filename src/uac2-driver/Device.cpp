@@ -2088,7 +2088,7 @@ VOID EvtUSBAudioAcxDriverStartAsioStream(
 
     if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        status = circuitContext->AudioIsochronousEngine->StartAsioStream();
+        status = circuitContext->AudioIsochronousEngine->StartAsioStream(WdfRequestGetFileObject(request));
     }
 Exit:
     WdfRequestCompleteWithInformation(request, status, outDataCb);
@@ -2134,7 +2134,7 @@ VOID EvtUSBAudioAcxDriverStopAsioStream(
 
     if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        status = circuitContext->AudioIsochronousEngine->StopAsioStream();
+        status = circuitContext->AudioIsochronousEngine->StopAsioStream(WdfRequestGetFileObject(request));
     }
 
 Exit:
@@ -2194,6 +2194,7 @@ VOID EvtUSBAudioAcxDriverSetAsioBuffer(
         outDataCb = params.Parameters.Property.ValueCb;
 
         status = circuitContext->AudioIsochronousEngine->SetAsioBuffer(
+            WdfRequestGetFileObject(request),
             static_cast<ULONG>(outBufferLength),
             (PBYTE)outBuffer,
             0,
@@ -2248,7 +2249,7 @@ VOID EvtUSBAudioAcxDriverUnsetAsioBuffer(
 
     if (circuitContext->AudioIsochronousEngine != nullptr)
     {
-        status = circuitContext->AudioIsochronousEngine->UnsetAsioBuffer();
+        status = circuitContext->AudioIsochronousEngine->UnsetAsioBuffer(WdfRequestGetFileObject(request));
     }
 
 Exit:

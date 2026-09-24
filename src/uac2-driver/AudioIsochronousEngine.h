@@ -614,32 +614,39 @@ class AudioIsochronousEngine
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     NTSTATUS
-    StartAsioStream();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    _Success_(NT_SUCCESS(return))
-    NTSTATUS
-    StopAsioStream();
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    _Success_(NT_SUCCESS(return))
-    NTSTATUS
-    SetAsioBuffer(
-        _In_ ULONG    recBufferLength,
-        _Inout_ PBYTE recBuffer,
-        _In_ ULONG    recBufferOffset,
-        _In_ ULONG    playBufferLength,
-        _In_ PBYTE    playBuffer,
-        _In_ ULONG    playBufferOffset
+    StartAsioStream(
+        _In_ WDFFILEOBJECT fileObject
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     _Success_(NT_SUCCESS(return))
     NTSTATUS
-    UnsetAsioBuffer();
+    StopAsioStream(
+        _In_ WDFFILEOBJECT fileObject
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    _Success_(NT_SUCCESS(return))
+    NTSTATUS
+    SetAsioBuffer(
+        _In_ WDFFILEOBJECT fileObject,
+        _In_ ULONG         recBufferLength,
+        _Inout_ PBYTE      recBuffer,
+        _In_ ULONG         recBufferOffset,
+        _In_ ULONG         playBufferLength,
+        _In_ PBYTE         playBuffer,
+        _In_ ULONG         playBufferOffset
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    _Success_(NT_SUCCESS(return))
+    NTSTATUS
+    UnsetAsioBuffer(
+        _In_ WDFFILEOBJECT fileObject
+    );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -1036,7 +1043,6 @@ class AudioIsochronousEngine
     WDFWAITLOCK                    m_asioWaitLock{nullptr};
     WDFWAITLOCK                    m_streamWaitLock{nullptr};
     WDFWAITLOCK                    m_streamEngineWaitLock{nullptr};
-    WDFFILEOBJECT                  m_asioBufferOwner{};
     WDFFILEOBJECT                  m_asioOwner{};
     WDFFILEOBJECT                  m_resetRequestOwner{};
     LONG                           m_startCounterAsio{0};
