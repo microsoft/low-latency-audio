@@ -2182,6 +2182,7 @@ VOID EvtUSBAudioAcxDriverSetAsioBuffer(
     PIRP irp = WdfRequestWdmGetIrp(request);
 
     IF_TRUE_ACTION_JUMP(irp == nullptr, ASSERT(FALSE); outDataCb = 0; status = STATUS_INVALID_PARAMETER;, Exit);
+    IF_TRUE_ACTION_JUMP(irp->RequestorMode != UserMode, ASSERT(FALSE); outDataCb = 0; status = STATUS_INVALID_USER_BUFFER;, Exit);
 
     PIO_STACK_LOCATION irpStack = IoGetCurrentIrpStackLocation(irp);
     PBYTE              inBuffer = (PBYTE)irpStack->Parameters.DeviceIoControl.Type3InputBuffer;

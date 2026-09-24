@@ -116,6 +116,10 @@ AsioBufferObject::LockAndGetSystemAddress(
         }
     });
 
+    //
+    // MM_USER_PROBE_ADDRESS is not documented in the WDK.
+    // Therefore, EvtUSBAudioAcxDriverSetAsioBuffer validates that the request  originates from UserMode by checking IRP::RequestorMode before calling this function.
+    //
     mdl = IoAllocateMdl(virtualAddress, length, FALSE, FALSE, nullptr);
     if (mdl == nullptr)
     {
@@ -126,7 +130,7 @@ AsioBufferObject::LockAndGetSystemAddress(
 
     __try
     {
-        MmProbeAndLockPages(mdl, KernelMode, isInput ? IoModifyAccess /* IoWriteAccess */ : IoReadAccess);
+        MmProbeAndLockPages(mdl, UserMode, isInput ? IoModifyAccess /* IoWriteAccess */ : IoReadAccess);
     }
     __except (EXCEPTION_EXECUTE_HANDLER)
     {
