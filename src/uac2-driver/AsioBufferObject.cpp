@@ -192,8 +192,10 @@ AsioBufferObject::SetBuffer(
 )
 {
     PAGED_CODE();
-    NTSTATUS status = STATUS_SUCCESS;
-    PVOID    systemAddress = nullptr;
+    NTSTATUS                    status = STATUS_SUCCESS;
+    PVOID                       systemAddress = nullptr;
+    UAC_ASIO_PLAY_BUFFER_HEADER playBufferHeader{};
+    UAC_ASIO_REC_BUFFER_HEADER  recBufferHeader{};
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ASIO, "%!FUNC! Entry");
     //    WdfWaitLockAcquire(m_deviceContext->StreamWaitLock, nullptr);
@@ -209,76 +211,85 @@ AsioBufferObject::SetBuffer(
     RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferLength == 0, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(recBuffer == nullptr, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(playBuffer == nullptr, status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferLength < playBufferOffset, status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(recBufferLength < recBufferOffset, status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION((playBufferLength - playBufferOffset) < sizeof(UAC_ASIO_PLAY_BUFFER_HEADER), status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION((recBufferLength - recBufferOffset) < sizeof(UAC_ASIO_REC_BUFFER_HEADER), status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_recMdlLocked, status = STATUS_DEVICE_BUSY, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_playMdlLocked, status = STATUS_DEVICE_BUSY, status);
 
     status = LockAndGetSystemAddress(false, playBuffer + playBufferOffset, playBufferLength - playBufferOffset, m_playMdl, m_playMdlLocked, systemAddress);
     RETURN_NTSTATUS_IF_FAILED(status);
 
-    m_playHeader = static_cast<PUAC_ASIO_PLAY_BUFFER_HEADER>(systemAddress);
-    m_playBuffer = static_cast<PBYTE>(systemAddress) + m_playHeader->HeaderLength;
-    m_playBufferSize = playBufferLength - playBufferOffset - m_playHeader->HeaderLength;
+    RtlCopyMemory(&playBufferHeader, systemAddress, sizeof(playBufferHeader));
 
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->HeaderLength < (offsetof(UAC_ASIO_PLAY_BUFFER_HEADER, AsioDriverVersion) + sizeof(ULONG)), status = STATUS_INVALID_BUFFER_SIZE, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->AsioDriverVersion != UAC_ASIO_DRIVER_VERSION, status = STATUS_REVISION_MISMATCH, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->HeaderLength != sizeof(UAC_ASIO_PLAY_BUFFER_HEADER), status = STATUS_INVALID_BUFFER_SIZE, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->PlayChannels > UAC_MAX_ASIO_CHANNELS, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->RecChannels > UAC_MAX_ASIO_CHANNELS, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION((m_playHeader->RecChannels < UAC_MIN_ASIO_CHANNELS) && (m_playHeader->PlayChannels < UAC_MIN_ASIO_CHANNELS), status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->PeriodSamples > UAC_MAX_ASIO_PERIOD_SAMPLES, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_playHeader->PeriodSamples < UAC_MIN_ASIO_PERIOD_SAMPLES, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION((m_playHeader->RecChannels > m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.InputAsioChannels) || (m_playHeader->PlayChannels > m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.OutputAsioChannels), status = STATUS_INVALID_PARAMETER, status);
+    m_playHeader = static_cast<PUAC_ASIO_PLAY_BUFFER_HEADER>(systemAddress);
+
+    RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.HeaderLength != sizeof(UAC_ASIO_PLAY_BUFFER_HEADER), status = STATUS_INVALID_BUFFER_SIZE, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.HeaderLength < (offsetof(UAC_ASIO_PLAY_BUFFER_HEADER, AsioDriverVersion) + sizeof(ULONG)), status = STATUS_INVALID_BUFFER_SIZE, status);
+
+    m_playBuffer = static_cast<PBYTE>(systemAddress) + playBufferHeader.HeaderLength;
+    m_playBufferSize = playBufferLength - playBufferOffset - playBufferHeader.HeaderLength;
+
+    RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.AsioDriverVersion != UAC_ASIO_DRIVER_VERSION, status = STATUS_REVISION_MISMATCH, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.PlayChannels > UAC_MAX_ASIO_CHANNELS, status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.RecChannels > UAC_MAX_ASIO_CHANNELS, status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION((playBufferHeader.RecChannels < UAC_MIN_ASIO_CHANNELS) && (playBufferHeader.PlayChannels < UAC_MIN_ASIO_CHANNELS), status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.PeriodSamples > UAC_MAX_ASIO_PERIOD_SAMPLES, status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.PeriodSamples < UAC_MIN_ASIO_PERIOD_SAMPLES, status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION((playBufferHeader.RecChannels > m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.InputAsioChannels) || (playBufferHeader.PlayChannels > m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.OutputAsioChannels), status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION((m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat != UACSampleFormat::UAC_SAMPLE_FORMAT_PCM && m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat != UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT), status = STATUS_NO_MATCH, status);
 
     systemAddress = nullptr;
-    status = LockAndGetSystemAddress(false, recBuffer + recBufferOffset, recBufferLength - recBufferOffset, m_recMdl, m_recMdlLocked, systemAddress);
+    status = LockAndGetSystemAddress(true, recBuffer + recBufferOffset, recBufferLength - recBufferOffset, m_recMdl, m_recMdlLocked, systemAddress);
     RETURN_NTSTATUS_IF_FAILED(status);
 
-    m_recHeader = static_cast<PUAC_ASIO_REC_BUFFER_HEADER>(systemAddress);
-    m_recBuffer = static_cast<PBYTE>(systemAddress) + m_recHeader->HeaderLength;
-    m_recBufferSize = recBufferLength - recBufferOffset - m_recHeader->HeaderLength;
+    RtlCopyMemory(&recBufferHeader, systemAddress, sizeof(recBufferHeader));
 
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_recHeader == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_recHeader->HeaderLength != sizeof(UAC_ASIO_REC_BUFFER_HEADER), status = STATUS_INVALID_BUFFER_SIZE, status);
+    m_recHeader = static_cast<PUAC_ASIO_REC_BUFFER_HEADER>(systemAddress);
+
+    RETURN_NTSTATUS_IF_TRUE_ACTION(recBufferHeader.HeaderLength != sizeof(UAC_ASIO_REC_BUFFER_HEADER), status = STATUS_INVALID_BUFFER_SIZE, status);
+
+    m_recBuffer = static_cast<PBYTE>(systemAddress) + recBufferHeader.HeaderLength;
+    m_recBufferSize = recBufferLength - recBufferOffset - recBufferHeader.HeaderLength;
 
     ULONG bytesPerSample = USBAudioDataFormat::ConvertSampleTypeToBytesPerSample(m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleType);
-    ULONG bufferSizeBytes = m_playHeader->PeriodSamples;
+    ULONG bufferSizeBytes = playBufferHeader.PeriodSamples;
 
     bufferSizeBytes *= bytesPerSample;
 
     //
     // As per the ASIO specifications, double buffering is used alternately.
     // The number of samples on one side of the buffer is specified in
-    // m_playHeader->PeriodSamples, so the calculated bufferSizeBytes is
+    // playBufferHeader.PeriodSamples, so the calculated bufferSizeBytes is
     // multiplied by 2 to indicate double buffering to derive the total size.
     //
-    ULONG requiredRecBufferLength = bufferSizeBytes * 2 * m_playHeader->RecChannels;
-    ULONG requiredPlayBufferLength = bufferSizeBytes * 2 * m_playHeader->PlayChannels;
+    ULONG requiredRecBufferLength = bufferSizeBytes * 2 * playBufferHeader.RecChannels;
+    ULONG requiredPlayBufferLength = bufferSizeBytes * 2 * playBufferHeader.PlayChannels;
 
     //
     // PlayChannelsMap and RecChannelsMap do not perform range checking
     // because they accept all 64-bit ULONGLONG values.
     //
-    m_bufferPeriod = m_playHeader->PeriodSamples;
-    m_bufferLength = m_playHeader->PeriodSamples * 2;
-    m_playChannels = m_playHeader->PlayChannels;
-    m_recChannels = m_playHeader->RecChannels;
-    m_playChannelsMap = m_playHeader->PlayChannelsMap;
-    m_recChannelsMap = m_playHeader->RecChannelsMap;
-    m_recHeader->CurrentSampleRate = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate;
-    m_recHeader->CurrentClockSource = 0;
+    m_bufferPeriod = playBufferHeader.PeriodSamples;
+    m_bufferLength = playBufferHeader.PeriodSamples * 2;
+    m_playChannels = playBufferHeader.PlayChannels;
+    m_recChannels = playBufferHeader.RecChannels;
+    m_playChannelsMap = playBufferHeader.PlayChannelsMap;
+    m_recChannelsMap = playBufferHeader.RecChannelsMap;
+    recBufferHeader.CurrentSampleRate = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate;
+    recBufferHeader.CurrentClockSource = 0;
 
-    if ((((playBufferLength - playBufferOffset) != (m_playHeader->HeaderLength + requiredPlayBufferLength)) || (recBufferLength - recBufferOffset) != (m_recHeader->HeaderLength + requiredRecBufferLength)))
+    if ((((playBufferLength - playBufferOffset) != (playBufferHeader.HeaderLength + requiredPlayBufferLength)) || (recBufferLength - recBufferOffset) != (recBufferHeader.HeaderLength + requiredRecBufferLength)))
     {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ASIO, "invalid buffer length, IN %u, req %u, OUT %u, req %u", m_recHeader->HeaderLength + requiredRecBufferLength, recBufferLength - recBufferOffset, m_playHeader->HeaderLength + requiredPlayBufferLength, playBufferLength - playBufferOffset);
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ASIO, "playHdr PeriodSamples %u, RecChannels %u, PlayChannels %u, bytesPerSample %u", m_playHeader->PeriodSamples, m_playHeader->RecChannels, m_playHeader->PlayChannels, bytesPerSample);
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ASIO, "invalid buffer length, IN %u, req %u, OUT %u, req %u", recBufferHeader.HeaderLength + requiredRecBufferLength, recBufferLength - recBufferOffset, playBufferHeader.HeaderLength + requiredPlayBufferLength, playBufferLength - playBufferOffset);
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ASIO, "playHdr PeriodSamples %u, RecChannels %u, PlayChannels %u, bytesPerSample %u", playBufferHeader.PeriodSamples, playBufferHeader.RecChannels, playBufferHeader.PlayChannels, bytesPerSample);
 
-        if ((playBufferLength < (m_playHeader->HeaderLength + requiredPlayBufferLength)) || (recBufferLength < (m_recHeader->HeaderLength + requiredRecBufferLength)))
+        if ((playBufferLength < (playBufferHeader.HeaderLength + requiredPlayBufferLength)) || (recBufferLength < (recBufferHeader.HeaderLength + requiredRecBufferLength)))
         {
             status = STATUS_BUFFER_TOO_SMALL;
         }
-        else if ((playBufferLength > (m_playHeader->HeaderLength + requiredPlayBufferLength)) || (recBufferLength > (m_recHeader->HeaderLength + requiredRecBufferLength)))
+        else if ((playBufferLength > (playBufferHeader.HeaderLength + requiredPlayBufferLength)) || (recBufferLength > (recBufferHeader.HeaderLength + requiredRecBufferLength)))
         {
             status = STATUS_INVALID_BUFFER_SIZE;
         }
@@ -293,10 +304,10 @@ AsioBufferObject::SetBuffer(
 
     PKEVENT tempNotificationEvent = nullptr;
 #ifdef _WIN64
-    if (m_playHeader->Is32bitProcess)
+    if (playBufferHeader.Is32bitProcess)
     {
         status = ObReferenceObjectByHandle(
-            m_playHeader->NotificationEvent.p32,
+            playBufferHeader.NotificationEvent.p32,
             EVENT_MODIFY_STATE,
             *ExEventObjectType,
             UserMode,
@@ -307,7 +318,7 @@ AsioBufferObject::SetBuffer(
     else
     {
         status = ObReferenceObjectByHandle(
-            m_playHeader->NotificationEvent.p64,
+            playBufferHeader.NotificationEvent.p64,
             EVENT_MODIFY_STATE,
             *ExEventObjectType,
             UserMode,
@@ -317,7 +328,7 @@ AsioBufferObject::SetBuffer(
     }
 #else // _WIN64
     status = ObReferenceObjectByHandle(
-        m_playHeader->NotificationEvent,
+        playBufferHeader.NotificationEvent,
         EVENT_MODIFY_STATE,
         *ExEventObjectType,
         UserMode,
@@ -337,10 +348,10 @@ AsioBufferObject::SetBuffer(
 
     PKEVENT tempOutputReadyEvent = nullptr;
 #ifdef _WIN64
-    if (m_playHeader->Is32bitProcess)
+    if (playBufferHeader.Is32bitProcess)
     {
         status = ObReferenceObjectByHandle(
-            m_playHeader->OutputReadyEvent.p32,
+            playBufferHeader.OutputReadyEvent.p32,
             EVENT_MODIFY_STATE,
             *ExEventObjectType,
             UserMode,
@@ -351,7 +362,7 @@ AsioBufferObject::SetBuffer(
     else
     {
         status = ObReferenceObjectByHandle(
-            m_playHeader->OutputReadyEvent.p64,
+            playBufferHeader.OutputReadyEvent.p64,
             EVENT_MODIFY_STATE,
             *ExEventObjectType,
             UserMode,
@@ -361,7 +372,7 @@ AsioBufferObject::SetBuffer(
     }
 #else // _WIN64
     status = ObReferenceObjectByHandle(
-        m_playHeader->OutputReadyEvent,
+        playBufferHeader.OutputReadyEvent,
         EVENT_MODIFY_STATE,
         *ExEventObjectType,
         UserMode,
@@ -382,7 +393,7 @@ AsioBufferObject::SetBuffer(
     status = STATUS_SUCCESS;
 
     m_audioIsochronousEngine->SetAsioBufferPeriod(m_bufferPeriod);
-    m_audioIsochronousEngine->SetAsioDriverVersion(m_playHeader->AsioDriverVersion);
+    m_audioIsochronousEngine->SetAsioDriverVersion(playBufferHeader.AsioDriverVersion);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
     return status;
@@ -894,7 +905,10 @@ bool AsioBufferObject::EvaluatePositionAndNotifyIfNeeded(
         // Notify the position before counting up.
         _InterlockedExchange64((volatile LONG64 *)&m_recHeader->RecBufferPosition, asioNotifyPosition);
         _InterlockedExchange64((volatile LONG64 *)&m_recHeader->NotifySystemTime, currentTimePCUs);
-        KeSetEvent(m_userNotificationEvent, IO_SOUND_INCREMENT, FALSE);
+        if (m_userNotificationEvent != nullptr)
+        {
+            KeSetEvent(m_userNotificationEvent, IO_SOUND_INCREMENT, FALSE);
+        }
         curAsioMeasuredPeriodUs = (LONG)(currentTimePCUs - lastAsioNotifyPCUs);
         ULONG minimumPeriod = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate / 1000;
         if (minimumPeriod < m_bufferPeriod)
