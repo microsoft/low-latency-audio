@@ -31,6 +31,7 @@ Environment:
 #include <timeapi.h>
 #include <math.h>
 #include <process.h>
+#include "ChannelName.h"
 #include "USBAsio.h"
 #include "USBDevice.h"
 #include "print_.h"
@@ -824,27 +825,15 @@ ASIOError CUSBAsio::getChannelInfo(ASIOChannelInfo * info)
                 }
             }
         }
-        ULONG ch = 0;
-        for (; ch < m_channelInfo->NumChannels; ++ch)
-        {
-            if (m_channelInfo->Channel[ch].Index == info->channel && m_channelInfo->Channel[ch].IsInput == info->isInput)
-            {
-                break;
-            }
-        }
-
-        //
-        // ASIOChannelInfo::name uses multibyte character sets. Device-provided
-        // names can exceed the fixed ASIO buffer, so truncate them safely.
-        //
-        if (ch == m_channelInfo->NumChannels)
-        {
-            _snprintf_s(info->name, DRIVER_NAME_LENGTH, _TRUNCATE, "channel %u", info->channel);
-        }
-        else
-        {
-            _snprintf_s(info->name, DRIVER_NAME_LENGTH, _TRUNCATE, "%S", m_channelInfo->Channel[ch].Name);
-        }
+        static_assert(sizeof(((ASIOChannelInfo *)0)->name) == CHANNEL_INFO_NAME_LENGTH, "ASIOChannelInfo::name size mismatch");
+        static_assert(CHANNEL_INFO_NAME_LENGTH == UAC_MAX_CHANNEL_NAME_LENGTH, "CHANNEL_INFO_NAME_LENGTH and UAC_MAX_CHANNEL_NAME_LENGTH must be identical");
+        CopyAsioChannelName(
+            m_channelInfo->Channel,
+            m_channelInfo->NumChannels,
+            info->channel,
+            info->isInput != ASIOFalse,
+            info->name
+        );
     }
 #ifdef _UNICODE
     info_print_(_T("getChannelInfo(): channel %d, isInput %d, isActive %d, channelGroup %d, type %d, name %S\n"), info->channel, info->isInput, info->isActive, info->channelGroup, info->type, info->name);

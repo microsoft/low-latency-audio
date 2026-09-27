@@ -282,6 +282,7 @@
     <ClInclude Include="asio\combase.h" />
     <ClInclude Include="asio\iasiodrv.h" />
     <ClInclude Include="asio\wxdebug.h" />
+    <ClInclude Include="ChannelName.h" />
     <ClInclude Include="framework.h" />
     <ClInclude Include="print_.h" />
     <ClInclude Include="resource.h" />
@@ -297,6 +298,7 @@
       <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">4100;4189;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <DisableSpecificWarnings Condition="'$(Configuration)|$(Platform)'=='Release|x64'">4100;4189;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
+    <ClCompile Include="ChannelName.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="print_.cpp" />
     <ClCompile Include="Register.cpp" />
