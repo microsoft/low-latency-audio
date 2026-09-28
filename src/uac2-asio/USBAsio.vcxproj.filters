@@ -48,11 +48,17 @@
     <ClInclude Include="print_.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ChannelName.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="..\Inc\UAC_User.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ChannelName.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="dllmain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
