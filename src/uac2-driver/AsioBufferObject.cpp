@@ -277,8 +277,8 @@ AsioBufferObject::SetBuffer(
     m_recChannels = playBufferHeader.RecChannels;
     m_playChannelsMap = playBufferHeader.PlayChannelsMap;
     m_recChannelsMap = playBufferHeader.RecChannelsMap;
-    recBufferHeader.CurrentSampleRate = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate;
-    recBufferHeader.CurrentClockSource = 0;
+    m_recHeader->CurrentSampleRate = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate;
+    m_recHeader->CurrentClockSource = 0;
 
     if ((((playBufferLength - playBufferOffset) != (playBufferHeader.HeaderLength + requiredPlayBufferLength)) || (recBufferLength - recBufferOffset) != (recBufferHeader.HeaderLength + requiredRecBufferLength)))
     {
