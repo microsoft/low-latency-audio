@@ -834,7 +834,6 @@ TransferObject::SendIsochronousRequest(
     requestContext->DeviceContext = m_deviceContext;
     requestContext->AudioIsochronousEngine = m_audioIsochronousEngine;
     requestContext->AudioIsochronousEngine->AddRef();
-    requestContext->StreamObject = const_cast<StreamObject *>(m_streamObject);
     requestContext->TransferObject = this;
     requestContext->UrbMemory = m_urbMemory;
     WdfSpinLockRelease(m_spinLock);
@@ -848,10 +847,10 @@ TransferObject::SendIsochronousRequest(
     }
 #endif
 
-    m_isRequested = true;
+    InterlockedExchange(&m_requestState, toLONG(RequestState::InFlight));
     if (WdfRequestSend(m_request, WdfUsbTargetPipeGetIoTarget(pipe), WDF_NO_SEND_OPTIONS) == FALSE)
     {
-        m_isRequested = false;
+        InterlockedCompareExchange(&m_requestState, toLONG(RequestState::Idle), toLONG(RequestState::InFlight));
         status = WdfRequestGetStatus(m_request);
         if (!NT_SUCCESS(status))
         {
@@ -874,22 +873,35 @@ TransferObject::CancelRequest()
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, m_index = %u", m_index);
 
-    WdfSpinLockAcquire(m_spinLock);
-    if (m_isRequested && (m_request != nullptr))
+    if ((InterlockedExchange(&m_requestState, toLONG(RequestState::Cancelling)) == toLONG(RequestState::InFlight)) && (m_request != nullptr))
     {
-        m_isRequested = false;
-        WdfSpinLockRelease(m_spinLock);
-
         LARGE_INTEGER timeout{};
         // Isochronous only
         timeout.QuadPart = (UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_DEFAULT_FIRST_PACKET_LATENCY) * -20000LL;
 
+		// 
+		// If WdfRequestCancelSentRequest times out, the underlying request may still be owned by the USB stack. 
+		// Destroying the TransferObject immediately after the timeout can therefore result in a use-after-free condition and trigger a system crash (bug check).
+		//
+		// To avoid this, AudioIsochronousEngine and TransferObject are detached from ISOCHRONOUS_REQUEST_CONTEXT before issuing the cancellation request.
+		//
+		// The AudioIsochronousEngine pointer in ISOCHRONOUS_REQUEST_CONTEXT is managed using interlocked operations. 
+		// This allows the cancellation and completion paths to safely transfer ownership and prevents both paths from operating on the same object simultaneously.
+		//
+        PISOCHRONOUS_REQUEST_CONTEXT requestContext = GetIsochronousRequestContext(m_request);
+        AudioIsochronousEngine *     audioIsochronousEngine = (AudioIsochronousEngine *)InterlockedExchangePointer((volatile PVOID *)&(requestContext->AudioIsochronousEngine), nullptr);
+        InterlockedExchangePointer((volatile PVOID *)&(requestContext->TransferObject), nullptr);
         WdfRequestCancelSentRequest(m_request);
+
+        if (audioIsochronousEngine != nullptr)
+        {
+            audioIsochronousEngine->Release();
+        }
         status = KeWaitForSingleObject(&m_requestCompletedEvent, Executive, KernelMode, FALSE, &timeout);
-    }
-    else
-    {
-        WdfSpinLockRelease(m_spinLock);
+        if (status == STATUS_TIMEOUT)
+        {
+            TraceEvents(TRACE_LEVEL_WARNING, TRACE_DEVICE, " - Timeout occurred while canceling the request. %!STATUS!", status);
+        }
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -910,7 +922,7 @@ void TransferObject::CompleteRequest(
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "%u, %llu, %llu, %llu, %llu", m_index, completedTimeUs, qpcPosition, periodUs, periodQPCPosition);
     WdfSpinLockAcquire(m_spinLock);
 
-    m_isRequested = false;
+    InterlockedExchange(&m_requestState, toLONG(RequestState::Idle));
     m_completedTimeUs = completedTimeUs;
     m_periodUs = periodUs;
     m_qpcPosition = qpcPosition;
@@ -946,21 +958,6 @@ TransferObject::GetUSBDStatus()
     // TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 
     return usbdStatus;
-}
-
-_Use_decl_annotations_
-NONPAGED_CODE_SEG
-bool TransferObject::IsRequested()
-{
-    bool isRequested;
-
-    WdfSpinLockAcquire(m_spinLock);
-
-    isRequested = m_isRequested;
-
-    WdfSpinLockRelease(m_spinLock);
-
-    return isRequested;
 }
 
 _Use_decl_annotations_

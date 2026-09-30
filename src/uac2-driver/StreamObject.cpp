@@ -94,6 +94,8 @@ StreamObject::~StreamObject()
 
     TerminateMixingEngineThread();
 
+    Cleanup();
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
 

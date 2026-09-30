@@ -397,7 +397,6 @@ typedef struct _ISOCHRONOUS_REQUEST_CONTEXT
 {
     PDEVICE_CONTEXT          DeviceContext;
     AudioIsochronousEngine * AudioIsochronousEngine;
-    StreamObject *           StreamObject;
     TransferObject *         TransferObject;
     PVOID                    IrpBuffer;
     PMDL                     IrpMdl;

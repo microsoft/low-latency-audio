@@ -134,40 +134,52 @@ AudioIsochronousEngine::~AudioIsochronousEngine()
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
-    if (m_contiguousMemory != nullptr)
     {
-        delete m_contiguousMemory;
-        m_contiguousMemory = nullptr;
-    }
+        WaitLocker streamWaitLocker(m_streamWaitLock, nullptr);
 
-    if (m_rtPacketObject != nullptr)
-    {
-        delete m_rtPacketObject;
-        m_rtPacketObject = nullptr;
-    }
+        if (m_contiguousMemory != nullptr)
+        {
+            delete m_contiguousMemory;
+            m_contiguousMemory = nullptr;
+        }
 
-    if (m_streamObject != nullptr)
-    {
-        delete m_streamObject;
-        m_streamObject = nullptr;
-    }
+        if (m_rtPacketObject != nullptr)
+        {
+            delete m_rtPacketObject;
+            m_rtPacketObject = nullptr;
+        }
 
-    if (m_asioBufferObject != nullptr)
-    {
-        delete m_asioBufferObject;
-        m_asioBufferObject = nullptr;
-    }
+        if (m_streamObject != nullptr)
+        {
+            delete m_streamObject;
+            m_streamObject = nullptr;
+        }
 
-    if (m_captureStreamEngineMemory != nullptr)
-    {
-        WdfObjectDelete(m_captureStreamEngineMemory);
-        m_captureStreamEngineMemory = nullptr;
-    }
+        {
+            WaitLocker waitLocker(m_asioWaitLock, nullptr);
 
-    if (m_renderStreamEngineMemory != nullptr)
-    {
-        WdfObjectDelete(m_renderStreamEngineMemory);
-        m_renderStreamEngineMemory = nullptr;
+            if (m_asioBufferObject != nullptr)
+            {
+                delete m_asioBufferObject;
+                m_asioBufferObject = nullptr;
+            }
+        }
+
+        {
+            WaitLocker waitLocker(m_streamEngineWaitLock, nullptr);
+
+            if (m_captureStreamEngineMemory != nullptr)
+            {
+                WdfObjectDelete(m_captureStreamEngineMemory);
+                m_captureStreamEngineMemory = nullptr;
+            }
+
+            if (m_renderStreamEngineMemory != nullptr)
+            {
+                WdfObjectDelete(m_renderStreamEngineMemory);
+                m_renderStreamEngineMemory = nullptr;
+            }
+        }
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
@@ -189,6 +201,7 @@ AudioIsochronousEngine::Initialize()
     status = WdfWaitLockCreate(&attributes, &m_streamWaitLock);
     if (!NT_SUCCESS(status))
     {
+        m_streamWaitLock = nullptr;
         TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
         return status;
     }
@@ -199,6 +212,7 @@ AudioIsochronousEngine::Initialize()
     status = WdfWaitLockCreate(&attributes, &m_streamEngineWaitLock);
     if (!NT_SUCCESS(status))
     {
+        m_streamEngineWaitLock = nullptr;
         TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
         return status;
     }
@@ -214,6 +228,7 @@ AudioIsochronousEngine::Initialize()
     status = WdfWaitLockCreate(&attributes, &m_asioWaitLock);
     if (!NT_SUCCESS(status))
     {
+        m_asioWaitLock = nullptr;
         TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
         return status;
     }
@@ -1485,12 +1500,14 @@ AudioIsochronousEngine::StopIsoStream()
     // cancel irp
     if (m_streamObject != nullptr)
     {
+        m_streamObject->TerminateMixingEngineThread();
+
         status = m_streamObject->CancelRequestAll();
 
         AbortPipes(IsoDirection::In);
         AbortPipes(IsoDirection::Feedback);
+        AbortPipes(IsoDirection::Out);
 
-        m_streamObject->TerminateMixingEngineThread();
         m_streamObject->Cleanup();
         delete m_streamObject;
         m_streamObject = nullptr;
@@ -1544,7 +1561,6 @@ NONPAGED_CODE_SEG
 _Use_decl_annotations_
 VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
     PWDF_REQUEST_COMPLETION_PARAMS completionParams,
-    StreamObject *                 streamObject,
     TransferObject *               transferObject
 )
 {
@@ -1554,9 +1570,6 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
     ULONGLONG   qpcPosition = 0ULL;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
-
-    ASSERT(transferObject);
-    ASSERT(streamObject);
 
     currentTimeUs = USBAudioAcxDriverStreamGetCurrentTimeUs(m_deviceContext, &qpcPosition);
 
@@ -1587,19 +1600,22 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
     {
         ULONGLONG periodUs = 0ULL;
         ULONGLONG periodQPC = 0ULL;
-        streamObject->CompleteRequest(transferObject->GetDirection(), currentTimeUs, qpcPosition, periodUs, periodQPC);
+        if (m_streamObject != nullptr)
+        {
+            m_streamObject->CompleteRequest(transferObject->GetDirection(), currentTimeUs, qpcPosition, periodUs, periodQPC);
+        }
         transferObject->CompleteRequest(currentTimeUs, qpcPosition, periodUs, periodQPC);
     }
 
     if (NT_SUCCESS(status) && USBD_SUCCESS(usbdStatus) && (m_startCounterIsoStream != 0))
     {
         //		WdfWaitLockAcquire(m_deviceContext->StreamWaitLock, nullptr);
-        if ((streamObject != nullptr) && !streamObject->IsTerminateStream())
+        if ((m_streamObject != nullptr) && !m_streamObject->IsTerminateStream())
         {
             switch (transferObject->GetDirection())
             {
             case IsoDirection::In: {
-                status = ProcessTransferIn(streamObject, transferObject);
+                status = ProcessTransferIn(m_streamObject, transferObject);
                 if (!NT_SUCCESS(status))
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferIn failed %!STATUS!", status);
@@ -1614,7 +1630,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
 
                     goto IsoRequestCompletionRoutine_Exit;
                 }
-                status = InitializeIsoUrbIn(streamObject, transferObject, transferObject->GetNumPackets());
+                status = InitializeIsoUrbIn(m_streamObject, transferObject, transferObject->GetNumPackets());
                 if (!NT_SUCCESS(status))
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbIn failed %!STATUS!", status);
@@ -1624,7 +1640,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
             }
             break;
             case IsoDirection::Out: {
-                status = ProcessTransferOut(streamObject, transferObject);
+                status = ProcessTransferOut(m_streamObject, transferObject);
                 if (!NT_SUCCESS(status))
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferOut failed %!STATUS!", status);
@@ -1632,7 +1648,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
                     goto IsoRequestCompletionRoutine_Exit;
                 }
 
-                streamObject->SetOutputStreaming(transferObject->GetIndex(), transferObject->GetLockDelayCount());
+                m_streamObject->SetOutputStreaming(transferObject->GetIndex(), transferObject->GetLockDelayCount());
 
                 // Since the URB is referenced in ProcessTransferOut, the parent request is released here.
                 status = transferObject->FreeRequest();
@@ -1642,7 +1658,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
 
                     goto IsoRequestCompletionRoutine_Exit;
                 }
-                status = InitializeIsoUrbOut(streamObject, transferObject, transferObject->GetNumPackets());
+                status = InitializeIsoUrbOut(m_streamObject, transferObject, transferObject->GetNumPackets());
                 if (!NT_SUCCESS(status))
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbOut failed %!STATUS!", status);
@@ -1652,7 +1668,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
             }
             break;
             case IsoDirection::Feedback: {
-                status = ProcessTransferFeedback(streamObject, transferObject);
+                status = ProcessTransferFeedback(m_streamObject, transferObject);
                 if (!NT_SUCCESS(status))
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ProcessTransferFeedback failed %!STATUS!", status);
@@ -1668,7 +1684,7 @@ VOID AudioIsochronousEngine::IsoRequestCompletionRoutine(
                     goto IsoRequestCompletionRoutine_Exit;
                 }
 
-                status = InitializeIsoUrbFeedback(streamObject, transferObject, transferObject->GetNumPackets());
+                status = InitializeIsoUrbFeedback(m_streamObject, transferObject, transferObject->GetNumPackets());
                 if (!NT_SUCCESS(status))
                 {
                     TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "InitializeIsoUrbFeedback failed %!STATUS!", status);

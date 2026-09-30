@@ -27,6 +27,18 @@ Environment:
 class RtPacketObject;
 class AudioIsochronousEngine;
 
+enum class RequestState
+{
+    Idle,
+    InFlight,
+    Cancelling
+};
+
+constexpr LONG toLONG(RequestState requestState)
+{
+    return static_cast<LONG>(requestState);
+}
+
 class TransferObject
 {
   public:
@@ -135,11 +147,6 @@ class TransferObject
     NONPAGED_CODE_SEG
     USBD_STATUS
     GetUSBDStatus();
-
-    __drv_maxIRQL(DISPATCH_LEVEL)
-    NONPAGED_CODE_SEG
-    bool
-    IsRequested();
 
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
@@ -312,7 +319,7 @@ class TransferObject
     PURB                     m_urb{nullptr};
     WDFMEMORY                m_urbMemory{nullptr};
     WDFREQUEST               m_request{nullptr};
-    bool                     m_isRequested{false};
+    LONG                     m_requestState{toLONG(RequestState::Idle)};
     PMDL                     m_dataBufferMdl{nullptr};
     PUCHAR                   m_dataBuffer{nullptr};
     ULONG                    m_numIsoPackets{0}; // Number of IsoPackets in the URB

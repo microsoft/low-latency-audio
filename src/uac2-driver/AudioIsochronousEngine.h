@@ -118,7 +118,6 @@ class AudioIsochronousEngine
     VOID
     IsoRequestCompletionRoutine(
         _In_ PWDF_REQUEST_COMPLETION_PARAMS completionParams,
-        _In_ StreamObject *                 streamObject,
         _In_ TransferObject *               transferObject
     );
 

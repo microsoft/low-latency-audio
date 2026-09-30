@@ -2743,21 +2743,18 @@ Return Value:
 {
     NTSTATUS                     status = STATUS_SUCCESS;
     PISOCHRONOUS_REQUEST_CONTEXT requestContext = (PISOCHRONOUS_REQUEST_CONTEXT)context;
-    AudioIsochronousEngine *     audioTransferEngine = requestContext->AudioIsochronousEngine;
-    StreamObject *               streamObject = requestContext->StreamObject;
-    TransferObject *             transferObject = requestContext->TransferObject;
+    AudioIsochronousEngine *     audioIsochronousEngine = (AudioIsochronousEngine *)InterlockedExchangePointer((volatile PVOID *)&(requestContext->AudioIsochronousEngine), nullptr);
+    TransferObject *             transferObject = (TransferObject *)InterlockedExchangePointer((volatile PVOID *)&(requestContext->TransferObject), nullptr);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, %p", requestContext);
 
-    ASSERT(audioTransferEngine);
-    ASSERT(streamObject);
-    ASSERT(transferObject);
-
-    if (audioTransferEngine != nullptr)
+    if (audioIsochronousEngine != nullptr)
     {
-        audioTransferEngine->IsoRequestCompletionRoutine(completionParams, streamObject, transferObject);
-        audioTransferEngine->Release();
-        requestContext->AudioIsochronousEngine = nullptr;
+        if (transferObject != nullptr)
+        {
+            audioIsochronousEngine->IsoRequestCompletionRoutine(completionParams, transferObject);
+        }
+        audioIsochronousEngine->Release();
     }
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
