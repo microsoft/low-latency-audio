@@ -1726,6 +1726,17 @@ bool USBAudio1ControlInterface::CanSetSampleFrequency(
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+bool USBAudio1ControlInterface::CanGetSampleFrequency(
+    UCHAR /* clockSourceID */
+)
+{
+    PAGED_CODE();
+
+    return false;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 NTSTATUS
 USBAudio1ControlInterface::GetSelectorConfiguration(
     PDEVICE_CONTEXT /* deviceContext */,
@@ -2574,7 +2585,7 @@ NTSTATUS USBAudio2ControlInterface::GetCurrentSampleFrequency(
 
     RETURN_NTSTATUS_IF_TRUE(clockSourceID == USBAudioConfiguration::InvalidID, STATUS_INVALID_PARAMETER);
 
-    if (CanSetSampleFrequency(clockSourceID))
+    if (CanGetSampleFrequency(clockSourceID))
     {
         status = ControlRequestGetSampleFrequency(deviceContext, GetInterfaceNumber(), clockSourceID, sampleRate);
         if (NT_SUCCESS(status))
@@ -2604,6 +2615,27 @@ bool USBAudio2ControlInterface::CanSetSampleFrequency(
     if (NT_SUCCESS(status))
     {
         canSetSampleFrequency = ((sampleFrequencyControls & NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_MASK) == NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_READ_WRITE);
+    }
+    return canSetSampleFrequency;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+bool USBAudio2ControlInterface::CanGetSampleFrequency(
+    UCHAR clockSourceID
+)
+{
+    NTSTATUS status = STATUS_SUCCESS;
+    bool     canSetSampleFrequency = false;
+    UCHAR    sampleFrequencyControls = 0;
+
+    PAGED_CODE();
+
+    status = QuerySampleFrequencyControls(clockSourceID, sampleFrequencyControls);
+
+    if (NT_SUCCESS(status))
+    {
+        canSetSampleFrequency = ((sampleFrequencyControls & NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_READ) == NS_USBAudio0200::CLOCK_FREQUENCY_CONTROL_READ);
     }
     return canSetSampleFrequency;
 }
@@ -7072,6 +7104,21 @@ bool USBAudioStreamInterfaceGroup::CanSetSampleFrequency()
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+bool USBAudioStreamInterfaceGroup::CanGetSampleFrequency()
+{
+    PAGED_CODE();
+
+    ASSERT(m_usbAudioControlInterface != nullptr);
+    if (m_usbAudioControlInterface != nullptr)
+    {
+        return m_usbAudioControlInterface->CanGetSampleFrequency(m_targetClockSourceID);
+    }
+
+    return false;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 NTSTATUS USBAudioStreamInterfaceGroup::SelectAlternateInterface(
     bool                        isInput,
     AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
@@ -7977,9 +8024,25 @@ USBAudioStreamInterfaceGroup::GetNearestSupportedSampleRate(
             if ((c_SampleRateList[frameRateListIndex] >= sampleRate) && (newSampleRate == 0))
             {
                 newSampleRate = c_SampleRateList[frameRateListIndex];
+                break;
             }
         }
     }
+
+    if (newSampleRate == 0)
+    {
+        for (ULONG frameRateListIndex = 0, sampleRateMask = 1; frameRateListIndex < c_SampleRateCount; ++frameRateListIndex, sampleRateMask <<= 1)
+        {
+            if ((audioStreamPropertySet.AudioProperty.SupportedSampleRate & sampleRateMask))
+            {
+                if ((c_SampleRateList[frameRateListIndex] < sampleRate))
+                {
+                    newSampleRate = c_SampleRateList[frameRateListIndex];
+                }
+            }
+        }
+    }
+
     sampleRate = newSampleRate;
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!, %u", status, sampleRate);

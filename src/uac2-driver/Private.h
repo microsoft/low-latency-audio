@@ -110,9 +110,13 @@ DEFINE_GUID(DEVICE_CONTAINER_GUID, 0x99a15cbb, 0x8ecf, 0x4ed5, 0xa3, 0xa1, 0xd2,
 #define CAPTURECIRCUITNAME L"CaptureDevice%03x"
 DECLARE_CONST_UNICODE_STRING(captureCircuitName, CAPTURECIRCUITNAME);
 
+#define CAPTURECIRCUITNAME_SAMPLERATE L"CaptureDevice%03x_%d"
+
 // This string must match the string defined in AudioCodec.inf for the speaker name:
-#define RENDERCIRCUITNAME L"RenderDevice%03x"
+#define RENDERCIRCUITNAME             L"RenderDevice%03x"
 DECLARE_CONST_UNICODE_STRING(renderCircuitName, RENDERCIRCUITNAME);
+
+#define RENDERCIRCUITNAME_SAMPLERATE L"RenderDevice%03x_%d"
 
 // Diverted from Acx/Samples/AudioCodec/Driver/DriverSettings.h  End
 

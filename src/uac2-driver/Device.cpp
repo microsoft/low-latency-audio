@@ -605,15 +605,11 @@ Return Value:
         {
             if (index < deviceContext->NumberOfAudioIsochronousEngines)
             {
-                DECLARE_UNICODE_STRING_SIZE(circuitName, CIRCUITNAMELENGTH);
-
                 deviceContext->AudioIsochronousEngines[index] = AudioIsochronousEngine::Create(deviceContext, usbAudioStreamInterfaceGroup);
                 RETURN_NTSTATUS_IF_TRUE_ACTION(deviceContext->AudioIsochronousEngines[index] == nullptr, status = STATUS_INSUFFICIENT_RESOURCES, status);
                 RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->Initialize());
 
-                RETURN_NTSTATUS_IF_FAILED(RtlUnicodeStringPrintf(&circuitName, RENDERCIRCUITNAME, index));
-                TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "render device name = %wZ, DeviceName = %ws", &circuitName, deviceContext->DeviceName);
-                RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->AddStaticRender(device, &CODEC_RENDER_COMPONENT_GUID, &circuitName));
+                RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->AddStaticRender(device, &CODEC_RENDER_COMPONENT_GUID, index));
 
                 //
                 // The driver uses this DDI to associate a circuit to a device. After
@@ -625,9 +621,7 @@ Return Value:
                 //
                 RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->AddRenderCircuit(device));
 
-                RETURN_NTSTATUS_IF_FAILED(RtlUnicodeStringPrintf(&circuitName, CAPTURECIRCUITNAME, index));
-                TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "capture device name = %wZ, DeviceName = %ws", &circuitName, deviceContext->DeviceName);
-                RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->AddStaticCapture(device, &CODEC_CAPTURE_COMPONENT_GUID, &MIC_CUSTOM_NAME, &circuitName));
+                RETURN_NTSTATUS_IF_FAILED(deviceContext->AudioIsochronousEngines[index]->AddStaticCapture(device, &CODEC_CAPTURE_COMPONENT_GUID, &MIC_CUSTOM_NAME, index));
 
                 //
                 // The driver uses this DDI to associate a circuit to a device. After

@@ -2816,14 +2816,40 @@ _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
 AudioIsochronousEngine::AddStaticRender(
-    WDFDEVICE              device,
-    const GUID *           componentGuid,
-    const UNICODE_STRING * circuitName
+    WDFDEVICE    device,
+    const GUID * componentGuid,
+    ULONG        index
 )
 {
+    NTSTATUS status = STATUS_SUCCESS;
+
     PAGED_CODE();
 
-    return CodecR_AddStaticRender(device, componentGuid, circuitName, this);
+    DECLARE_UNICODE_STRING_SIZE(circuitName, CIRCUITNAMELENGTH);
+
+    //
+    // For devices whose sample rate cannot be changed from the PC side,
+    // include the current sample rate in the ACXCIRCUIT friendly name so
+    // that the default format follows sample-rate changes made on the
+    // device side.
+    //
+    if (m_usbAudioStreamInterfaceGroup->CanSetSampleFrequency())
+    {
+        RETURN_NTSTATUS_IF_FAILED(RtlUnicodeStringPrintf(&circuitName, RENDERCIRCUITNAME, index));
+    }
+    else
+    {
+        ULONG sampleRate = 0;
+
+        RETURN_NTSTATUS_IF_FAILED(m_usbAudioStreamInterfaceGroup->GetCurrentSampleFrequency(sampleRate));
+
+        RETURN_NTSTATUS_IF_FAILED(RtlUnicodeStringPrintf(&circuitName, RENDERCIRCUITNAME_SAMPLERATE, index, sampleRate));
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "render device name = %wZ", &circuitName);
+    status = CodecR_AddStaticRender(device, componentGuid, &circuitName, this);
+
+    return status;
 }
 
 _Use_decl_annotations_
@@ -2884,15 +2910,41 @@ _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
 AudioIsochronousEngine::AddStaticCapture(
-    WDFDEVICE              device,
-    const GUID *           componentGuid,
-    const GUID *           micCustomName,
-    const UNICODE_STRING * circuitName
+    WDFDEVICE    device,
+    const GUID * componentGuid,
+    const GUID * micCustomName,
+    ULONG        index
 )
 {
+    NTSTATUS status = STATUS_SUCCESS;
+
     PAGED_CODE();
 
-    return CodecC_AddStaticCapture(device, componentGuid, micCustomName, circuitName, this);
+    DECLARE_UNICODE_STRING_SIZE(circuitName, CIRCUITNAMELENGTH);
+
+    //
+    // For devices whose sample rate cannot be changed from the PC side,
+    // include the current sample rate in the ACXCIRCUIT friendly name so
+    // that the default format follows sample-rate changes made on the
+    // device side.
+    //
+    if (m_usbAudioStreamInterfaceGroup->CanSetSampleFrequency())
+    {
+        RETURN_NTSTATUS_IF_FAILED(RtlUnicodeStringPrintf(&circuitName, CAPTURECIRCUITNAME, index));
+    }
+    else
+    {
+        ULONG sampleRate = 0;
+
+        RETURN_NTSTATUS_IF_FAILED(m_usbAudioStreamInterfaceGroup->GetCurrentSampleFrequency(sampleRate));
+
+        RETURN_NTSTATUS_IF_FAILED(RtlUnicodeStringPrintf(&circuitName, CAPTURECIRCUITNAME_SAMPLERATE, index, sampleRate));
+    }
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "capture device name = %wZ", &circuitName);
+    status = CodecC_AddStaticCapture(device, componentGuid, micCustomName, &circuitName, this);
+
+    return status;
 }
 
 _Use_decl_annotations_

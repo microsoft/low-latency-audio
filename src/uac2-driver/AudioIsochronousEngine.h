@@ -344,9 +344,9 @@ class AudioIsochronousEngine
     PAGED_CODE_SEG
     NTSTATUS
     AddStaticRender(
-        _In_ WDFDEVICE              device,
-        _In_ const GUID *           componentGuid,
-        _In_ const UNICODE_STRING * circuitName
+        _In_ WDFDEVICE    device,
+        _In_ const GUID * componentGuid,
+        _In_ ULONG        index
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -375,10 +375,10 @@ class AudioIsochronousEngine
     PAGED_CODE_SEG
     NTSTATUS
     AddStaticCapture(
-        _In_ WDFDEVICE              device,
-        _In_ const GUID *           componentGuid,
-        _In_ const GUID *           micCustomName,
-        _In_ const UNICODE_STRING * circuitName
+        _In_ WDFDEVICE    device,
+        _In_ const GUID * componentGuid,
+        _In_ const GUID * micCustomName,
+        _In_ ULONG        index
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)

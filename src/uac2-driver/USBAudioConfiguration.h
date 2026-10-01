@@ -700,6 +700,10 @@ class USBAudioControlInterface : public USBAudioInterface
         _In_ UCHAR clockSourceID
     ) = 0;
 
+    virtual bool CanGetSampleFrequency(
+        _In_ UCHAR clockSourceID
+    ) = 0;
+
     virtual NTSTATUS GetSelectorConfiguration(
         _In_ PDEVICE_CONTEXT deviceContext,
         _In_ UCHAR           entityID,
@@ -1334,6 +1338,12 @@ class USBAudio1ControlInterface : public USBAudioControlInterface
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     virtual bool CanSetSampleFrequency(
+        _In_ UCHAR clockSourceID
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual bool CanGetSampleFrequency(
         _In_ UCHAR clockSourceID
     );
 
@@ -1985,6 +1995,12 @@ class USBAudio2ControlInterface : public USBAudioControlInterface
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     virtual bool CanSetSampleFrequency(
+        _In_ UCHAR clockSourceID
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    virtual bool CanGetSampleFrequency(
         _In_ UCHAR clockSourceID
     );
 
@@ -2842,6 +2858,20 @@ class USBAudioStreamInterfaceGroup
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
+    NTSTATUS GetCurrentSampleFrequency(
+        _Out_ ULONG & sampleRate
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    bool CanSetSampleFrequency();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    bool CanGetSampleFrequency();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
     NTSTATUS WalkNextUnitTowardForward(
         _In_ const AUDIO_STREAM_PROPERTY_SET & audioStreamPropertySet,
         _Inout_updates_(4) ULONGLONG           pendingUnitMap[4],
@@ -2916,16 +2946,6 @@ class USBAudioStreamInterfaceGroup
     );
 
   protected:
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    NTSTATUS GetCurrentSampleFrequency(
-        _Out_ ULONG & sampleRate
-    );
-
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
-    bool CanSetSampleFrequency();
-
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     NTSTATUS SelectAlternateInterface(
