@@ -28,6 +28,8 @@ Environment:
 
 #include "MixingEngineThread.h"
 
+class AudioIsochronousEngine;
+
 enum class StreamStatuses
 {
     NotStable = 0,
@@ -128,10 +130,12 @@ class StreamObject
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     StreamObject(
-        _In_ PDEVICE_CONTEXT      deviceContext,
-        _In_ const StreamStatuses ioStable,
-        _In_ const StreamStatuses ioStreaming,
-        _In_ const StreamStatuses ioSteady
+        _In_ PDEVICE_CONTEXT          deviceContext,
+        _In_ AudioIsochronousEngine * audioIsochronousEngine,
+        _In_ const StreamStatuses     ioStable,
+        _In_ const StreamStatuses     ioStreaming,
+        _In_ const StreamStatuses     ioSteady,
+        _In_ const ULONG              maxIrpNumber
     );
 
     virtual __drv_maxIRQL(PASSIVE_LEVEL)
@@ -332,13 +336,24 @@ class StreamObject
     NONPAGED_CODE_SEG
     void SetTerminateStream();
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    bool
+    IsMixingEngineThreadReady();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void SetMixingEngineThreadReady();
+
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     StreamObject * Create(
-        _In_ PDEVICE_CONTEXT      deviceContext,
-        _In_ const StreamStatuses ioStable,
-        _In_ const StreamStatuses ioStreaming,
-        _In_ const StreamStatuses ioSteady
+        _In_ PDEVICE_CONTEXT          deviceContext,
+        _In_ AudioIsochronousEngine * audioIsochronousEngine,
+        _In_ const StreamStatuses     ioStable,
+        _In_ const StreamStatuses     ioStreaming,
+        _In_ const StreamStatuses     ioSteady,
+        _In_ const ULONG              maxIrpNumber
     );
 
   private:
@@ -403,6 +418,13 @@ class StreamObject
     void GetCompletedPacket(
         _Out_ LONGLONG & inCompletedPacket,
         _Out_ LONGLONG & outCompletedPacket
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    NONPAGED_CODE_SEG
+    void GetCompletedPacket(
+        _In_ bool        isInput,
+        _Out_ LONGLONG & completedPacket
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -491,7 +513,8 @@ class StreamObject
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     void MixingEngineThreadFunction(
-        _In_ PDEVICE_CONTEXT deviceContext
+        _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ WorkerThread *  thisThread
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -500,7 +523,26 @@ class StreamObject
         _In_ PDEVICE_CONTEXT deviceContext
     );
 
-    const PDEVICE_CONTEXT m_deviceContext;
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void MixingEngineThreadMainWithoutASIO(
+        _In_ PDEVICE_CONTEXT deviceContext
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void MixingEngineInputThreadMainWithoutASIO(
+        _In_ PDEVICE_CONTEXT deviceContext
+    );
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void MixingEngineOutputThreadMainWithoutASIO(
+        _In_ PDEVICE_CONTEXT deviceContext
+    );
+
+    const PDEVICE_CONTEXT    m_deviceContext;
+    AudioIsochronousEngine * m_audioIsochronousEngine{nullptr};
 
     TransferObject *     m_inputTransferObject[UAC_MAX_IRP_NUMBER]{};
     TransferObject *     m_outputTransferObject[UAC_MAX_IRP_NUMBER]{};
@@ -517,7 +559,8 @@ class StreamObject
     LONG m_requirePortReset{0};
     LONG m_donePortReset{0};
 
-    LONG m_IsTerminateStream{(LONG) false};
+    LONG m_isTerminateStream{(LONG) false};
+    LONG m_isMixingEngineThreadReady{(LONG) false};
 
     LONGLONG m_inputWritePosition{0LL};
     LONGLONG m_inputSyncPosition{0LL};
@@ -587,8 +630,6 @@ class StreamObject
     ISO_REQUEST_COMPLETION_TIME m_outputIsoRequestCompletionTime;
     ISO_REQUEST_COMPLETION_TIME m_feedbackIsoRequestCompletionTime;
 
-    ULONG m_dopMarkerToggle{0};
-
     ULONGLONG m_startPCUs{0ULL};
     ULONGLONG m_elapsedPCUs{0ULL};
     ULONGLONG m_wakeUpDiffPCUs{0ULL};
@@ -616,6 +657,7 @@ class StreamObject
     const StreamStatuses c_ioStable;
     const StreamStatuses c_ioStreaming;
     const StreamStatuses c_ioSteady;
+    const ULONG          c_maxIrpNumber;
 };
 
 #endif

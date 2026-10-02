@@ -37,21 +37,23 @@ PAGED_CODE_SEG
 MixingEngineThread *
 MixingEngineThread::CreateMixingEngineThread(
     PDEVICE_CONTEXT deviceContext,
+    StreamObject *  streamObject,
     ULONG           newTimerResolution
 )
 {
     PAGED_CODE();
 
-    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) MixingEngineThread(deviceContext, newTimerResolution);
+    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) MixingEngineThread(deviceContext, streamObject, newTimerResolution);
 }
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
 MixingEngineThread::MixingEngineThread(
     PDEVICE_CONTEXT deviceContext,
+    StreamObject *  streamObject,
     ULONG           newTimerResolution
 )
-    : WorkerThread(deviceContext), m_newTimerResolution(newTimerResolution)
+    : WorkerThread(deviceContext), m_streamObject(streamObject), m_newTimerResolution(newTimerResolution)
 {
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
@@ -74,7 +76,7 @@ MixingEngineThread::~MixingEngineThread()
 _Use_decl_annotations_
 PAGED_CODE_SEG
 NTSTATUS
-MixingEngineThread::CreateThread(WORKER_THREAD_FUNCTION mixingEngineThreadFunction, KPRIORITY priority, LONG wakeUpIntervalUs)
+MixingEngineThread::CreateThread(WORKER_THREAD_FUNCTION mixingEngineThreadFunction, KPRIORITY priority, LONG wakeUpIntervalUs, ULONG classicFramesPerIrp)
 {
     NTSTATUS status = STATUS_SUCCESS;
 
@@ -83,6 +85,7 @@ MixingEngineThread::CreateThread(WORKER_THREAD_FUNCTION mixingEngineThreadFuncti
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
     m_wakeUpIntervalUs = wakeUpIntervalUs;
+    m_classicFramesPerIrp = classicFramesPerIrp;
 
     status = WorkerThread::CreateThread(mixingEngineThreadFunction, priority);
 
@@ -124,15 +127,9 @@ void MixingEngineThread::ThreadMain()
 
     PEX_TIMER exTimer = ExAllocateTimer(nullptr, nullptr, EX_TIMER_HIGH_RESOLUTION);
     m_waitEvents[toInt(MixingEngineWaitEventsNumber::TimerEvent)] = exTimer;
+    m_waitEvents[toInt(MixingEngineWaitEventsNumber::OutputReadyEvent)] = nullptr;
     m_waitEventsCount = toInt(MixingEngineWaitEventsNumber::NumOfWaitEventsWithoutOutputReady);
 
-#if 0
-	if ((deviceExtension->AsioBufferObject != nullptr) && (deviceExtension->AsioBufferObject->OutputReadyEvent != nullptr))
-	{
-		m_waitEvents[toInt(MixingEngineWaitEventsNumber::OutputReadyEvent)] = deviceExtension->AsioBufferObject->OutputReadyEvent;
-		m_waitEventsCount = toInt(MixingEngineWaitEventsNumber::NumOfWaitEvents);
-	}
-#endif
     KeSetEvent(&m_threadReadyEvent, EVENT_INCREMENT, FALSE);
 
     status = KeWaitForMultipleObjects(ARRAYSIZE(m_startEvents), m_startEvents, WaitAny, Executive, KernelMode, FALSE, nullptr, nullptr);
@@ -141,7 +138,7 @@ void MixingEngineThread::ThreadMain()
         goto ThreadMain_Exit;
     }
 
-    LONGLONG duetime = 0ll - (LONGLONG)m_deviceContext->ClassicFramesPerIrp * 10000LL;
+    LONGLONG duetime = 0ll - (LONGLONG)m_classicFramesPerIrp * 10000LL;
     LONGLONG period = (LONGLONG)m_wakeUpIntervalUs * 10LL;
 
     EXT_SET_PARAMETERS setParameters;
@@ -153,7 +150,7 @@ void MixingEngineThread::ThreadMain()
 
     // ======================================================================
     ASSERT(m_workerThreadFunction != nullptr);
-    m_workerThreadFunction(m_deviceContext);
+    m_workerThreadFunction(m_deviceContext, this);
 
     EXT_DELETE_PARAMETERS deleteParameters;
 
@@ -199,4 +196,34 @@ NTSTATUS MixingEngineThread::Wait()
     );
 
     return wakeUpReason;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+StreamObject *
+MixingEngineThread::GetStreamObject() const noexcept
+{
+    PAGED_CODE();
+
+    return m_streamObject;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+void MixingEngineThread::SetOutputReadyEvent(
+    PKEVENT outputReadyEvent
+)
+{
+    PAGED_CODE();
+
+    if (outputReadyEvent != nullptr)
+    {
+        m_waitEvents[toInt(MixingEngineWaitEventsNumber::OutputReadyEvent)] = outputReadyEvent;
+        m_waitEventsCount = toInt(MixingEngineWaitEventsNumber::NumOfWaitEvents);
+    }
+    else
+    {
+        m_waitEvents[toInt(MixingEngineWaitEventsNumber::OutputReadyEvent)] = nullptr;
+        m_waitEventsCount = toInt(MixingEngineWaitEventsNumber::NumOfWaitEventsWithoutOutputReady);
+    }
 }

@@ -28,6 +28,7 @@ Environment:
 
 class ContiguousMemory;
 class TransferObject;
+class AudioIsochronousEngine;
 
 class RtPacketObject
 {
@@ -35,7 +36,8 @@ class RtPacketObject
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     RtPacketObject(
-        _In_ PDEVICE_CONTEXT deviceContext
+        _In_ PDEVICE_CONTEXT          deviceContext,
+        _In_ AudioIsochronousEngine * audioIsochronousEngine
     );
 
     virtual __drv_maxIRQL(PASSIVE_LEVEL)
@@ -175,7 +177,8 @@ class RtPacketObject
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     RtPacketObject * Create(
-        _In_ PDEVICE_CONTEXT deviceContext
+        _In_ PDEVICE_CONTEXT          deviceContext,
+        _In_ AudioIsochronousEngine * audioIsochronousEngine
     );
 
   private:
@@ -193,13 +196,14 @@ class RtPacketObject
         bool      Pause{false};
     } RT_PACKET_INFO;
 
-    const PDEVICE_CONTEXT m_deviceContext;
-    RT_PACKET_INFO *      m_inputRtPacketInfo{nullptr};
-    RT_PACKET_INFO *      m_outputRtPacketInfo{nullptr};
-    ULONG                 m_numOfInputDevices{0};
-    ULONG                 m_numOfOutputDevices{0};
-    WDFMEMORY             m_inputRtPacketInfoMemory{nullptr};
-    WDFMEMORY             m_outputRtPacketInfoMemory{nullptr};
+    const PDEVICE_CONTEXT    m_deviceContext;
+    AudioIsochronousEngine * m_audioIsochronousEngine{nullptr};
+    RT_PACKET_INFO *         m_inputRtPacketInfo{nullptr};
+    RT_PACKET_INFO *         m_outputRtPacketInfo{nullptr};
+    ULONG                    m_numOfInputDevices{0};
+    ULONG                    m_numOfOutputDevices{0};
+    WDFMEMORY                m_inputRtPacketInfoMemory{nullptr};
+    WDFMEMORY                m_outputRtPacketInfoMemory{nullptr};
 
     PWAVEFORMATEX m_inputWaveFormat{nullptr};  // The origin of WAVEFORMATEX used by Acx Audio
     PWAVEFORMATEX m_outputWaveFormat{nullptr}; // The origin of WAVEFORMATEX used by Acx Audio

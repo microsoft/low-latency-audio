@@ -25,7 +25,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AsioBufferObject.cpp" />
+    <ClCompile Include="AudioIsochronousEngine.cpp" />
     <ClCompile Include="CaptureCircuit.cpp" />
+    <ClCompile Include="CircuitCommon.cpp" />
     <ClCompile Include="CircuitHelper.cpp" />
     <ClCompile Include="ContiguousMemory.cpp" />
     <ClCompile Include="Device.cpp" />
@@ -48,6 +50,7 @@
     <ClInclude Include="..\Inc\UAC_User.h" />
     <ClInclude Include="AsioBufferObject.h" />
     <ClInclude Include="AudioFormats.h" />
+    <ClInclude Include="AudioIsochronousEngine.h" />
     <ClInclude Include="CircuitHelper.h" />
     <ClInclude Include="Common.h" />
     <ClInclude Include="ContiguousMemory.h" />
@@ -70,6 +73,7 @@
     <ClInclude Include="RtPacketObject.h" />
     <ClInclude Include="USBAudioConfiguration.h" />
     <ClInclude Include="USBAudioDataFormat.h" />
+    <ClInclude Include="VariableArray.h" />
     <ClInclude Include="WorkerThread.h" />
   </ItemGroup>
   <ItemGroup>

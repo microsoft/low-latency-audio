@@ -174,13 +174,19 @@ class WaitLocker
     WaitLocker(_In_ WDFWAITLOCK & waitLock, _In_opt_ PLONGLONG timeout)
         : m_WaitLock(waitLock)
     {
-        WdfWaitLockAcquire(m_WaitLock, timeout);
+        if (m_WaitLock != nullptr)
+        {
+            WdfWaitLockAcquire(m_WaitLock, timeout);
+        }
     }
 
     FORCEINLINE
     virtual ~WaitLocker()
     {
-        WdfWaitLockRelease(m_WaitLock);
+        if (m_WaitLock != nullptr)
+        {
+            WdfWaitLockRelease(m_WaitLock);
+        }
     }
 
   private:
