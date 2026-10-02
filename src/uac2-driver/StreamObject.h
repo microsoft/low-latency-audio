@@ -336,6 +336,15 @@ class StreamObject
     NONPAGED_CODE_SEG
     void SetTerminateStream();
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    bool
+    IsMixingEngineThreadReady();
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void SetMixingEngineThreadReady();
+
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     StreamObject * Create(
@@ -550,7 +559,8 @@ class StreamObject
     LONG m_requirePortReset{0};
     LONG m_donePortReset{0};
 
-    LONG m_IsTerminateStream{(LONG) false};
+    LONG m_isTerminateStream{(LONG) false};
+    LONG m_isMixingEngineThreadReady{(LONG) false};
 
     LONGLONG m_inputWritePosition{0LL};
     LONGLONG m_inputSyncPosition{0LL};
@@ -619,8 +629,6 @@ class StreamObject
     ISO_REQUEST_COMPLETION_TIME m_inputIsoRequestCompletionTime;
     ISO_REQUEST_COMPLETION_TIME m_outputIsoRequestCompletionTime;
     ISO_REQUEST_COMPLETION_TIME m_feedbackIsoRequestCompletionTime;
-
-    ULONG m_dopMarkerToggle{0};
 
     ULONGLONG m_startPCUs{0ULL};
     ULONGLONG m_elapsedPCUs{0ULL};

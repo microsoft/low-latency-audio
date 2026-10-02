@@ -1444,14 +1444,32 @@ _Use_decl_annotations_
 NONPAGED_CODE_SEG
 bool StreamObject::IsTerminateStream()
 {
-    return InterlockedCompareExchange(&m_IsTerminateStream, 0, 0) ? true : false;
+    return InterlockedCompareExchange(&m_isTerminateStream, 0, 0) ? true : false;
 }
 
 _Use_decl_annotations_
 NONPAGED_CODE_SEG
 void StreamObject::SetTerminateStream()
 {
-    InterlockedExchange(&m_IsTerminateStream, (ULONG) true);
+    InterlockedExchange(&m_isTerminateStream, (ULONG) true);
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+bool StreamObject::IsMixingEngineThreadReady()
+{
+    PAGED_CODE();
+
+    return InterlockedCompareExchange(&m_isMixingEngineThreadReady, 0, 0) ? true : false;
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
+void StreamObject::SetMixingEngineThreadReady()
+{
+    PAGED_CODE();
+
+    InterlockedExchange(&m_isMixingEngineThreadReady, (ULONG) true);
 }
 
 _Use_decl_annotations_
@@ -1642,6 +1660,11 @@ void StreamObject::MixingEngineThreadMain(
         if (!NT_SUCCESS(wakeupReason) || (wakeupReason == STATUS_WAIT_0) || IsTerminateStream())
         {
             break;
+        }
+
+        if (!IsMixingEngineThreadReady())
+        {
+            continue;
         }
 
         // Get the current status of stream.
@@ -2156,6 +2179,11 @@ void StreamObject::MixingEngineThreadMainWithoutASIO(
             break;
         }
 
+        if (!IsMixingEngineThreadReady())
+        {
+            continue;
+        }
+
         // Get the current status of stream.
         StreamStatuses streamStatus = GetStreamStatuses(isProcessIo);
 
@@ -2493,6 +2521,11 @@ void StreamObject::MixingEngineInputThreadMainWithoutASIO(
         if (!NT_SUCCESS(wakeupReason) || (wakeupReason == STATUS_WAIT_0) || IsTerminateStream())
         {
             break;
+        }
+
+        if (!IsMixingEngineThreadReady())
+        {
+            continue;
         }
 
         // Get the current status of stream.

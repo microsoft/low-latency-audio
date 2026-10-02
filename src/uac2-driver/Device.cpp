@@ -2740,17 +2740,16 @@ Return Value:
     AudioIsochronousEngine *     audioIsochronousEngine = (AudioIsochronousEngine *)InterlockedExchangePointer((volatile PVOID *)&(requestContext->AudioIsochronousEngine), nullptr);
     TransferObject *             transferObject = (TransferObject *)InterlockedExchangePointer((volatile PVOID *)&(requestContext->TransferObject), nullptr);
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, %p", requestContext);
-
     if (audioIsochronousEngine != nullptr)
     {
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, %p", requestContext);
         if (transferObject != nullptr)
         {
             audioIsochronousEngine->IsoRequestCompletionRoutine(completionParams, transferObject);
         }
         audioIsochronousEngine->Release();
+        TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
     }
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
 
     return;
 }

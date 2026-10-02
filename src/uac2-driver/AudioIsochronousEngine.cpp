@@ -1069,6 +1069,7 @@ NTSTATUS AudioIsochronousEngine::StartIsoStream()
         }
         RETURN_NTSTATUS_IF_FAILED(status);
     }
+    m_streamObject->SetMixingEngineThreadReady();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
     return status;
