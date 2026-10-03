@@ -1,0 +1,54 @@
+
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34330.188
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LowLatencyAudioSetupActions", "custom-actions\LowLatencyAudioSetupActions.vcxproj", "{D9F7D81A-8B9B-429E-AB46-0DEBF36B911C}"
+EndProject
+Project("{B7DD6F7E-DEF8-4E67-B5B7-07EF123DB6F0}") = "LowLatencyAudioPackage", "package\LowLatencyAudioPackage.wixproj", "{4C05FB24-1DD4-4787-A2A6-D5D2E3CAC7B5}"
+	ProjectSection(ProjectDependencies) = postProject
+		{D9F7D81A-8B9B-429E-AB46-0DEBF36B911C} = {D9F7D81A-8B9B-429E-AB46-0DEBF36B911C}
+	EndProjectSection
+EndProject
+Project("{B7DD6F7E-DEF8-4E67-B5B7-07EF123DB6F0}") = "LowLatencyAudioBundle", "bundle\LowLatencyAudioBundle.wixproj", "{94286A6F-CC11-436A-9772-6337AC9CF617}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|ARM64 = Debug|ARM64
+		Debug|x64 = Debug|x64
+		Release|ARM64 = Release|ARM64
+		Release|x64 = Release|x64
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{D9F7D81A-8B9B-429E-AB46-0DEBF36B911C}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{D9F7D81A-8B9B-429E-AB46-0DEBF36B911C}.Debug|ARM64.Build.0 = Debug|ARM64
+		{D9F7D81A-8B9B-429E-AB46-0DEBF36B911C}.Debug|x64.ActiveCfg = Debug|x64
+		{D9F7D81A-8B9B-429E-AB46-0DEBF36B911C}.Debug|x64.Build.0 = Debug|x64
+		{D9F7D81A-8B9B-429E-AB46-0DEBF36B911C}.Release|ARM64.ActiveCfg = Release|ARM64
+		{D9F7D81A-8B9B-429E-AB46-0DEBF36B911C}.Release|ARM64.Build.0 = Release|ARM64
+		{D9F7D81A-8B9B-429E-AB46-0DEBF36B911C}.Release|x64.ActiveCfg = Release|x64
+		{D9F7D81A-8B9B-429E-AB46-0DEBF36B911C}.Release|x64.Build.0 = Release|x64
+		{4C05FB24-1DD4-4787-A2A6-D5D2E3CAC7B5}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{4C05FB24-1DD4-4787-A2A6-D5D2E3CAC7B5}.Debug|ARM64.Build.0 = Debug|ARM64
+		{4C05FB24-1DD4-4787-A2A6-D5D2E3CAC7B5}.Debug|x64.ActiveCfg = Debug|x64
+		{4C05FB24-1DD4-4787-A2A6-D5D2E3CAC7B5}.Debug|x64.Build.0 = Debug|x64
+		{4C05FB24-1DD4-4787-A2A6-D5D2E3CAC7B5}.Release|ARM64.ActiveCfg = Release|ARM64
+		{4C05FB24-1DD4-4787-A2A6-D5D2E3CAC7B5}.Release|ARM64.Build.0 = Release|ARM64
+		{4C05FB24-1DD4-4787-A2A6-D5D2E3CAC7B5}.Release|x64.ActiveCfg = Release|x64
+		{4C05FB24-1DD4-4787-A2A6-D5D2E3CAC7B5}.Release|x64.Build.0 = Release|x64
+		{94286A6F-CC11-436A-9772-6337AC9CF617}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{94286A6F-CC11-436A-9772-6337AC9CF617}.Debug|ARM64.Build.0 = Debug|ARM64
+		{94286A6F-CC11-436A-9772-6337AC9CF617}.Debug|x64.ActiveCfg = Debug|x64
+		{94286A6F-CC11-436A-9772-6337AC9CF617}.Debug|x64.Build.0 = Debug|x64
+		{94286A6F-CC11-436A-9772-6337AC9CF617}.Release|ARM64.ActiveCfg = Release|ARM64
+		{94286A6F-CC11-436A-9772-6337AC9CF617}.Release|ARM64.Build.0 = Release|ARM64
+		{94286A6F-CC11-436A-9772-6337AC9CF617}.Release|x64.ActiveCfg = Release|x64
+		{94286A6F-CC11-436A-9772-6337AC9CF617}.Release|x64.Build.0 = Release|x64
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6CF67AFA-9078-43BE-A807-9CA374B0705D}
+	EndGlobalSection
+EndGlobal

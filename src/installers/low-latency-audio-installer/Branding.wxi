@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Everything about the installer that a release partner sets, in one place. The package
+  (Package.wxs) and the bundle (Bundle.wxs) both include this file.
+
+  Values marked PLACEHOLDER have to be confirmed or replaced before a release goes to customers.
+  Values marked KEEP must not change after the first release, or upgrades stop working.
+-->
+<Include>
+
+  <!-- ============================== Names ============================== -->
+
+  <!-- PLACEHOLDER: the company shown as the publisher in Installed apps -->
+  <?define Manufacturer = "Microsoft Corporation" ?>
+
+  <!-- PLACEHOLDER: the product name in Installed apps and on the installer's own window -->
+  <?define ProductName = "Microsoft Low-Latency Audio (Preview)" ?>
+
+  <!-- PLACEHOLDER: the folder under Program Files that everything installs into -->
+  <?define InstallFolderName = "Low-Latency Audio" ?>
+
+  <!-- PLACEHOLDER: the Start menu folder and the two shortcuts in it -->
+  <?define StartMenuFolderName = "Low-Latency Audio" ?>
+  <?define DriverSelectorShortcutName = "Low-Latency Audio Driver Selector" ?>
+  <?define ControlPanelShortcutName = "USB ASIO Control Panel" ?>
+
+  <!-- ============================== Links ============================== -->
+
+  <!-- PLACEHOLDER: the license the installer links to -->
+  <?define LicenseUrl = "https://github.com/microsoft/low-latency-audio/blob/main/LICENSE" ?>
+
+  <!-- PLACEHOLDER: the support link in Installed apps -->
+  <?define HelpUrl = "https://aka.ms/asio" ?>
+
+  <!-- ============================== Upgrade codes ============================== -->
+
+  <!--
+    KEEP: Windows Installer and the bundle recognize an earlier release by these codes. Replace
+    them only before the first release, and then never again. A partner that ships its own
+    release, separate from anyone else's, should replace both with new GUIDs.
+  -->
+  <?define PackageUpgradeCode = "8e78f75c-b6d9-4711-9b3b-13edb61c038d" ?>
+  <?define BundleUpgradeCode = "133dea61-17c3-4ce2-bfc4-b5ae515dca5f" ?>
+
+  <!-- ============================== Requirements ============================== -->
+
+  <!--
+    PLACEHOLDER: the oldest Windows build the driver runs on. The driver is built against ACX 1.1
+    and KMDF 1.33, which both shipped in Windows 11, version 22H2 (build 22621). Confirm this
+    against the ACX and KMDF versions in src\uac2-driver\USBAudioAcxDriver.vcxproj.
+  -->
+  <?define MinimumWindowsBuild = "22621" ?>
+  <?define MinimumWindowsMessage = "This driver needs Windows 11, version 22H2 or later." ?>
+
+  <!-- ============================== ASIO registration ============================== -->
+
+  <!--
+    The name music apps list the ASIO driver under, and its COM class. These must match the ASIO
+    driver itself: DRIVER_NAME_8b and IID_ASIO_DRIVER in src\uac2-asio\USBAsio.cpp. The Arm64
+    build is an Arm64X DLL with a different name, so that both x64 and Arm64 music apps load it.
+  -->
+  <?if $(var.Platform) ~= "ARM64" ?>
+    <?define AsioDriverName = "USB ASIO (ARM64X)" ?>
+  <?else?>
+    <?define AsioDriverName = "USB ASIO" ?>
+  <?endif?>
+
+  <?define AsioClsid = "{327468A4-1351-4930-BB6B-0FEB69BF5D70}" ?>
+
+</Include>

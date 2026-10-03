@@ -1,0 +1,15 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License
+// ============================================================================
+// This is part of the Microsoft Low-Latency Audio driver project.
+// Further information: https://aka.ms/asio
+// ============================================================================
+
+namespace LowLatencyDriverSelector
+{
+    [default_interface]
+    runtimeclass MainWindow : Microsoft.UI.Xaml.Window
+    {
+        MainWindow();
+    }
+}

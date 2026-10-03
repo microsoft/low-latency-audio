@@ -1,0 +1,16 @@
+<Project Sdk="WixToolset.Sdk/6.0.0">
+
+  <PropertyGroup>
+    <OutputName>LowLatencyAudio</OutputName>
+
+    <!-- The custom action DLL is built by its own project first: build-all.ps1 builds it, and the
+         solution lists it as a dependency of this project. -->
+    <LlaCustomActionsFolder>$(MSBuildThisFileDirectory)..\..\..\vsfiles\out\LowLatencyAudioSetupActions\$(Platform)\$(Configuration)</LlaCustomActionsFolder>
+
+    <DefineConstants>$(DefineConstants);ProductVersion=$(LlaVersionMajor).$(LlaVersionMinor).$(LlaVersionBuild).$(LlaVersionRevision);StagingFolder=$([MSBuild]::EnsureTrailingSlash('$(LlaStagingFolder)'))$(Platform);CustomActionsFolder=$(LlaCustomActionsFolder);ProductIconFile=$(LlaRepoRoot)src\driver-selector\Assets\AppIcon.ico</DefineConstants>
+
+    <!-- ICE61 warns about AllowSameVersionUpgrades in Package.wxs, which is deliberate. -->
+    <SuppressIces>ICE61</SuppressIces>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,7 @@
+.vs/
+Generated Files/
+packages/
+
+# Visual Studio user-specific files
+*.vcxproj.user
+*.user
