@@ -1,0 +1,83 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:bal="http://wixtoolset.org/schemas/v4/wxs/bal">
+
+  <?include ..\Branding.wxi ?>
+
+  <!--
+    ProductVersion, VCRuntimeInstaller, WindowsAppRuntimeInstaller and ProductIconFile come from
+    the project file, which gets them from build\build-all.ps1. build-all.ps1 also downloads the
+    two runtime installers and checks that Microsoft signed them.
+  -->
+
+  <?if $(var.Platform) ~= "ARM64" ?>
+    <!-- IMAGE_FILE_MACHINE_ARM64 -->
+    <?define RequiredNativeMachine = "43620" ?>
+    <?define WrongArchitectureMessage = "This installer is for PCs with an Arm64 processor. Use the x64 installer on this PC." ?>
+  <?else?>
+    <!-- IMAGE_FILE_MACHINE_AMD64 -->
+    <?define RequiredNativeMachine = "34404" ?>
+    <?define WrongArchitectureMessage = "This installer is for PCs with an x64 processor. Use the Arm64 installer on this PC." ?>
+  <?endif?>
+
+  <Bundle Name="$(var.ProductName)"
+          Manufacturer="$(var.Manufacturer)"
+          Version="$(var.ProductVersion)"
+          UpgradeCode="$(var.BundleUpgradeCode)"
+          IconSourceFile="$(var.ProductIconFile)"
+          HelpUrl="$(var.HelpUrl)">
+
+    <BootstrapperApplication>
+      <bal:WixStandardBootstrapperApplication Theme="hyperlinkLicense"
+                                              LicenseUrl="$(var.LicenseUrl)"
+                                              LogoFile="logo.png"
+                                              ShowVersion="yes"
+                                              SuppressOptionsUI="yes"
+                                              SuppressRepair="yes" />
+    </BootstrapperApplication>
+
+    <!-- The finish page offers to open the Driver Selector, which is where the customer chooses
+         the devices that use the new driver. It asks for administrator rights itself. -->
+    <Variable Name="LaunchTarget"
+              Type="formatted"
+              Value="[ProgramFiles64Folder]$(var.InstallFolderName)\LowLatencyDriverSelector.exe" />
+
+    <bal:Condition Condition="NativeMachine = $(var.RequiredNativeMachine)"
+                   Message="$(var.WrongArchitectureMessage)" />
+
+    <bal:Condition Condition="WindowsBuildNumber &gt;= $(var.MinimumWindowsBuild)"
+                   Message="$(var.MinimumWindowsMessage)" />
+
+    <Chain>
+      <!--
+        The two apps need the Visual C++ runtime. The ASIO driver and the custom actions link it
+        statically, so a failure here does not stop the driver from installing. The x64 package
+        also carries the Arm64 runtime. It exits with 1638 when a newer runtime is already there.
+      -->
+      <ExePackage Id="VCRuntime"
+                  DisplayName="Microsoft Visual C++ Runtime"
+                  SourceFile="$(var.VCRuntimeInstaller)"
+                  Compressed="yes"
+                  Permanent="yes"
+                  Vital="no"
+                  InstallArguments="/install /quiet /norestart">
+        <ExitCode Value="1638" Behavior="success" />
+        <ExitCode Value="3010" Behavior="scheduleReboot" />
+      </ExePackage>
+
+      <!-- The Windows App SDK runtime the two apps are built against. Same reasoning for Vital. -->
+      <ExePackage Id="WindowsAppRuntime"
+                  DisplayName="Microsoft Windows App Runtime"
+                  SourceFile="$(var.WindowsAppRuntimeInstaller)"
+                  Compressed="yes"
+                  Permanent="yes"
+                  Vital="no"
+                  InstallArguments="--quiet" />
+
+      <MsiPackage Id="LowLatencyAudioPackage"
+                  SourceFile="$(var.LowLatencyAudioPackage.TargetPath)"
+                  Compressed="yes"
+                  Vital="yes" />
+    </Chain>
+
+  </Bundle>
+</Wix>

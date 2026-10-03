@@ -1,0 +1,36 @@
+<Project>
+
+  <!--
+    Shared settings for the projects under src\installers.
+
+    The WiX projects build into src\vsfiles like every other project in this repository, which
+    keeps their obj and bin folders out of the source tree.
+
+    build\build-all.ps1 passes the version and the folder locations in as properties. The defaults
+    below are what a plain Visual Studio build gets.
+  -->
+
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)' == '.wixproj'">
+    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)..\vsfiles\intermediate\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)..\vsfiles\out\$(MSBuildProjectName)\</BaseOutputPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <LlaRepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildThisFileDirectory)..\..\'))</LlaRepoRoot>
+
+    <LlaVersionMajor Condition="'$(LlaVersionMajor)' == ''">1</LlaVersionMajor>
+    <LlaVersionMinor Condition="'$(LlaVersionMinor)' == ''">0</LlaVersionMinor>
+    <LlaVersionBuild Condition="'$(LlaVersionBuild)' == ''">0</LlaVersionBuild>
+    <LlaVersionRevision Condition="'$(LlaVersionRevision)' == ''">0</LlaVersionRevision>
+
+    <!-- what build-all.ps1 -Target Stage produces, one folder per platform -->
+    <LlaStagingFolder Condition="'$(LlaStagingFolder)' == ''">$(LlaRepoRoot)build\staging\installer\</LlaStagingFolder>
+
+    <!-- the VC runtime and Windows App Runtime installers the bundle carries; build-all.ps1
+         downloads them and passes their paths in -->
+    <LlaDependenciesFolder Condition="'$(LlaDependenciesFolder)' == ''">$(LlaRepoRoot)build\dependencies\</LlaDependenciesFolder>
+    <LlaVCRuntimeInstaller Condition="'$(LlaVCRuntimeInstaller)' == ''">$(LlaDependenciesFolder)VC_redist.x64.exe</LlaVCRuntimeInstaller>
+    <LlaWindowsAppRuntimeInstaller Condition="'$(LlaWindowsAppRuntimeInstaller)' == ''">$(LlaDependenciesFolder)$(Platform)\WindowsAppRuntimeInstall-$(Platform).exe</LlaWindowsAppRuntimeInstaller>
+  </PropertyGroup>
+
+</Project>

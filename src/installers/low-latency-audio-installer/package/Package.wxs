@@ -1,0 +1,241 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+
+  <?include ..\Branding.wxi ?>
+
+  <!--
+    StagingFolder, CustomActionsFolder and ProductVersion come from the project file, which gets
+    them from build\build-all.ps1. The staging layout is:
+
+      app\      everything that installs into the product folder: the ASIO driver DLL, the ASIO
+                control panel, the Driver Selector, and the Windows App SDK files both apps share
+      driver\   the low-latency driver package: its INF, .sys and catalog
+
+    The driver package is signed by Microsoft through attestation signing. Stage it from the
+    signed submission, not from a local build, or Windows refuses to load the driver.
+  -->
+  <?define AppStagingFolder = "$(var.StagingFolder)\app" ?>
+  <?define DriverStagingFolder = "$(var.StagingFolder)\driver" ?>
+
+  <!-- set by the driver project; the custom actions find the package in the driver store by it -->
+  <?define DriverInfName = "USBAudio2-ACX.inf" ?>
+
+  <?if $(var.Platform) ~= "ARM64" ?>
+    <?define NativeArchitecture = "ARM64" ?>
+    <?define WrongArchitectureMessage = "This installer is for PCs with an Arm64 processor. Use the x64 installer on this PC." ?>
+  <?else?>
+    <?define NativeArchitecture = "AMD64" ?>
+    <?define WrongArchitectureMessage = "This installer is for PCs with an x64 processor. Use the Arm64 installer on this PC." ?>
+  <?endif?>
+
+  <Package Name="$(var.ProductName)"
+           Manufacturer="$(var.Manufacturer)"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="$(var.PackageUpgradeCode)"
+           Scope="perMachine"
+           Compressed="yes"
+           Language="1033">
+
+    <!-- Same version upgrades are allowed because preview builds don't always get a new version
+         number, and without this two of them install side by side. -->
+    <MajorUpgrade AllowSameVersionUpgrades="yes"
+                  DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <!-- the developer installer in src\installer, which only ever installed the control panel -->
+    <Upgrade Id="3b1e7eb9-37c7-44a4-ad9a-c686db7639b8">
+      <UpgradeVersion Minimum="0.0.0" Property="DEVELOPERCONTROLPANELINSTALLER" />
+    </Upgrade>
+
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="ProductIcon" SourceFile="$(var.ProductIconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="ProductIcon" />
+    <Property Id="ARPHELPLINK" Value="$(var.HelpUrl)" />
+
+    <!-- ============================== Requirements ============================== -->
+
+    <!-- An x64 package installs on an Arm64 PC too, through emulation, and the x64 driver would
+         never load there. The native architecture is only in the 64-bit registry. -->
+    <Property Id="NATIVEPROCESSORARCHITECTURE">
+      <RegistrySearch Id="NativeProcessorArchitectureSearch"
+                      Root="HKLM"
+                      Key="SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
+                      Name="PROCESSOR_ARCHITECTURE"
+                      Type="raw"
+                      Bitness="always64" />
+    </Property>
+
+    <!-- Windows Installer reports an old Windows version to packages, so the build comes from the
+         registry instead. -->
+    <Property Id="WINDOWSCURRENTBUILD">
+      <RegistrySearch Id="WindowsCurrentBuildSearch"
+                      Root="HKLM"
+                      Key="SOFTWARE\Microsoft\Windows NT\CurrentVersion"
+                      Name="CurrentBuildNumber"
+                      Type="raw"
+                      Bitness="always64" />
+    </Property>
+
+    <Launch Condition="Installed OR NATIVEPROCESSORARCHITECTURE = &quot;$(var.NativeArchitecture)&quot;"
+            Message="$(var.WrongArchitectureMessage)" />
+
+    <Launch Condition="Installed OR WINDOWSCURRENTBUILD &gt;= $(var.MinimumWindowsBuild)"
+            Message="$(var.MinimumWindowsMessage)" />
+
+    <!-- ============================== Folders ============================== -->
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="$(var.InstallFolderName)">
+        <Directory Id="ASSETSFOLDER" Name="Assets" />
+        <Directory Id="DRIVERFOLDER" Name="Driver" />
+      </Directory>
+    </StandardDirectory>
+
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="ShortcutFolder" Name="$(var.StartMenuFolderName)" />
+    </StandardDirectory>
+
+    <!-- ============================== Files ============================== -->
+
+    <!--
+      The ASIO control panel and the Driver Selector share this folder. That works because each
+      keeps its resources and its compiled XAML in its own <exe name>.pri, and because the Windows
+      App SDK files they both carry are byte for byte the same: build-all.ps1 checks both while it
+      stages.
+
+      The control panel has to sit in the same folder as USBAsio.dll. The ASIO driver starts it
+      from there when a music app asks for its control panel.
+    -->
+    <ComponentGroup Id="AppFiles" Directory="INSTALLFOLDER">
+
+      <Component>
+        <File Id="UsbAsioDll" Source="$(var.AppStagingFolder)\USBAsio.dll" KeyPath="yes" />
+
+        <!-- What USBAsio.dll writes when it registers itself, so the registration comes and goes
+             with the file instead of depending on self-registration. -->
+        <RegistryKey Root="HKLM" Key="SOFTWARE\Classes\CLSID\$(var.AsioClsid)">
+          <RegistryValue Type="string" Value="$(var.AsioDriverName)" />
+          <RegistryKey Key="InprocServer32">
+            <RegistryValue Type="string" Value="[#UsbAsioDll]" />
+            <RegistryValue Name="ThreadingModel" Type="string" Value="Apartment" />
+          </RegistryKey>
+        </RegistryKey>
+
+        <RegistryKey Root="HKLM" Key="SOFTWARE\ASIO\$(var.AsioDriverName)">
+          <RegistryValue Name="CLSID" Type="string" Value="$(var.AsioClsid)" />
+          <RegistryValue Name="Description" Type="string" Value="$(var.AsioDriverName)" />
+        </RegistryKey>
+      </Component>
+
+      <Component>
+        <File Id="ControlPanelExe" Source="$(var.AppStagingFolder)\USBAsioControlPanel.exe" KeyPath="yes" />
+      </Component>
+      <Component>
+        <File Id="ControlPanelPri" Source="$(var.AppStagingFolder)\USBAsioControlPanel.pri" KeyPath="yes" />
+      </Component>
+
+      <Component>
+        <File Id="DriverSelectorExe" Source="$(var.AppStagingFolder)\LowLatencyDriverSelector.exe" KeyPath="yes" />
+      </Component>
+      <Component>
+        <File Id="DriverSelectorPri" Source="$(var.AppStagingFolder)\LowLatencyDriverSelector.pri" KeyPath="yes" />
+      </Component>
+
+      <!-- shared by both apps -->
+      <Component>
+        <File Id="WindowsAppRuntimeBootstrapDll" Source="$(var.AppStagingFolder)\Microsoft.WindowsAppRuntime.Bootstrap.dll" KeyPath="yes" />
+      </Component>
+      <Component>
+        <File Id="WebView2CoreDll" Source="$(var.AppStagingFolder)\Microsoft.Web.WebView2.Core.dll" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+
+    <!-- The control panel loads its About page image from Assets on disk. -->
+    <ComponentGroup Id="ControlPanelAssets" Directory="ASSETSFOLDER">
+      <Files Include="$(var.AppStagingFolder)\Assets\**" />
+    </ComponentGroup>
+
+    <!-- The whole driver package, whatever files it has. The custom actions add it to the driver
+         store from here. -->
+    <ComponentGroup Id="DriverPackageFiles" Directory="DRIVERFOLDER">
+      <Files Include="$(var.DriverStagingFolder)\**" />
+    </ComponentGroup>
+
+    <!-- Start menu. ICE38 wants a per-user key path for anything in the Start menu folder, even
+         in a per-machine package. The targets are folder paths rather than file references,
+         because a file reference ties the shortcut to the file's component (ICE69). -->
+    <Component Id="StartMenuShortcuts" Directory="ShortcutFolder" Guid="3a7c26b0-18aa-42d8-8792-b3dbdf5dfe04">
+      <Shortcut Id="DriverSelectorShortcut"
+                Name="$(var.DriverSelectorShortcutName)"
+                Description="Choose which driver each USB Audio 2.0 device uses."
+                Target="[INSTALLFOLDER]LowLatencyDriverSelector.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <Shortcut Id="ControlPanelShortcut"
+                Name="$(var.ControlPanelShortcutName)"
+                Description="Change the ASIO buffer size and other settings."
+                Target="[INSTALLFOLDER]USBAsioControlPanel.exe"
+                WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="RemoveShortcutFolder" On="uninstall" />
+      <RegistryValue Root="HKCU"
+                     Key="Software\$(var.Manufacturer)\$(var.InstallFolderName)"
+                     Name="StartMenuShortcuts"
+                     Type="integer"
+                     Value="1"
+                     KeyPath="yes" />
+    </Component>
+
+    <Feature Id="LowLatencyAudio" Title="$(var.ProductName)" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentGroupRef Id="ControlPanelAssets" />
+      <ComponentGroupRef Id="DriverPackageFiles" />
+      <ComponentRef Id="StartMenuShortcuts" />
+    </Feature>
+
+    <!-- ============================== Driver package ============================== -->
+
+    <!--
+      The installer adds the driver package to the driver store and stops there. It never puts the
+      driver on a device: the INF lists no devices, and choosing them is up to the customer, in the
+      Driver Selector. On an upgrade, a device that already uses an older copy of the driver moves
+      to the new one.
+
+      Uninstall moves every device using the driver back to the next best driver, which is the
+      Windows USB Audio 2.0 driver, and deletes the package from the driver store. It is skipped
+      when this product is being removed as part of an upgrade, so devices don't drop back to the
+      Windows driver in the middle of one.
+
+      Neither action has a rollback action. A failed install can leave the package in the driver
+      store; running the installer again and then uninstalling clears it.
+    -->
+    <Binary Id="SetupActionsDll" SourceFile="$(var.CustomActionsFolder)\LowLatencyAudioSetupActions.dll" />
+
+    <CustomAction Id="InstallDriverPackage"
+                  BinaryRef="SetupActionsDll"
+                  DllEntry="InstallDriverPackage"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="check" />
+
+    <CustomAction Id="RemoveDriverPackages"
+                  BinaryRef="SetupActionsDll"
+                  DllEntry="RemoveDriverPackages"
+                  Execute="deferred"
+                  Impersonate="no"
+                  Return="ignore" />
+
+    <SetProperty Id="InstallDriverPackage"
+                 Value="[DRIVERFOLDER]$(var.DriverInfName)"
+                 Before="InstallDriverPackage"
+                 Sequence="execute" />
+
+    <SetProperty Id="RemoveDriverPackages"
+                 Value="[DRIVERFOLDER]$(var.DriverInfName)"
+                 Before="RemoveDriverPackages"
+                 Sequence="execute" />
+
+    <InstallExecuteSequence>
+      <Custom Action="InstallDriverPackage" After="InstallFiles" Condition="NOT REMOVE~=&quot;ALL&quot;" />
+      <Custom Action="RemoveDriverPackages" Before="RemoveFiles" Condition="REMOVE~=&quot;ALL&quot; AND NOT UPGRADINGPRODUCTCODE" />
+    </InstallExecuteSequence>
+
+  </Package>
+</Wix>

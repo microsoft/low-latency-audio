@@ -1,0 +1,25 @@
+<Project Sdk="WixToolset.Sdk/6.0.0">
+
+  <PropertyGroup>
+    <OutputType>Bundle</OutputType>
+    <OutputName>LowLatencyAudioSetup</OutputName>
+    <DefineConstants>$(DefineConstants);ProductVersion=$(LlaVersionMajor).$(LlaVersionMinor).$(LlaVersionBuild).$(LlaVersionRevision);VCRuntimeInstaller=$(LlaVCRuntimeInstaller);WindowsAppRuntimeInstaller=$(LlaWindowsAppRuntimeInstaller);ProductIconFile=$(LlaRepoRoot)src\driver-selector\Assets\AppIcon.ico</DefineConstants>
+
+    <!-- WIX1161 recommends a detect condition for each runtime installer. Both check for
+         themselves and finish straight away when the runtime is already there. -->
+    <SuppressSpecificWarnings>1161</SuppressSpecificWarnings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WixToolset.Bal.wixext" Version="6.0.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\package\LowLatencyAudioPackage.wixproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="logo.png" />
+  </ItemGroup>
+
+</Project>
