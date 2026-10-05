@@ -338,7 +338,6 @@ class TransferObject
     ULONG                    m_isoPacketLength[UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_FRAMES_PER_MS]{0};
     ULONG                    m_totalProcessedBytesSoFar[UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_FRAMES_PER_MS]{0};
     WDFSPINLOCK              m_spinLock{nullptr};
-    KEVENT                   m_requestCompletedEvent{0};
     ULONGLONG                m_completedTimeUs{0ULL};   // Time when the URB was processed (microseconds)
     ULONGLONG                m_qpcPosition{0ULL};       // Time when the URB was processed (query performance counter value)
     ULONGLONG                m_periodUs{0ULL};          // Interval between the time the previous URB was processed and the time this URB was processed; 0 for the first URB (microseconds)

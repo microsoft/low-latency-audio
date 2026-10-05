@@ -71,8 +71,6 @@ TransferObject::TransferObject(
     status = WdfSpinLockCreate(&attributes, &m_spinLock);
     ASSERT(NT_SUCCESS(status));
 
-    KeInitializeEvent(&m_requestCompletedEvent, NotificationEvent, TRUE);
-
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
 
@@ -838,8 +836,6 @@ TransferObject::SendIsochronousRequest(
     requestContext->UrbMemory = m_urbMemory;
     WdfSpinLockRelease(m_spinLock);
 
-    KeClearEvent(&m_requestCompletedEvent);
-
 #if defined(DBG)
     if (false)
     {
@@ -871,36 +867,45 @@ TransferObject::CancelRequest()
 {
     NTSTATUS status = STATUS_SUCCESS;
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, m_index = %u", m_index);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, direction = %s, m_index = %u", GetDirectionString(m_direction), m_index);
 
-    if ((InterlockedExchange(&m_requestState, toLONG(RequestState::Cancelling)) == toLONG(RequestState::InFlight)) && (m_request != nullptr))
+    if (InterlockedCompareExchange(&m_requestState, toLONG(RequestState::Cancelling), toLONG(RequestState::InFlight)) == toLONG(RequestState::InFlight))
     {
-        LARGE_INTEGER timeout{};
-        // Isochronous only
-        timeout.QuadPart = (UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_DEFAULT_FIRST_PACKET_LATENCY) * -20000LL;
-
-		// 
-		// If WdfRequestCancelSentRequest times out, the underlying request may still be owned by the USB stack. 
-		// Destroying the TransferObject immediately after the timeout can therefore result in a use-after-free condition and trigger a system crash (bug check).
-		//
-		// To avoid this, AudioIsochronousEngine and TransferObject are detached from ISOCHRONOUS_REQUEST_CONTEXT before issuing the cancellation request.
-		//
-		// The AudioIsochronousEngine pointer in ISOCHRONOUS_REQUEST_CONTEXT is managed using interlocked operations. 
-		// This allows the cancellation and completion paths to safely transfer ownership and prevents both paths from operating on the same object simultaneously.
-		//
-        PISOCHRONOUS_REQUEST_CONTEXT requestContext = GetIsochronousRequestContext(m_request);
-        AudioIsochronousEngine *     audioIsochronousEngine = (AudioIsochronousEngine *)InterlockedExchangePointer((volatile PVOID *)&(requestContext->AudioIsochronousEngine), nullptr);
-        InterlockedExchangePointer((volatile PVOID *)&(requestContext->TransferObject), nullptr);
-        WdfRequestCancelSentRequest(m_request);
-
-        if (audioIsochronousEngine != nullptr)
+        //
+        // The request may remain owned by the USB stack after WdfRequestCancelSentRequest returns.
+        // Accessing a destroyed TransferObject from the completion routine can therefore result in a use-after-free condition and trigger a system crash.
+        //
+        // To prevent this, AudioIsochronousEngine and TransferObject are detached from ISOCHRONOUS_REQUEST_CONTEXT before issuing the cancellation request.
+        //
+        // The pointers in ISOCHRONOUS_REQUEST_CONTEXT are managed using interlocked operations.
+        // This allows the cancellation and completion paths to safely transfer ownership and prevents both paths from processing the same references.
+        //
+        WdfSpinLockAcquire(m_spinLock);
+        if (m_request != nullptr)
         {
-            audioIsochronousEngine->Release();
+            PISOCHRONOUS_REQUEST_CONTEXT requestContext = GetIsochronousRequestContext(m_request);
+            AudioIsochronousEngine *     audioIsochronousEngine = (AudioIsochronousEngine *)InterlockedExchangePointer((volatile PVOID *)&(requestContext->AudioIsochronousEngine), nullptr);
+            InterlockedExchangePointer((volatile PVOID *)&(requestContext->TransferObject), nullptr);
+
+            //
+            // Keep the request object valid while canceling the sent request.
+            // https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/synchronizing-cancellation-of-sent-requests
+            //
+            WDFREQUEST request = m_request;
+            WdfObjectReference(request);
+            WdfSpinLockRelease(m_spinLock);
+
+            WdfRequestCancelSentRequest(request);
+            WdfObjectDereference(request);
+
+            if (audioIsochronousEngine != nullptr)
+            {
+                audioIsochronousEngine->Release();
+            }
         }
-        status = KeWaitForSingleObject(&m_requestCompletedEvent, Executive, KernelMode, FALSE, &timeout);
-        if (status == STATUS_TIMEOUT)
+        else
         {
-            TraceEvents(TRACE_LEVEL_WARNING, TRACE_DEVICE, " - Timeout occurred while canceling the request. %!STATUS!", status);
+            WdfSpinLockRelease(m_spinLock);
         }
     }
 
@@ -927,8 +932,6 @@ void TransferObject::CompleteRequest(
     m_periodUs = periodUs;
     m_qpcPosition = qpcPosition;
     m_periodQPCPosition = periodQPCPosition;
-    KeSetEvent(&m_requestCompletedEvent, 1, FALSE);
-
     WdfSpinLockRelease(m_spinLock);
 
     // TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
