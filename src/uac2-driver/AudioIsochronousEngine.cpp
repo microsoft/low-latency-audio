@@ -917,8 +917,7 @@ NTSTATUS AudioIsochronousEngine::StartIsoStream()
     auto startIsoStreamScope = wil::scope_exit([&]() {
         if (!NT_SUCCESS(status) && (m_streamObject != nullptr) && (status != STATUS_DEVICE_BUSY))
         {
-            delete m_streamObject;
-            m_streamObject = nullptr;
+			StopIsoStream();
         }
         else
         {
