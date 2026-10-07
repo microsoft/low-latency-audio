@@ -46,7 +46,15 @@ TransferObject * TransferObject::Create(
 {
     PAGED_CODE();
 
-    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) TransferObject(deviceContext, audioIsochronousEngine, streamObject, index, direction);
+    TransferObject * transferObject = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) TransferObject(deviceContext, audioIsochronousEngine, streamObject, index, direction);
+
+    if ((transferObject != nullptr) && (transferObject->m_spinLock == nullptr))
+    {
+        delete transferObject;
+        transferObject = nullptr;
+    }
+
+    return transferObject;
 }
 
 _Use_decl_annotations_
@@ -70,6 +78,11 @@ TransferObject::TransferObject(
     attributes.ParentObject = m_deviceContext->Device;
     status = WdfSpinLockCreate(&attributes, &m_spinLock);
     ASSERT(NT_SUCCESS(status));
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
+        m_spinLock = nullptr;
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }

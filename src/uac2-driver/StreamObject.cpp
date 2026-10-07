@@ -54,7 +54,15 @@ StreamObject * StreamObject::Create(
 {
     PAGED_CODE();
 
-    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) StreamObject(deviceContext, audioIsochronousEngine, ioStable, ioStreaming, ioSteady, maxIrpNumber);
+    StreamObject * streamObject = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) StreamObject(deviceContext, audioIsochronousEngine, ioStable, ioStreaming, ioSteady, maxIrpNumber);
+
+    if ((streamObject != nullptr) && ((streamObject->m_positionSpinLock == nullptr) || (streamObject->m_packetSpinLock == nullptr)))
+    {
+        delete streamObject;
+        streamObject = nullptr;
+    }
+
+    return streamObject;
 }
 
 _Use_decl_annotations_
@@ -70,17 +78,28 @@ StreamObject::StreamObject(
     : m_deviceContext(deviceContext), m_audioIsochronousEngine(audioIsochronousEngine), c_ioStable(ioStable), c_ioStreaming(ioStreaming), c_ioSteady(ioSteady), c_maxIrpNumber(maxIrpNumber)
 {
     WDF_OBJECT_ATTRIBUTES attributes;
+    NTSTATUS              status;
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
     attributes.ParentObject = deviceContext->Device;
-    WdfSpinLockCreate(&attributes, &m_positionSpinLock);
+    status = WdfSpinLockCreate(&attributes, &m_positionSpinLock);
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
+        m_positionSpinLock = nullptr;
+    }
 
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
     attributes.ParentObject = deviceContext->Device;
-    WdfSpinLockCreate(&attributes, &m_packetSpinLock);
+    status = WdfSpinLockCreate(&attributes, &m_packetSpinLock);
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
+        m_packetSpinLock = nullptr;
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
