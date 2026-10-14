@@ -798,7 +798,7 @@ CCaptureStreamEngine::ReleaseHardware()
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Entry");
 
-    m_audioIsochronousEngine->StreamResetCurrentPacket(false, m_deviceIndex);
+    m_audioIsochronousEngine->StreamResetCurrentPacket(true, m_deviceIndex);
     m_audioIsochronousEngine->StreamReleaseHardware(true, m_deviceIndex);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit");
