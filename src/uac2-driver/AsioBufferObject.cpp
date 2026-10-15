@@ -213,12 +213,16 @@ AsioBufferObject::SetBuffer(
     RETURN_NTSTATUS_IF_TRUE_ACTION(playBuffer == nullptr, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferLength < playBufferOffset, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(recBufferLength < recBufferOffset, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION((playBufferLength - playBufferOffset) < sizeof(UAC_ASIO_PLAY_BUFFER_HEADER), status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION((recBufferLength - recBufferOffset) < sizeof(UAC_ASIO_REC_BUFFER_HEADER), status = STATUS_INVALID_PARAMETER, status);
+
+    const ULONG actualPlayBufferLength = playBufferLength - playBufferOffset;
+    const ULONG actualRecBufferLength = recBufferLength - recBufferOffset;
+
+    RETURN_NTSTATUS_IF_TRUE_ACTION(actualPlayBufferLength < sizeof(UAC_ASIO_PLAY_BUFFER_HEADER), status = STATUS_INVALID_PARAMETER, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(actualRecBufferLength < sizeof(UAC_ASIO_REC_BUFFER_HEADER), status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_recMdlLocked, status = STATUS_DEVICE_BUSY, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_playMdlLocked, status = STATUS_DEVICE_BUSY, status);
 
-    status = LockAndGetSystemAddress(false, playBuffer + playBufferOffset, playBufferLength - playBufferOffset, m_playMdl, m_playMdlLocked, systemAddress);
+    status = LockAndGetSystemAddress(false, playBuffer + playBufferOffset, actualPlayBufferLength, m_playMdl, m_playMdlLocked, systemAddress);
     RETURN_NTSTATUS_IF_FAILED(status);
 
     RtlCopyMemory(&playBufferHeader, systemAddress, sizeof(playBufferHeader));
@@ -229,7 +233,7 @@ AsioBufferObject::SetBuffer(
     RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.HeaderLength < (offsetof(UAC_ASIO_PLAY_BUFFER_HEADER, AsioDriverVersion) + sizeof(ULONG)), status = STATUS_INVALID_BUFFER_SIZE, status);
 
     m_playBuffer = static_cast<PBYTE>(systemAddress) + playBufferHeader.HeaderLength;
-    m_playBufferSize = playBufferLength - playBufferOffset - playBufferHeader.HeaderLength;
+    m_playBufferSize = actualPlayBufferLength - playBufferHeader.HeaderLength;
 
     RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.AsioDriverVersion != UAC_ASIO_DRIVER_VERSION, status = STATUS_REVISION_MISMATCH, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.PlayChannels > UAC_MAX_ASIO_CHANNELS, status = STATUS_INVALID_PARAMETER, status);
@@ -241,7 +245,7 @@ AsioBufferObject::SetBuffer(
     RETURN_NTSTATUS_IF_TRUE_ACTION((m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat != UACSampleFormat::UAC_SAMPLE_FORMAT_PCM && m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat != UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT), status = STATUS_NO_MATCH, status);
 
     systemAddress = nullptr;
-    status = LockAndGetSystemAddress(true, recBuffer + recBufferOffset, recBufferLength - recBufferOffset, m_recMdl, m_recMdlLocked, systemAddress);
+    status = LockAndGetSystemAddress(true, recBuffer + recBufferOffset, actualRecBufferLength, m_recMdl, m_recMdlLocked, systemAddress);
     RETURN_NTSTATUS_IF_FAILED(status);
 
     RtlCopyMemory(&recBufferHeader, systemAddress, sizeof(recBufferHeader));
@@ -251,7 +255,7 @@ AsioBufferObject::SetBuffer(
     RETURN_NTSTATUS_IF_TRUE_ACTION(recBufferHeader.HeaderLength != sizeof(UAC_ASIO_REC_BUFFER_HEADER), status = STATUS_INVALID_BUFFER_SIZE, status);
 
     m_recBuffer = static_cast<PBYTE>(systemAddress) + recBufferHeader.HeaderLength;
-    m_recBufferSize = recBufferLength - recBufferOffset - recBufferHeader.HeaderLength;
+    m_recBufferSize = actualRecBufferLength - recBufferHeader.HeaderLength;
 
     ULONG bytesPerSample = USBAudioDataFormat::ConvertSampleTypeToBytesPerSample(m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleType);
     ULONG bufferSizeBytes = playBufferHeader.PeriodSamples;
@@ -280,16 +284,19 @@ AsioBufferObject::SetBuffer(
     m_recHeader->CurrentSampleRate = m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.SampleRate;
     m_recHeader->CurrentClockSource = 0;
 
-    if ((((playBufferLength - playBufferOffset) != (playBufferHeader.HeaderLength + requiredPlayBufferLength)) || (recBufferLength - recBufferOffset) != (recBufferHeader.HeaderLength + requiredRecBufferLength)))
+    const ULONG expectedPlayBufferLength = playBufferHeader.HeaderLength + requiredPlayBufferLength;
+    const ULONG expectedRecBufferLength = recBufferHeader.HeaderLength + requiredRecBufferLength;
+
+    if ((actualPlayBufferLength != expectedPlayBufferLength) || (actualRecBufferLength != expectedRecBufferLength))
     {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ASIO, "invalid buffer length, IN %u, req %u, OUT %u, req %u", recBufferHeader.HeaderLength + requiredRecBufferLength, recBufferLength - recBufferOffset, playBufferHeader.HeaderLength + requiredPlayBufferLength, playBufferLength - playBufferOffset);
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_ASIO, "invalid buffer length, IN %u, req %u, OUT %u, req %u", actualRecBufferLength, expectedRecBufferLength, actualPlayBufferLength, expectedPlayBufferLength);
         TraceEvents(TRACE_LEVEL_ERROR, TRACE_ASIO, "playHdr PeriodSamples %u, RecChannels %u, PlayChannels %u, bytesPerSample %u", playBufferHeader.PeriodSamples, playBufferHeader.RecChannels, playBufferHeader.PlayChannels, bytesPerSample);
 
-        if ((playBufferLength < (playBufferHeader.HeaderLength + requiredPlayBufferLength)) || (recBufferLength < (recBufferHeader.HeaderLength + requiredRecBufferLength)))
+        if ((actualPlayBufferLength < expectedPlayBufferLength) || (actualRecBufferLength < expectedRecBufferLength))
         {
             status = STATUS_BUFFER_TOO_SMALL;
         }
-        else if ((playBufferLength > (playBufferHeader.HeaderLength + requiredPlayBufferLength)) || (recBufferLength > (recBufferHeader.HeaderLength + requiredRecBufferLength)))
+        else
         {
             status = STATUS_INVALID_BUFFER_SIZE;
         }
