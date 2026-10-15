@@ -44,6 +44,107 @@ const ULONG c_SampleRateList[] = {
 };
 const ULONG c_SampleRateCount = SIZEOF_ARRAY(c_SampleRateList);
 
+#define HNSTIME_PER_MILLISECOND 10000
+
+static struct
+{
+    KSAUDIO_PACKETSIZE_CONSTRAINTS2              TransportPacketConstraints;         // 1
+    KSAUDIO_PACKETSIZE_PROCESSINGMODE_CONSTRAINT AdditionalProcessingConstraints[1]; // 1 + 1 = 2
+} s_PacketSizeConstraints = {
+    {ULONG(2.0 * (double)HNSTIME_PER_MILLISECOND),                                   // 2 ms minimum processing interval
+     FILE_LONG_ALIGNMENT,                                                            // 4 byte packet size alignment
+     0,                                                                              // no maximum packet size constraint
+     2,                                                                              // 2 processing constraints follow
+     {
+         STATIC_AUDIO_SIGNALPROCESSINGMODE_RAW,                                      // constraint for raw processing mode
+         0,                                                                          // NA samples per processing frame
+         ULONG(2.0 * (double)HNSTIME_PER_MILLISECOND),                               // 20000 hns (2ms) per processing frame
+     }
+    },
+    {{
+        STATIC_AUDIO_SIGNALPROCESSINGMODE_DEFAULT,    // constraint for default processing mode
+        0,                                            // NA samples per processing frame
+        ULONG(2.0 * (double)HNSTIME_PER_MILLISECOND), // 20000 hns (2ms) per processing frame
+    }
+    }
+};
+
+const DSP_DEVPROPERTY c_InterfaceProperties[] =
+    {
+        {
+            &DEVPKEY_KsAudio_PacketSize_Constraints2, // Key
+            DEVPROP_TYPE_BINARY,                      // Type
+            sizeof(s_PacketSizeConstraints),          // BufferSize
+            &s_PacketSizeConstraints,                 // Buffer
+        },
+};
+
+const ULONG c_InterfacePropertiesCount = ARRAYSIZE(c_InterfaceProperties);
+
+typedef struct _TERMINALTYPE_TO_PINCATEGORY_ENTRY
+{
+    const USHORT TerminalType;
+    const GUID * PinCategory;
+} TERMINALTYPE_TO_PINCATEGORY_ENTRY, *PTERMINALTYPE_TO_PINCATEGORY_ENTRY;
+
+static const TERMINALTYPE_TO_PINCATEGORY_ENTRY s_TerminalTypeToPinCategoryEntries[] = {
+    {NS_USBAudio0200::MICROPHONE, &KSNODETYPE_MICROPHONE},
+    {NS_USBAudio0200::DESKTOP_MICROPHONE, &KSNODETYPE_DESKTOP_MICROPHONE},
+    {NS_USBAudio0200::PERSONAL_MICROPHONE, &KSNODETYPE_PERSONAL_MICROPHONE},
+    {NS_USBAudio0200::OMNI_DIRECTIONAL_MICROPHONE, &KSNODETYPE_OMNI_DIRECTIONAL_MICROPHONE},
+    {NS_USBAudio0200::MICROPHONE_ARRAY, &KSNODETYPE_MICROPHONE_ARRAY},
+    {NS_USBAudio0200::PROCESSING_MICROPHONE_ARRAY, &KSNODETYPE_PROCESSING_MICROPHONE_ARRAY},
+    {NS_USBAudio0200::SPEAKER, &KSNODETYPE_SPEAKER},
+    {NS_USBAudio0200::HEADPHONES, &KSNODETYPE_HEADPHONES},
+    {NS_USBAudio0200::HEAD_MOUNTED_DISPLAY_AUDIO, &KSNODETYPE_HEAD_MOUNTED_DISPLAY_AUDIO},
+    {NS_USBAudio0200::DESKTOP_SPEAKER, &KSNODETYPE_DESKTOP_SPEAKER},
+    {NS_USBAudio0200::ROOM_SPEAKER, &KSNODETYPE_ROOM_SPEAKER},
+    {NS_USBAudio0200::COMMUNICATION_SPEAKER, &KSNODETYPE_COMMUNICATION_SPEAKER},
+    {NS_USBAudio0200::LOW_FREQUENCY_EFFECTS_SPEAKER, &KSNODETYPE_LOW_FREQUENCY_EFFECTS_SPEAKER},
+    {NS_USBAudio0200::HANDSET, &KSNODETYPE_HANDSET},
+    {NS_USBAudio0200::HEADSET, &KSNODETYPE_HEADSET},
+    {NS_USBAudio0200::SPEAKERPHONE_NO_ECHO_REDUCTION, &KSNODETYPE_SPEAKERPHONE_NO_ECHO_REDUCTION},
+    {NS_USBAudio0200::ECHO_SUPPRESSING_SPEAKERPHONE, &KSNODETYPE_ECHO_SUPPRESSING_SPEAKERPHONE},
+    {NS_USBAudio0200::ECHO_CANCELING_SPEAKERPHONE, &KSNODETYPE_ECHO_CANCELING_SPEAKERPHONE},
+    {NS_USBAudio0200::PHONE_LINE, &KSNODETYPE_PHONE_LINE},
+    {NS_USBAudio0200::TELEPHONE, &KSNODETYPE_TELEPHONE},
+    {NS_USBAudio0200::DOWN_LINE_PHONE, &KSNODETYPE_DOWN_LINE_PHONE},
+    {NS_USBAudio0200::ANALOG_CONNECTOR, &KSNODETYPE_ANALOG_CONNECTOR},
+    {NS_USBAudio0200::DIGITAL_AUDIO_INTERFACE, &KSNODETYPE_DIGITAL_AUDIO_INTERFACE},
+    {NS_USBAudio0200::LINE_CONNECTOR, &KSNODETYPE_LINE_CONNECTOR},
+    {NS_USBAudio0200::LEGACY_AUDIO_CONNECTOR, &KSNODETYPE_LEGACY_AUDIO_CONNECTOR},
+    {NS_USBAudio0200::SPDIF_INTERFACE, &KSNODETYPE_SPDIF_INTERFACE},
+    {NS_USBAudio0200::_1394_DA_STREAM, &KSNODETYPE_1394_DA_STREAM},
+    {NS_USBAudio0200::_1394_DV_STREAM_SOUNDTRACK, &KSNODETYPE_1394_DV_STREAM_SOUNDTRACK},
+    {NS_USBAudio0200::EMBEDDED_UNDEFINED, &KSNODETYPE_EMBEDDED_UNDEFINED},
+    {NS_USBAudio0200::LEVEL_CALIBRATION_NOISE_SOURCE, &KSNODETYPE_LEVEL_CALIBRATION_NOISE_SOURCE},
+    {NS_USBAudio0200::EQUALIZATION_NOISE, &KSNODETYPE_EQUALIZATION_NOISE},
+    {NS_USBAudio0200::CD_PLAYER, &KSNODETYPE_CD_PLAYER},
+    {NS_USBAudio0200::DAT, &KSNODETYPE_DAT_IO_DIGITAL_AUDIO_TAPE},
+    {NS_USBAudio0200::DCC, &KSNODETYPE_DCC_IO_DIGITAL_COMPACT_CASSETTE},
+    {NS_USBAudio0200::COMPRESSED_AUDIO_PLAYER, &KSNODETYPE_MINIDISK},
+    {NS_USBAudio0200::ANALOG_TAPE, &KSNODETYPE_ANALOG_TAPE},
+    {NS_USBAudio0200::PHONOGRAPH, &KSNODETYPE_PHONOGRAPH},
+    {NS_USBAudio0200::VCR_AUDIO, &KSNODETYPE_VCR_AUDIO},
+    {NS_USBAudio0200::VIDEO_DISC_AUDIO, &KSNODETYPE_VIDEO_DISC_AUDIO},
+    {NS_USBAudio0200::DVD_AUDIO, &KSNODETYPE_DVD_AUDIO},
+    {NS_USBAudio0200::TV_TUNER_AUDIO, &KSNODETYPE_TV_TUNER_AUDIO},
+    {NS_USBAudio0200::SATELLITE_RECEIVER_AUDIO, &KSNODETYPE_SATELLITE_RECEIVER_AUDIO},
+    {NS_USBAudio0200::CABLE_TUNER_AUDIO, &KSNODETYPE_CABLE_TUNER_AUDIO},
+    {NS_USBAudio0200::DSS_AUDIO, &KSNODETYPE_DSS_AUDIO},
+    {NS_USBAudio0200::RADIO_RECEIVER, &KSNODETYPE_RADIO_RECEIVER},
+    {NS_USBAudio0200::RADIO_TRANSMITTER, &KSNODETYPE_RADIO_TRANSMITTER},
+    {NS_USBAudio0200::MULTITRACK_RECORDER, &KSNODETYPE_MULTITRACK_RECORDER},
+    {NS_USBAudio0200::SYNTHESIZER, &KSNODETYPE_SYNTHESIZER},
+    // {  NS_USBAudio0200::ADAT_LIGHTPIPE, nullptr },
+    // {  NS_USBAudio0200::TDIF, nullptr },
+    // {  NS_USBAudio0200::MADI, nullptr },
+    // {  NS_USBAudio0200::PIANO, nullptr },
+    // {  NS_USBAudio0200::GUITAR, nullptr },
+    // {  NS_USBAudio0200::DRUMS_RHYTHM, nullptr },
+    // {  NS_USBAudio0200::OTHER_MUSICAL_INSTRUMENT, nullptr },
+};
+
 PAGED_CODE_SEG
 NTSTATUS AllocateFormat(
     _In_ KSDATAFORMAT_WAVEFORMATEXTENSIBLE * WaveFormat,
@@ -300,6 +401,110 @@ exit:
 } // EvtAudioCpuResourcesCallback
 
 PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
+ProcessRequestHandler_BasicSupport(
+    PACX_REQUEST_PARAMETERS Params,
+    ULONG                   Flags,
+    DWORD                   PropTypeSetId
+)
+{
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    ASSERT(Flags & KSPROPERTY_TYPE_BASICSUPPORT);
+
+    if (Params->Parameters.Property.ValueCb >= sizeof(KSPROPERTY_DESCRIPTION))
+    {
+        // if return buffer can hold a KSPROPERTY_DESCRIPTION, return it
+        //
+        PKSPROPERTY_DESCRIPTION propertyDescription = (PKSPROPERTY_DESCRIPTION)Params->Parameters.Property.Value;
+
+        propertyDescription->AccessFlags = Flags;
+        propertyDescription->DescriptionSize = sizeof(KSPROPERTY_DESCRIPTION);
+        if (VT_ILLEGAL != PropTypeSetId)
+        {
+            propertyDescription->PropTypeSet.Set = KSPROPTYPESETID_General;
+            propertyDescription->PropTypeSet.Id = PropTypeSetId;
+        }
+        else
+        {
+            propertyDescription->PropTypeSet.Set = GUID_NULL;
+            propertyDescription->PropTypeSet.Id = 0;
+        }
+        propertyDescription->PropTypeSet.Flags = 0;
+        propertyDescription->MembersListCount = 0;
+        propertyDescription->Reserved = 0;
+
+        Params->Parameters.Property.ValueCb = sizeof(KSPROPERTY_DESCRIPTION);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Description       = KSPROPERTY_DESCRIPTION ");
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - AccessFlags       = 0x%08x", propertyDescription->AccessFlags);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - DescriptionSize   = 0x%08x", propertyDescription->DescriptionSize);
+        if (VT_ILLEGAL != PropTypeSetId)
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - PropertySet       = KSPROPERTYSETID_General %d", propertyDescription->PropTypeSet.Id);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  Set              = KSPROPTYPESETID_General");
+        }
+        else
+        {
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - PropertySet       = GUID_NULL 0");
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  Set              = GUID_NULL");
+        }
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  Id               = 0x%08x", propertyDescription->PropTypeSet.Id);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  Flags            = 0x%08x", propertyDescription->PropTypeSet.Flags);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  MembersListCount = 0x%08x", propertyDescription->MembersListCount);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " -  Reserved         = 0x%08x", propertyDescription->Reserved);
+        status = STATUS_SUCCESS;
+    }
+    else if (Params->Parameters.Property.ValueCb >= sizeof(ULONG))
+    {
+        // if return buffer can hold a ULONG, return the access flags
+        //
+        *(PULONG)(Params->Parameters.Property.Value) = Flags;
+
+        Params->Parameters.Property.ValueCb = sizeof(ULONG);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Value   = 0x%08x", *(PULONG)(Params->Parameters.Property.Value));
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - ValueCb = 0x%08x", Params->Parameters.Property.ValueCb);
+        status = STATUS_SUCCESS;
+    }
+    else
+    {
+        Params->Parameters.Property.ValueCb = 0;
+        status = STATUS_BUFFER_TOO_SMALL;
+    }
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
+
+    return status;
+}
+
+PAGED_CODE_SEG
+_Use_decl_annotations_
+NTSTATUS
+ProcessRequestHandler_BasicSupportAgc(
+    PACX_REQUEST_PARAMETERS /* Params */,
+    ULONG /* Flags */,
+    DWORD /* PropTypeSetId */
+)
+{
+    NTSTATUS status = STATUS_INVALID_PARAMETER;
+
+    PAGED_CODE();
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Entry");
+
+    // ASSERT(Flags & KSPROPERTY_TYPE_BASICSUPPORT);
+
+    // TBD
+
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ENTITY, "%!FUNC! Exit %!STATUS!", status);
+
+    return status;
+}
+
+PAGED_CODE_SEG
 ULONG GetSampleRateFromIndex(_In_ ULONG Index)
 {
     PAGED_CODE();
@@ -344,98 +549,17 @@ const GUID * ConvertTerminalType(
 
     PAGED_CODE();
 
-    switch (TerminalType)
+    for (ULONG index = 0; index < SIZEOF_ARRAY(s_TerminalTypeToPinCategoryEntries); index++)
     {
-    case NS_USBAudio0200::MICROPHONE:
-        pinCategory = &KSNODETYPE_MICROPHONE;
-        break;
-    case NS_USBAudio0200::DESKTOP_MICROPHONE:
-        pinCategory = &KSNODETYPE_DESKTOP_MICROPHONE;
-        break;
-    case NS_USBAudio0200::PERSONAL_MICROPHONE:
-        pinCategory = &KSNODETYPE_PERSONAL_MICROPHONE;
-        break;
-    case NS_USBAudio0200::OMNI_DIRECTIONAL_MICROPHONE:
-        pinCategory = &KSNODETYPE_OMNI_DIRECTIONAL_MICROPHONE;
-        break;
-    case NS_USBAudio0200::MICROPHONE_ARRAY:
-        pinCategory = &KSNODETYPE_MICROPHONE_ARRAY;
-        break;
-    case NS_USBAudio0200::PROCESSING_MICROPHONE_ARRAY:
-        pinCategory = &KSNODETYPE_PROCESSING_MICROPHONE_ARRAY;
-        break;
-    case NS_USBAudio0200::SPEAKER:
-        pinCategory = &KSNODETYPE_SPEAKER;
-        break;
-    case NS_USBAudio0200::HEADPHONES:
-        pinCategory = &KSNODETYPE_HEADPHONES;
-        break;
-    case NS_USBAudio0200::HEAD_MOUNTED_DISPLAY_AUDIO:
-        pinCategory = &KSNODETYPE_HEAD_MOUNTED_DISPLAY_AUDIO;
-        break;
-    case NS_USBAudio0200::DESKTOP_SPEAKER:
-        pinCategory = &KSNODETYPE_DESKTOP_SPEAKER;
-        break;
-    case NS_USBAudio0200::ROOM_SPEAKER:
-        pinCategory = &KSNODETYPE_ROOM_SPEAKER;
-        break;
-    case NS_USBAudio0200::COMMUNICATION_SPEAKER:
-        pinCategory = &KSNODETYPE_COMMUNICATION_SPEAKER;
-        break;
-    case NS_USBAudio0200::LOW_FREQUENCY_EFFECTS_SPEAKER:
-        pinCategory = &KSNODETYPE_LOW_FREQUENCY_EFFECTS_SPEAKER;
-        break;
-    case NS_USBAudio0200::HANDSET:
-        pinCategory = &KSNODETYPE_HANDSET;
-        break;
-    case NS_USBAudio0200::HEADSET:
-        pinCategory = &KSNODETYPE_HEADSET;
-        break;
-    case NS_USBAudio0200::SPEAKERPHONE_NO_ECHO_REDUCTION:
-        pinCategory = &KSNODETYPE_SPEAKERPHONE_NO_ECHO_REDUCTION;
-        break;
-    case NS_USBAudio0200::ECHO_SUPPRESSING_SPEAKERPHONE:
-        pinCategory = &KSNODETYPE_ECHO_SUPPRESSING_SPEAKERPHONE;
-        break;
-    case NS_USBAudio0200::ECHO_CANCELING_SPEAKERPHONE:
-        pinCategory = &KSNODETYPE_ECHO_CANCELING_SPEAKERPHONE;
-        break;
-    case NS_USBAudio0200::PHONE_LINE:
-        pinCategory = &KSNODETYPE_PHONE_LINE;
-        break;
-    case NS_USBAudio0200::TELEPHONE:
-        pinCategory = &KSNODETYPE_TELEPHONE;
-        break;
-    case NS_USBAudio0200::DOWN_LINE_PHONE:
-        pinCategory = &KSNODETYPE_DOWN_LINE_PHONE;
-        break;
-    case NS_USBAudio0200::ANALOG_CONNECTOR:
-        pinCategory = &KSNODETYPE_ANALOG_CONNECTOR;
-        break;
-    case NS_USBAudio0200::DIGITAL_AUDIO_INTERFACE:
-        pinCategory = &KSNODETYPE_DIGITAL_AUDIO_INTERFACE;
-        break;
-    case NS_USBAudio0200::LINE_CONNECTOR:
+        if (TerminalType == s_TerminalTypeToPinCategoryEntries[index].TerminalType)
+        {
+            pinCategory = s_TerminalTypeToPinCategoryEntries[index].PinCategory;
+            break;
+        }
+    }
+    if (pinCategory == nullptr)
+    {
         pinCategory = &KSNODETYPE_LINE_CONNECTOR;
-        break;
-    case NS_USBAudio0200::LEGACY_AUDIO_CONNECTOR:
-        pinCategory = &KSNODETYPE_LEGACY_AUDIO_CONNECTOR;
-        break;
-    case NS_USBAudio0200::SPDIF_INTERFACE:
-        pinCategory = &KSNODETYPE_SPDIF_INTERFACE;
-        break;
-    case NS_USBAudio0200::_1394_DA_STREAM:
-        pinCategory = &KSNODETYPE_1394_DA_STREAM;
-        break;
-    case NS_USBAudio0200::_1394_DV_STREAM_SOUNDTRACK:
-        pinCategory = &KSNODETYPE_1394_DV_STREAM_SOUNDTRACK;
-        break;
-    default:
-    case NS_USBAudio0200::ADAT_LIGHTPIPE:
-    case NS_USBAudio0200::TDIF:
-    case NS_USBAudio0200::MADI:
-        pinCategory = &KSNODETYPE_LINE_CONNECTOR;
-        break;
     }
 
     return pinCategory;
@@ -569,6 +693,39 @@ NTSTATUS ConvertAudioDataFormat(
 }
 
 PAGED_CODE_SEG
+_Use_decl_annotations_
+ULONG ConvertSpeakerPositions(
+    ULONG channelConfig
+)
+{
+    PAGED_CODE();
+
+    if (channelConfig < NS_USBAudio0200::TOP_FRONT_LEFT_OF_CENTER)
+    {
+        // NS_USBAudio0200::FRONT_LEFT                 , = 0x00000001, SPEAKER_FRONT_LEFT               = 0x00000001
+        // NS_USBAudio0200::FRONT_RIGHT                , = 0x00000002, SPEAKER_FRONT_RIGHT              = 0x00000002
+        // NS_USBAudio0200::FRONT_CENTER               , = 0x00000004, SPEAKER_FRONT_CENTER             = 0x00000004
+        // NS_USBAudio0200::LOW_FREQUENCY_EFFECTS_LFE  , = 0x00000008, SPEAKER_LOW_FREQUENCY            = 0x00000008
+        // NS_USBAudio0200::BACK_LEFT                  , = 0x00000010, SPEAKER_BACK_LEFT                = 0x00000010
+        // NS_USBAudio0200::BACK_RIGHT                 , = 0x00000020, SPEAKER_BACK_RIGHT               = 0x00000020
+        // NS_USBAudio0200::FRONT_LEFT_OF_CENTER       , = 0x00000040, SPEAKER_FRONT_LEFT_OF_CENTER     = 0x00000040
+        // NS_USBAudio0200::FRONT_RIGHT_OF_CENTER      , = 0x00000080, SPEAKER_FRONT_RIGHT_OF_CENTER    = 0x00000080
+        // NS_USBAudio0200::BACK_CENTER                , = 0x00000100, SPEAKER_BACK_CENTER              = 0x00000100
+        // NS_USBAudio0200::SIDE_LEFT                  , = 0x00000200, SPEAKER_SIDE_LEFT                = 0x00000200
+        // NS_USBAudio0200::SIDE_RIGHT                 , = 0x00000400, SPEAKER_SIDE_RIGHT               = 0x00000400
+        // NS_USBAudio0200::TOP_CENTER                 , = 0x00000800, SPEAKER_TOP_CENTER               = 0x00000800
+        // NS_USBAudio0200::TOP_FRONT_LEFT             , = 0x00001000, SPEAKER_TOP_FRONT_LEFT           = 0x00001000
+        // NS_USBAudio0200::TOP_FRONT_CENTER           , = 0x00002000, SPEAKER_TOP_FRONT_CENTER         = 0x00002000
+        // NS_USBAudio0200::TOP_FRONT_RIGHT            , = 0x00004000, SPEAKER_TOP_FRONT_RIGHT          = 0x00004000
+        // NS_USBAudio0200::TOP_BACK_LEFT              , = 0x00008000, SPEAKER_TOP_BACK_LEFT            = 0x00008000
+        // NS_USBAudio0200::TOP_BACK_CENTER            , = 0x00010000, SPEAKER_TOP_BACK_CENTER          = 0x00010000
+        // NS_USBAudio0200::TOP_BACK_RIGHT             , = 0x00020000, SPEAKER_TOP_BACK_RIGHT           = 0x00020000
+        return channelConfig;
+    }
+    return SPEAKER_ALL;
+}
+
+PAGED_CODE_SEG
 NTSTATUS GetChannelsFromMask(
     _In_ DWORD ChannelMask
 )
@@ -656,6 +813,35 @@ NTSTATUS SplitAcxDataFormatByDeviceChannels(
     RETURN_NTSTATUS_IF_FAILED(AllocateFormat(&pcmWaveFormatExtensible, Circuit, Device, &Destination));
 
     return STATUS_SUCCESS;
+}
+
+PAGED_CODE_SEG
+NTSTATUS
+NotifyDataFormatChange(
+    _In_ WDFDEVICE     Device,
+    _In_ ACXCIRCUIT    Circuit,
+    _In_ ACXPIN        Pin,
+    _In_ ACXDATAFORMAT OriginalDataFormat
+)
+{
+    NTSTATUS      status = STATUS_SUCCESS;
+    ACXDATAFORMAT desiredDataFormat = nullptr;
+
+    PAGED_CODE();
+
+    CODEC_PIN_CONTEXT * pinContext = GetCodecPinContext(Pin);
+    ASSERT(pinContext != nullptr);
+
+    status = SplitAcxDataFormatByDeviceChannels(Device, Circuit, pinContext->NumOfChannelsPerDevice, desiredDataFormat, OriginalDataFormat);
+    RETURN_NTSTATUS_IF_FAILED(status);
+
+    ACXDATAFORMATLIST dataFormatList = AcxPinGetRawDataFormatList(Pin);
+    status = AcxDataFormatListAssignDefaultDataFormat(dataFormatList, desiredDataFormat);
+    RETURN_NTSTATUS_IF_FAILED(status);
+
+    status = AcxPinNotifyDataFormatChange(Pin);
+
+    return status;
 }
 
 PAGED_CODE_SEG
@@ -758,16 +944,15 @@ PAGED_CODE_SEG
 NTSTATUS AddPropertyToCircuitInterface(
     ACXCIRCUIT              Circuit,
     ULONG                   PropertyCount,
-    const DSP_DEVPROPERTY*  Properties
+    const DSP_DEVPROPERTY * Properties
 )
 {
     PAGED_CODE();
 
-    NTSTATUS        status = STATUS_UNSUCCESSFUL;
-    UNICODE_STRING  acxLink = { 0 };
-    UNICODE_STRING  audioLink = { 0 };
-    WDFSTRING       wdfLink = AcxCircuitGetSymbolicLinkName(Circuit);
-    bool            freeStr = false;
+    UNICODE_STRING acxLink{};
+    UNICODE_STRING audioLink{};
+    WDFSTRING      wdfLink = AcxCircuitGetSymbolicLinkName(Circuit);
+    bool           freeStr = false;
 
     auto exit = wil::scope_exit(
         [&]() {
@@ -785,23 +970,18 @@ NTSTATUS AddPropertyToCircuitInterface(
     // Make sure there is a string.
     if (!acxLink.Length || !acxLink.Buffer)
     {
-        status = STATUS_INVALID_DEVICE_STATE;
-        return status;
+        RETURN_NTSTATUS_IF_FAILED(STATUS_INVALID_DEVICE_STATE);
     }
 
     // Get the audio interface.
-    status = IoGetDeviceInterfaceAlias(&acxLink, &KSCATEGORY_AUDIO, &audioLink);
-    if (!NT_SUCCESS(status))
-    {
-        return status;
-    }
+    RETURN_NTSTATUS_IF_FAILED(IoGetDeviceInterfaceAlias(&acxLink, &KSCATEGORY_AUDIO, &audioLink));
 
     freeStr = true;
 
     // Set specified properties on the audio interface for the ACXCIRCUIT.
     for (ULONG i = 0; i < PropertyCount; ++i)
     {
-        status = IoSetDeviceInterfacePropertyData(
+        RETURN_NTSTATUS_IF_FAILED(IoSetDeviceInterfacePropertyData(
             &audioLink,
             Properties[i].PropertyKey,
             LOCALE_NEUTRAL,
@@ -809,17 +989,10 @@ NTSTATUS AddPropertyToCircuitInterface(
             Properties[i].Type,
             Properties[i].BufferSize,
             Properties[i].Buffer
-        );
-
-        if (!NT_SUCCESS(status))
-        {
-            return status;
-        }
+        ));
     }
 
-    status = STATUS_SUCCESS;
-
-    return status;
+    return STATUS_SUCCESS;
 }
 
 PAGED_CODE_SEG

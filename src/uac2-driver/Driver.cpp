@@ -37,8 +37,7 @@ Environment:
 //  Local function prototypes
 //
 EXTERN_C_START
-EVT_WDF_OBJECT_CONTEXT_CLEANUP USBAudioAcxDriverEvtDriverContextCleanup; // IRQL <= DISPATCH_LEVEL, Conditionally IRQL = PASSIVE_LEVEL
-EVT_WDF_DRIVER_UNLOAD          USBAudioAcxDriverEvtDriverUnload;         // PASSIVE_LEVEL
+EVT_WDF_DRIVER_UNLOAD USBAudioAcxDriverEvtDriverUnload; // PASSIVE_LEVEL
 EXTERN_C_END
 
 //
@@ -47,7 +46,6 @@ EXTERN_C_END
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text(INIT, DriverEntry)
-#pragma alloc_text(PAGE, USBAudioAcxDriverEvtDriverContextCleanup)
 #pragma alloc_text(PAGE, USBAudioAcxDriverEvtDriverUnload)
 #endif
 
@@ -119,7 +117,6 @@ Return Value:
     // the framework driver object is deleted during driver unload.
     //
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
-    attributes.EvtCleanupCallback = USBAudioAcxDriverEvtDriverContextCleanup;
 
     WDF_DRIVER_CONFIG_INIT(&config, USBAudioAcxDriverEvtDeviceAdd);
     config.EvtDriverUnload = USBAudioAcxDriverEvtDriverUnload;
@@ -147,37 +144,6 @@ Return Value:
 }
 
 PAGED_CODE_SEG
-VOID USBAudioAcxDriverEvtDriverContextCleanup(
-    _In_ WDFOBJECT driverObject
-)
-/*++
-Routine Description:
-
-    Free all the resources allocated in DriverEntry.
-
-Arguments:
-
-    driverObject - handle to a WDF Driver object.
-
-Return Value:
-
-    VOID.
-
---*/
-{
-    PAGED_CODE();
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Entry");
-
-    //
-    // Stop WPP Tracing
-    //
-    WPP_CLEANUP(WdfDriverWdmGetDriverObject((WDFDRIVER)driverObject));
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit");
-}
-
-PAGED_CODE_SEG
 _Use_decl_annotations_
 VOID USBAudioAcxDriverEvtDriverUnload(
     _In_ WDFDRIVER driver
@@ -191,8 +157,12 @@ VOID USBAudioAcxDriverEvtDriverUnload(
         return;
     }
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Entry");
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC!");
 
+    //
+    // Stop WPP tracing before unloading the driver.
+    // TraceEvents must not be called after WPP_CLEANUP.
+    //
     WPP_CLEANUP(WdfDriverWdmGetDriverObject(driver));
 
     if (g_RegistryPath.Buffer != nullptr)
@@ -200,8 +170,6 @@ VOID USBAudioAcxDriverEvtDriverUnload(
         ExFreePool(g_RegistryPath.Buffer);
         RtlZeroMemory(&g_RegistryPath, sizeof(g_RegistryPath));
     }
-
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Exit");
 
     return;
 }
