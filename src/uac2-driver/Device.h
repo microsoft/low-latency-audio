@@ -312,6 +312,7 @@ typedef struct _DEVICE_CONTEXT
     LONG                               IsIdleStopSucceeded;
     LARGE_INTEGER                      LastVendorRequestTime;
     bool                               IsPrepareHardwareSucceeded;
+    WDFSPINLOCK                        IsochronousRequestSpinLock;
 
     bool              SuperSpeedCompatible;
     ErrorStatistics * ErrorStatistics;
@@ -396,12 +397,11 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ISOCHRONOUS_TEST_REQUEST_CONTEXT, GetIsochron
 typedef struct _ISOCHRONOUS_REQUEST_CONTEXT
 {
     PDEVICE_CONTEXT          DeviceContext;
+    WDFSPINLOCK              IsochronousRequestSpinLock;
     AudioIsochronousEngine * AudioIsochronousEngine;
+    StreamObject *           StreamObject;
     TransferObject *         TransferObject;
-    PVOID                    IrpBuffer;
-    PMDL                     IrpMdl;
-    PIRP                     Irp;
-    WDFMEMORY                UrbMemory;
+    WDFWORKITEM              ReleaseWorkItem;
 } ISOCHRONOUS_REQUEST_CONTEXT, *PISOCHRONOUS_REQUEST_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ISOCHRONOUS_REQUEST_CONTEXT, GetIsochronousRequestContext)
@@ -411,10 +411,11 @@ WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(ISOCHRONOUS_REQUEST_CONTEXT, GetIsochronousRe
 //
 typedef struct _WORK_ITEM_CONTEXT
 {
-    PDEVICE_CONTEXT  DeviceContext;
-    StreamObject *   StreamObject;
-    TransferObject * TransferObject;
-    NTSTATUS         IoStatusStatus;
+    AudioIsochronousEngine * AudioIsochronousEngine;
+    StreamObject *           StreamObject;
+    TransferObject *         TransferObject;
+    WDFSPINLOCK              SpinLock;
+    LONG                     Counter;
 } WORK_ITEM_CONTEXT, *PWORK_ITEM_CONTEXT;
 
 WDF_DECLARE_CONTEXT_TYPE_WITH_NAME(WORK_ITEM_CONTEXT, GetWorkItemContext)

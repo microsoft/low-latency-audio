@@ -83,6 +83,8 @@ StreamObject::StreamObject(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
+    AddRef();
+
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
     attributes.ParentObject = deviceContext->Device;
     status = WdfSpinLockCreate(&attributes, &m_positionSpinLock);
@@ -116,6 +118,27 @@ StreamObject::~StreamObject()
     Cleanup();
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+}
+
+NONPAGED_CODE_SEG
+_Use_decl_annotations_
+LONG StreamObject::AddRef(
+)
+{
+    return InterlockedIncrement(&m_referenceCounter);
+}
+
+NONPAGED_CODE_SEG
+_Use_decl_annotations_
+LONG StreamObject::Release(
+)
+{
+    LONG counter = InterlockedDecrement(&m_referenceCounter);
+    if (counter == 0)
+    {
+        delete this;
+    }
+    return counter;
 }
 
 _Use_decl_annotations_
@@ -363,20 +386,20 @@ StreamObject::Cleanup()
         if (m_inputTransferObject[index] != nullptr)
         {
             m_inputTransferObject[index]->CancelRequest();
-            delete m_inputTransferObject[index];
+            m_inputTransferObject[index]->Release();
             m_inputTransferObject[index] = nullptr;
         }
         if (m_outputTransferObject[index] != nullptr)
         {
             m_outputTransferObject[index]->CancelRequest();
-            delete m_outputTransferObject[index];
+            m_outputTransferObject[index]->Release();
             m_outputTransferObject[index] = nullptr;
         }
 
         if (m_transferObjectFeedback[index] != nullptr)
         {
             m_transferObjectFeedback[index]->CancelRequest();
-            delete m_transferObjectFeedback[index];
+            m_transferObjectFeedback[index]->Release();
             m_transferObjectFeedback[index] = nullptr;
         }
     }

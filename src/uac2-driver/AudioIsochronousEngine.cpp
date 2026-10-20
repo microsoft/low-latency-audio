@@ -151,7 +151,7 @@ AudioIsochronousEngine::~AudioIsochronousEngine()
 
         if (m_streamObject != nullptr)
         {
-            delete m_streamObject;
+            m_streamObject->Release();
             m_streamObject = nullptr;
         }
 
@@ -917,7 +917,7 @@ NTSTATUS AudioIsochronousEngine::StartIsoStream()
     auto startIsoStreamScope = wil::scope_exit([&]() {
         if (!NT_SUCCESS(status) && (m_streamObject != nullptr) && (status != STATUS_DEVICE_BUSY))
         {
-			StopIsoStream();
+            StopIsoStream();
         }
         else
         {
@@ -1509,7 +1509,7 @@ AudioIsochronousEngine::StopIsoStream()
         AbortPipes(IsoDirection::Out);
 
         m_streamObject->Cleanup();
-        delete m_streamObject;
+        m_streamObject->Release();
         m_streamObject = nullptr;
         if (m_audioStreamPropertySet.OutputProperty.InterfaceNumber != 0)
         {

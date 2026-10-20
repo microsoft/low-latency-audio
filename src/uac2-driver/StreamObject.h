@@ -36,7 +36,7 @@ enum class StreamStatuses
     InputStable = 1 << 0,                                                                     // 0x01
     OutputStable = 1 << 1,                                                                    // 0x02
     InputStreaming = 1 << 2,                                                                  // 0x04
-    OutputStreaming = 1 << 3,                                                                 // 0x03
+    OutputStreaming = 1 << 3,                                                                 // 0x08
     IoStable = (static_cast<ULONG>(InputStable) | static_cast<ULONG>(OutputStable)),          // 0x03
     IoStreaming = (static_cast<ULONG>(InputStreaming) | static_cast<ULONG>(OutputStreaming)), // 0x0c
     IoSteady = (static_cast<ULONG>(IoStable) | static_cast<ULONG>(IoStreaming))               // 0x0f
@@ -141,6 +141,14 @@ class StreamObject
     virtual __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     ~StreamObject();
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    LONG AddRef();
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    LONG Release();
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -653,6 +661,8 @@ class StreamObject
 
     BUFFER_PROPERTY m_inputBuffers[UAC_MAX_IRP_NUMBER * UAC_MAX_CLASSIC_FRAMES_PER_IRP * 8]{};
     BUFFER_PROPERTY m_outputBuffers[UAC_MAX_IRP_NUMBER * UAC_MAX_CLASSIC_FRAMES_PER_IRP * 8]{};
+
+    LONG m_referenceCounter{0};
 
     const StreamStatuses c_ioStable;
     const StreamStatuses c_ioStreaming;

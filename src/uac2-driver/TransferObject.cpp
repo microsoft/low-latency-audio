@@ -48,7 +48,7 @@ TransferObject * TransferObject::Create(
 
     TransferObject * transferObject = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) TransferObject(deviceContext, audioIsochronousEngine, streamObject, index, direction);
 
-    if ((transferObject != nullptr) && (transferObject->m_spinLock == nullptr))
+    if ((transferObject != nullptr) && ((transferObject->m_spinLock == nullptr) || (transferObject->m_releaseWorkItem == nullptr) || (transferObject->m_releaseWorkItemSpinLock == nullptr)))
     {
         delete transferObject;
         transferObject = nullptr;
@@ -73,6 +73,9 @@ TransferObject::TransferObject(
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
+    AddRef();
+
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
 
     attributes.ParentObject = m_deviceContext->Device;
@@ -82,19 +85,80 @@ TransferObject::TransferObject(
     {
         TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
         m_spinLock = nullptr;
+        return;
+    }
+
+    WDF_WORKITEM_CONFIG workItemConfig;
+    WDF_WORKITEM_CONFIG_INIT(&workItemConfig, EvtWorkItemFunction);
+
+    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, WORK_ITEM_CONTEXT);
+
+    attributes.ParentObject = m_deviceContext->Device;
+    status = WdfWorkItemCreate(&workItemConfig, &attributes, &m_releaseWorkItem);
+
+    ASSERT(NT_SUCCESS(status));
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWorkItemCreate failed %!STATUS!", status);
+        m_releaseWorkItem = nullptr;
+        return;
+    }
+
+    PWORK_ITEM_CONTEXT workItemContext = GetWorkItemContext(m_releaseWorkItem);
+    ASSERT(workItemContext != nullptr);
+
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+    attributes.ParentObject = m_releaseWorkItem;
+    status = WdfSpinLockCreate(&attributes, &m_releaseWorkItemSpinLock);
+
+    workItemContext->SpinLock = m_releaseWorkItemSpinLock;
+
+    ASSERT(NT_SUCCESS(status));
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfSpinLockCreate failed %!STATUS!", status);
+        workItemContext->SpinLock = m_releaseWorkItemSpinLock = nullptr;
+        return;
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
 
 _Use_decl_annotations_
-PAGED_CODE_SEG
+NONPAGED_CODE_SEG
 TransferObject::~TransferObject()
 {
-    PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
     Free();
+
+    if (m_releaseWorkItem != nullptr)
+    {
+        WdfObjectDelete(m_releaseWorkItem);
+        m_releaseWorkItem = nullptr;
+    }
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+}
+
+NONPAGED_CODE_SEG
+_Use_decl_annotations_
+LONG TransferObject::AddRef(
+)
+{
+    return InterlockedIncrement(&m_referenceCounter);
+}
+
+NONPAGED_CODE_SEG
+_Use_decl_annotations_
+LONG TransferObject::Release(
+)
+{
+    LONG counter = InterlockedDecrement(&m_referenceCounter);
+    if (counter == 0)
+    {
+        delete this;
+    }
+    return counter;
 }
 
 _Use_decl_annotations_
@@ -135,7 +199,10 @@ void TransferObject::Free()
 {
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, m_index = %u", m_index);
 
-    WdfSpinLockAcquire(m_spinLock);
+    if (m_spinLock != nullptr)
+    {
+        WdfSpinLockAcquire(m_spinLock);
+    }
 
     if (m_dataBufferMdl != nullptr)
     {
@@ -152,7 +219,11 @@ void TransferObject::Free()
         m_urb = nullptr;
     }
     m_dataBuffer = nullptr;
-    WdfSpinLockRelease(m_spinLock);
+
+    if (m_spinLock != nullptr)
+    {
+        WdfSpinLockRelease(m_spinLock);
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
@@ -843,10 +914,23 @@ TransferObject::SendIsochronousRequest(
     WdfRequestSetCompletionRoutine(m_request, completionRoutine, requestContext);
 
     requestContext->DeviceContext = m_deviceContext;
-    requestContext->AudioIsochronousEngine = m_audioIsochronousEngine;
-    requestContext->AudioIsochronousEngine->AddRef();
-    requestContext->TransferObject = this;
-    requestContext->UrbMemory = m_urbMemory;
+    requestContext->IsochronousRequestSpinLock = m_deviceContext->IsochronousRequestSpinLock;
+
+    {
+        WdfSpinLockAcquire(requestContext->IsochronousRequestSpinLock);
+        requestContext->AudioIsochronousEngine = m_audioIsochronousEngine;
+        requestContext->AudioIsochronousEngine->AddRef();
+
+        requestContext->StreamObject = m_streamObject;
+        requestContext->StreamObject->AddRef();
+
+        requestContext->TransferObject = this;
+        requestContext->TransferObject->AddRef();
+        requestContext->ReleaseWorkItem = m_releaseWorkItem;
+
+        WdfSpinLockRelease(requestContext->IsochronousRequestSpinLock);
+    }
+
     WdfSpinLockRelease(m_spinLock);
 
 #if defined(DBG)
@@ -861,6 +945,36 @@ TransferObject::SendIsochronousRequest(
     {
         InterlockedCompareExchange(&m_requestState, toLONG(RequestState::Idle), toLONG(RequestState::InFlight));
         status = WdfRequestGetStatus(m_request);
+
+        WdfSpinLockAcquire(requestContext->IsochronousRequestSpinLock);
+        AudioIsochronousEngine * audioIsochronousEngine = requestContext->AudioIsochronousEngine;
+        StreamObject *           streamObject = requestContext->StreamObject;
+        TransferObject *         transferObject = requestContext->TransferObject;
+
+        requestContext->TransferObject = nullptr;
+        requestContext->StreamObject = nullptr;
+        requestContext->AudioIsochronousEngine = nullptr;
+        requestContext->ReleaseWorkItem = nullptr;
+        WdfSpinLockRelease(requestContext->IsochronousRequestSpinLock);
+
+        if (streamObject != nullptr)
+        {
+            streamObject->Release();
+            streamObject = nullptr;
+        }
+
+        if (audioIsochronousEngine != nullptr)
+        {
+            audioIsochronousEngine->Release();
+            audioIsochronousEngine = nullptr;
+        }
+
+        if (transferObject != nullptr)
+        {
+            transferObject->Release();
+            transferObject = nullptr;
+        }
+
         if (!NT_SUCCESS(status))
         {
             TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfRequestSend failed");
@@ -897,8 +1011,16 @@ TransferObject::CancelRequest()
         if (m_request != nullptr)
         {
             PISOCHRONOUS_REQUEST_CONTEXT requestContext = GetIsochronousRequestContext(m_request);
-            AudioIsochronousEngine *     audioIsochronousEngine = (AudioIsochronousEngine *)InterlockedExchangePointer((volatile PVOID *)&(requestContext->AudioIsochronousEngine), nullptr);
-            InterlockedExchangePointer((volatile PVOID *)&(requestContext->TransferObject), nullptr);
+            WdfSpinLockAcquire(requestContext->IsochronousRequestSpinLock);
+            AudioIsochronousEngine * audioIsochronousEngine = requestContext->AudioIsochronousEngine;
+            StreamObject *           streamObject = requestContext->StreamObject;
+            TransferObject *         transferObject = requestContext->TransferObject;
+
+            requestContext->AudioIsochronousEngine = nullptr;
+            requestContext->StreamObject = nullptr;
+            requestContext->TransferObject = nullptr;
+            requestContext->ReleaseWorkItem = nullptr;
+            WdfSpinLockRelease(requestContext->IsochronousRequestSpinLock);
 
             //
             // Keep the request object valid while canceling the sent request.
@@ -911,9 +1033,22 @@ TransferObject::CancelRequest()
             WdfRequestCancelSentRequest(request);
             WdfObjectDereference(request);
 
+            if (streamObject != nullptr)
+            {
+                streamObject->Release();
+                streamObject = nullptr;
+            }
+
             if (audioIsochronousEngine != nullptr)
             {
                 audioIsochronousEngine->Release();
+                audioIsochronousEngine = nullptr;
+            }
+
+            if (transferObject != nullptr)
+            {
+                transferObject->Release();
+                transferObject = nullptr;
             }
         }
         else
@@ -1523,4 +1658,45 @@ void TransferObject::DebugReport()
     }
     // WdfSpinLockRelease(m_spinLock);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+}
+
+_Use_decl_annotations_
+NONPAGED_CODE_SEG
+VOID TransferObject::EvtWorkItemFunction(
+    WDFWORKITEM workItem
+)
+{
+    PWORK_ITEM_CONTEXT workItemContext = GetWorkItemContext(workItem);
+    ASSERT(workItemContext != nullptr);
+
+    WdfSpinLockAcquire(workItemContext->SpinLock);
+    LONG                     counter = workItemContext->Counter;
+    TransferObject *         transferObject = workItemContext->TransferObject;
+    StreamObject *           streamObject = workItemContext->StreamObject;
+    AudioIsochronousEngine * audioIsochronousEngine = workItemContext->AudioIsochronousEngine;
+
+    workItemContext->TransferObject = nullptr;
+    workItemContext->StreamObject = nullptr;
+    workItemContext->AudioIsochronousEngine = nullptr;
+    workItemContext->Counter = 0;
+    WdfSpinLockRelease(workItemContext->SpinLock);
+
+    while (counter > 0)
+    {
+        if (transferObject != nullptr)
+        {
+            transferObject->Release();
+        }
+
+        if (streamObject != nullptr)
+        {
+            streamObject->Release();
+        }
+
+        if (audioIsochronousEngine != nullptr)
+        {
+            audioIsochronousEngine->Release();
+        }
+        counter--;
+    }
 }

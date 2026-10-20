@@ -467,6 +467,17 @@ Return Value:
 
     deviceContext->IsPrepareHardwareSucceeded = false;
 
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+
+    attributes.ParentObject = deviceContext->Device;
+    status = WdfSpinLockCreate(&attributes, &deviceContext->IsochronousRequestSpinLock);
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfSpinLockCreate failed %!STATUS!", status);
+        deviceContext->IsochronousRequestSpinLock = nullptr;
+        return status;
+    }
+
     status = ReadAndSelectDescriptors(device);
     if (!NT_SUCCESS(status))
     {
@@ -2737,18 +2748,40 @@ Return Value:
 {
     NTSTATUS                     status = STATUS_SUCCESS;
     PISOCHRONOUS_REQUEST_CONTEXT requestContext = (PISOCHRONOUS_REQUEST_CONTEXT)context;
-    AudioIsochronousEngine *     audioIsochronousEngine = (AudioIsochronousEngine *)InterlockedExchangePointer((volatile PVOID *)&(requestContext->AudioIsochronousEngine), nullptr);
-    TransferObject *             transferObject = (TransferObject *)InterlockedExchangePointer((volatile PVOID *)&(requestContext->TransferObject), nullptr);
 
-    if (audioIsochronousEngine != nullptr)
+    WdfSpinLockAcquire(requestContext->IsochronousRequestSpinLock);
+    AudioIsochronousEngine * audioIsochronousEngine = requestContext->AudioIsochronousEngine;
+    StreamObject *           streamObject = requestContext->StreamObject;
+    TransferObject *         transferObject = requestContext->TransferObject;
+    WDFWORKITEM              releaseWorkItem = requestContext->ReleaseWorkItem;
+
+    requestContext->AudioIsochronousEngine = nullptr;
+    requestContext->StreamObject = nullptr;
+    requestContext->TransferObject = nullptr;
+    requestContext->ReleaseWorkItem = nullptr;
+    WdfSpinLockRelease(requestContext->IsochronousRequestSpinLock);
+
+    if ((audioIsochronousEngine != nullptr) && (streamObject != nullptr) && (transferObject != nullptr))
     {
         TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, %p", requestContext);
-        if (transferObject != nullptr)
-        {
-            audioIsochronousEngine->IsoRequestCompletionRoutine(completionParams, transferObject);
-        }
-        audioIsochronousEngine->Release();
+
+        audioIsochronousEngine->IsoRequestCompletionRoutine(completionParams, transferObject);
+
         TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
+    }
+
+    if ((releaseWorkItem != nullptr) && (audioIsochronousEngine != nullptr) && (streamObject != nullptr) && (transferObject != nullptr))
+    {
+        PWORK_ITEM_CONTEXT workItemContext = GetWorkItemContext(releaseWorkItem);
+        ASSERT(workItemContext != nullptr);
+
+        WdfSpinLockAcquire(workItemContext->SpinLock);
+        workItemContext->Counter++;
+        workItemContext->TransferObject = transferObject;
+        workItemContext->StreamObject = streamObject;
+        workItemContext->AudioIsochronousEngine = audioIsochronousEngine;
+        WdfSpinLockRelease(workItemContext->SpinLock);
+        WdfWorkItemEnqueue(releaseWorkItem);
     }
 
     return;
