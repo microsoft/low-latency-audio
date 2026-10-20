@@ -979,10 +979,13 @@ VOID Codec_EvtUSBAudioAcxDriverAgcProcessRequest(
     ULONG Channel = ALL_CHANNELS_ID;
     if (params.Parameters.Property.ControlCb == (sizeof(LONG) + sizeof(ULONG)))
     {
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Control[0] = %d (0x%x), Control[1] = 0x%x", ((LONG *)params.Parameters.Property.Control)[0], ((ULONG *)params.Parameters.Property.Control)[0], ((ULONG *)params.Parameters.Property.Control)[1]);
         if (params.Parameters.Property.Control != nullptr)
         {
-            ((ULONG *)params.Parameters.Property.Control)[0];
+            // Control[0] : KSNODEPROPERTY_AUDIO_CHANNEL::Channel
+            // Control[1] : KSNODEPROPERTY_AUDIO_CHANNEL::Reserved
+            // Use the channel value in Control[0].
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - Control[0] = %d (0x%x), Control[1] = 0x%x", ((LONG *)params.Parameters.Property.Control)[0], ((ULONG *)params.Parameters.Property.Control)[0], ((ULONG *)params.Parameters.Property.Control)[1]);
+            Channel = ((ULONG *)params.Parameters.Property.Control)[0];
         }
     }
 
