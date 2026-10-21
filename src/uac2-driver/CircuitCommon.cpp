@@ -2163,7 +2163,6 @@ Codec_AllocateElements(
     UCHAR                                             nextUnitID = USBAudioConfiguration::InvalidID;
     ULONGLONG                                         pendingUnitMap[4] = {};
     ULONG                                             counter = 0;
-    ACXELEMENT                                        currentElement{};
     ACXELEMENT                                        prevElement{};
     ULONG                                             pinID = 0;
 
@@ -2208,7 +2207,8 @@ Codec_AllocateElements(
     {
         while (hasMoreData)
         {
-            bool shouldConnect = true;
+            bool       shouldConnect = true;
+            ACXELEMENT currentElement{};
             RETURN_NTSTATUS_IF_FAILED(AudioIsochronousEngine->WalkNextUnit(IsInput, pendingUnitMap, audioNodeKind, unitID, nextUnitID, traversalDirection, hasMoreData));
             TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_ENTITY, " - IsInput = %!bool!, 0x%016llx, 0x%016llx, 0x%016llx, 0x%016llx, %s, 0x%02x, 0x%02x, %s, hasMoreData = %!bool!", IsInput, pendingUnitMap[0], pendingUnitMap[1], pendingUnitMap[2], pendingUnitMap[3], GetAudioNodeKindString(audioNodeKind), unitID, nextUnitID, GetTraversalDirectionString(traversalDirection), hasMoreData);
 
@@ -2298,46 +2298,58 @@ Codec_AllocateElements(
                 }
             }
             break;
-            case AudioNodeKind::SrcElement: { // Sampling Rate Converter Unit : KSNODETYPE_SRC
+            case AudioNodeKind::SrcElement: {
+                // Sampling Rate Converter Unit : KSNODETYPE_SRC
                 // ACXELEMENT element{};
                 // RETURN_NTSTATUS_IF_FAILED(Codec_CreateSrcElement(AudioIsochronousEngine, Device, Circuit, element, unitID, 0));
                 // RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
                 // currentElement = element;
                 // circuitContext->NumOfSrcElements++;
+                shouldConnect = false;
             }
             break;
-            case AudioNodeKind::EffectElement: { // Effect Unit : KSNODETYPE_3D_EFFECTS
+            case AudioNodeKind::EffectElement: {
+                // Effect Unit : KSNODETYPE_3D_EFFECTS
                 // ACXELEMENT element{};
                 // RETURN_NTSTATUS_IF_FAILED(Codec_CreateEffectElement(AudioIsochronousEngine, Device, Circuit, element, unitID, 0));
                 // RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
                 // currentElement = element;
                 // circuitContext->NumOfEffectElements++;
+                shouldConnect = false;
             }
             break;
-            case AudioNodeKind::ProcessingElement: { // Processing Unit : KSNODETYPE_MICROPHONE_ARRAY_PROCESSOR ?
+            case AudioNodeKind::ProcessingElement: {
+                // Processing Unit : KSNODETYPE_MICROPHONE_ARRAY_PROCESSOR ?
                 // ACXELEMENT element{};
-                // RETURN_NTSTATUS_IF_FAILED(Codec_CreateProessingElement(AudioIsochronousEngine, Device, Circuit, element, unitID, 0));
+                // RETURN_NTSTATUS_IF_FAILED(Codec_CreateProcessingElement(AudioIsochronousEngine, Device, Circuit, element, unitID, 0));
                 // RETURN_NTSTATUS_IF_FAILED(elements.Append(Circuit, element));
                 // currentElement = element;
-                // circuitContext->NumOfProessingElements++;
+                // circuitContext->NumOfProcessingElement++;
+                shouldConnect = false;
             }
             break;
             default:
+                TraceEvents(TRACE_LEVEL_WARNING, TRACE_ENTITY, "%!FUNC! Element unknown");
+                shouldConnect = false;
                 break;
             }
             unitID = nextUnitID;
-            if ((counter != 0) && shouldConnect)
+            if (currentElement != nullptr)
             {
-                ACX_CONNECTION connection{};
-                if (traversalDirection == TraversalDirection::Forward)
+                if ((prevElement != nullptr) && shouldConnect)
                 {
-                    Codec_ConnectElement(Circuit, connection, prevElement, currentElement);
+                    ACX_CONNECTION connection{};
+                    if (traversalDirection == TraversalDirection::Forward)
+                    {
+                        Codec_ConnectElement(Circuit, connection, prevElement, currentElement);
+                    }
+                    else
+                    {
+                        Codec_ConnectElement(Circuit, connection, currentElement, prevElement);
+                    }
+                    RETURN_NTSTATUS_IF_FAILED(connections.Append(Circuit, connection));
                 }
-                else
-                {
-                    Codec_ConnectElement(Circuit, connection, currentElement, prevElement);
-                }
-                RETURN_NTSTATUS_IF_FAILED(connections.Append(Circuit, connection));
+                prevElement = currentElement;
             }
             counter++;
             if (counter > 0xff)
@@ -2345,7 +2357,6 @@ Codec_AllocateElements(
                 TraceEvents(TRACE_LEVEL_ERROR, TRACE_ENTITY, "%!FUNC! counter overflow.");
                 break;
             }
-            prevElement = currentElement;
         }
 
         if (elements.GetNumOfArray() != 0)
