@@ -14,6 +14,18 @@
 namespace
 {
 void CopyDescriptorName(
+    _In_ const UAC_CHANNEL_INFO & channelInfo,
+    _Out_writes_z_(UAC_MAX_CHANNEL_NAME_LENGTH) char (&name)[UAC_MAX_CHANNEL_NAME_LENGTH]
+);
+
+bool HasUsableChannelNames(
+    _In_reads_opt_(numChannels) const UAC_CHANNEL_INFO * channelInfo,
+    _In_ ULONG                                         numChannels,
+    _In_ bool                                          isInput
+);
+
+_Use_decl_annotations_
+void CopyDescriptorName(
     const UAC_CHANNEL_INFO & channelInfo,
     char (&name)[UAC_MAX_CHANNEL_NAME_LENGTH]
 )
@@ -21,6 +33,7 @@ void CopyDescriptorName(
     _snprintf_s(name, _TRUNCATE, "%S", channelInfo.Name);
 }
 
+_Use_decl_annotations_
 bool HasUsableChannelNames(
     const UAC_CHANNEL_INFO * channelInfo,
     ULONG                   numChannels,
@@ -70,6 +83,7 @@ bool HasUsableChannelNames(
 }
 } // namespace
 
+_Use_decl_annotations_
 void CopyAsioChannelName(
     const UAC_CHANNEL_INFO * channelInfo,
     ULONG                    numChannels,

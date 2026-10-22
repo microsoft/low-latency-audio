@@ -13,9 +13,9 @@
 #include "UAC_User.h"
 
 void CopyAsioChannelName(
-    const UAC_CHANNEL_INFO * channelInfo,
-    ULONG                    numChannels,
-    LONG                     channel,
-    bool                     isInput,
-    char (&name)[UAC_MAX_CHANNEL_NAME_LENGTH]
+    _In_reads_opt_(numChannels) const UAC_CHANNEL_INFO * channelInfo,
+    _In_ ULONG                                         numChannels,
+    _In_ LONG                                          channel,
+    _In_ bool                                          isInput,
+    _Out_writes_z_(UAC_MAX_CHANNEL_NAME_LENGTH) char (&name)[UAC_MAX_CHANNEL_NAME_LENGTH]
 );

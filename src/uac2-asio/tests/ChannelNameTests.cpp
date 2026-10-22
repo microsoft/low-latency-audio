@@ -26,6 +26,23 @@ struct ChannelInfoFixture
 
 int g_failures = 0;
 
+void SetChannel(
+    _Inout_ UAC_CHANNEL_INFO & channel,
+    _In_ LONG                 index,
+    _In_ BOOL                 isInput,
+    _In_z_ const wchar_t *     name
+);
+
+void ExpectName(
+    _In_z_ const char * expected,
+    _In_reads_(numChannels) const UAC_CHANNEL_INFO * channels,
+    _In_ ULONG         numChannels,
+    _In_ LONG          channel,
+    _In_ BOOL          isInput,
+    _In_z_ const char * testName
+);
+
+_Use_decl_annotations_
 void SetChannel(UAC_CHANNEL_INFO & channel, LONG index, BOOL isInput, const wchar_t * name)
 {
     channel.Index = index;
@@ -33,17 +50,18 @@ void SetChannel(UAC_CHANNEL_INFO & channel, LONG index, BOOL isInput, const wcha
     wcscpy_s(channel.Name, name);
 }
 
-template <size_t ChannelCount>
+_Use_decl_annotations_
 void ExpectName(
     const char * expected,
-    const UAC_CHANNEL_INFO (&channels)[ChannelCount],
+    const UAC_CHANNEL_INFO * channels,
+    ULONG numChannels,
     LONG channel,
     BOOL isInput,
     const char * testName
 )
 {
     char actual[UAC_MAX_CHANNEL_NAME_LENGTH]{};
-    CopyAsioChannelName(channels, static_cast<ULONG>(ChannelCount), channel, isInput, actual);
+    CopyAsioChannelName(channels, numChannels, channel, isInput, actual);
 
     if (std::strcmp(actual, expected) != 0)
     {
@@ -58,8 +76,8 @@ void TestUniqueDescriptorNamesArePreserved()
     SetChannel(fixture.Channel[0], 0, TRUE, L"Mic 1");
     SetChannel(fixture.Channel[1], 1, TRUE, L"Mic 2");
 
-    ExpectName("Mic 1", fixture.Channel, 0, TRUE, "unique input name");
-    ExpectName("Mic 2", fixture.Channel, 1, TRUE, "second unique input name");
+    ExpectName("Mic 1", fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), 0, TRUE, "unique input name");
+    ExpectName("Mic 2", fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), 1, TRUE, "second unique input name");
 }
 
 void TestDuplicateInputNamesUseNumberedFallbacks()
@@ -73,7 +91,7 @@ void TestDuplicateInputNamesUseNumberedFallbacks()
     for (LONG channel = 0; channel < 12; ++channel)
     {
         const std::string expected = "Input " + std::to_string(channel + 1);
-        ExpectName(expected.c_str(), fixture.Channel, channel, TRUE, "duplicate input name");
+        ExpectName(expected.c_str(), fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), channel, TRUE, "duplicate input name");
     }
 }
 
@@ -88,7 +106,7 @@ void TestDuplicateOutputNamesUseNumberedFallbacks()
     for (LONG channel = 0; channel < 10; ++channel)
     {
         const std::string expected = "Output " + std::to_string(channel + 1);
-        ExpectName(expected.c_str(), fixture.Channel, channel, FALSE, "duplicate output name");
+        ExpectName(expected.c_str(), fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), channel, FALSE, "duplicate output name");
     }
 }
 
@@ -98,8 +116,8 @@ void TestEmptyNamesUseNumberedFallbacks()
     SetChannel(fixture.Channel[0], 0, TRUE, L"");
     SetChannel(fixture.Channel[1], 0, FALSE, L"");
 
-    ExpectName("Input 1", fixture.Channel, 0, TRUE, "empty input name");
-    ExpectName("Output 1", fixture.Channel, 0, FALSE, "empty output name");
+    ExpectName("Input 1", fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), 0, TRUE, "empty input name");
+    ExpectName("Output 1", fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), 0, FALSE, "empty output name");
 }
 
 void TestIncompleteDirectionUsesConsistentNumberedFallbacks()
@@ -108,8 +126,8 @@ void TestIncompleteDirectionUsesConsistentNumberedFallbacks()
     SetChannel(fixture.Channel[0], 0, TRUE, L"Input 2");
     SetChannel(fixture.Channel[1], 1, TRUE, L"");
 
-    ExpectName("Input 1", fixture.Channel, 0, TRUE, "incomplete input name set");
-    ExpectName("Input 2", fixture.Channel, 1, TRUE, "empty name in input set");
+    ExpectName("Input 1", fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), 0, TRUE, "incomplete input name set");
+    ExpectName("Input 2", fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), 1, TRUE, "empty name in input set");
 }
 
 void TestDuplicateDetectionIsScopedByDirection()
@@ -118,8 +136,8 @@ void TestDuplicateDetectionIsScopedByDirection()
     SetChannel(fixture.Channel[0], 0, TRUE, L"Channel 1");
     SetChannel(fixture.Channel[1], 0, FALSE, L"Channel 1");
 
-    ExpectName("Channel 1", fixture.Channel, 0, TRUE, "input and output names are independent");
-    ExpectName("Channel 1", fixture.Channel, 0, FALSE, "output and input names are independent");
+    ExpectName("Channel 1", fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), 0, TRUE, "input and output names are independent");
+    ExpectName("Channel 1", fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), 0, FALSE, "output and input names are independent");
 }
 
 void TestMaximumLengthNameIsNullTerminated()
@@ -129,7 +147,7 @@ void TestMaximumLengthNameIsNullTerminated()
     static_assert(std::size(maximumLengthName) == UAC_MAX_CHANNEL_NAME_LENGTH);
     SetChannel(fixture.Channel[0], 0, TRUE, maximumLengthName);
 
-    ExpectName("1234567890123456789012345678901", fixture.Channel, 0, TRUE, "maximum length input name");
+    ExpectName("1234567890123456789012345678901", fixture.Channel, static_cast<ULONG>(std::size(fixture.Channel)), 0, TRUE, "maximum length input name");
 }
 } // namespace
 
