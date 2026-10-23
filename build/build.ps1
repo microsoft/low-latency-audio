@@ -1,6 +1,7 @@
 Write-Host "This must be run in a command prompt with MSBuild and other tools paths set. For example, the Developer Command Prompt for VS2022"
 
-$repoRoot = "G:\Github\microsoft\low-latency-audio\"
+$scriptDir = $PSScriptRoot
+$repoRoot = (Resolve-Path (Split-Path $scriptDir -Parent)).Path.TrimEnd('\') + '\'
 $sourceRoot = $repoRoot + "src\"
 $vsfilesFolder = $sourceRoot + "vsfiles\"
 $vsfilesFolderOut = $vsfilesFolder + "out\"
@@ -124,7 +125,7 @@ foreach($configuration in $configurations)
         #New-Item -Path $stagingTargetFolder -ItemType Directory
 
             # copy output files to staging
-        Copy-Item -Path "$controlPanelOutputFolder*.exe" -Destination $stagingTargetFolder
+        Copy-Item -Path "$controlPanelOutputFolder*" -Destination $stagingTargetFolder -Recurse
 
         Write-Host
 
