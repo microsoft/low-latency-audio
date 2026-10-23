@@ -209,6 +209,8 @@ class RtPacketObject
     ULONG         m_outputPaddingBytes{0};
     DWORD         m_inputAvgBytesPerSec{0};
     DWORD         m_outputAvgBytesPerSec{0};
+
+    WDFWAITLOCK m_rtPacketLock{nullptr};
 };
 
 #endif
