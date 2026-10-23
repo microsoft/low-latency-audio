@@ -1,0 +1,306 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:import namespace="http://www.w3.org/XML/1998/namespace" />
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="metadata">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" />
+              </xsd:sequence>
+              <xsd:attribute name="name" use="required" type="xsd:string" />
+              <xsd:attribute name="type" type="xsd:string" />
+              <xsd:attribute name="mimetype" type="xsd:string" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="assembly">
+            <xsd:complexType>
+              <xsd:attribute name="alias" type="xsd:string" />
+              <xsd:attribute name="name" type="xsd:string" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+                <xsd:element name="comment" type="xsd:string" minOccurs="0" msdata:Ordinal="2" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" msdata:Ordinal="1" />
+              <xsd:attribute name="type" type="xsd:string" msdata:Ordinal="3" />
+              <xsd:attribute name="mimetype" type="xsd:string" msdata:Ordinal="4" />
+              <xsd:attribute ref="xml:space" />
+            </xsd:complexType>
+          </xsd:element>
+          <xsd:element name="resheader">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
+  </resheader>
+
+  <!-- ============================== Window ============================== -->
+
+  <data name="AppTitle" xml:space="preserve">
+    <value>Low-Latency Audio Driver Selector</value>
+    <comment>Window title and the text in the custom title bar.</comment>
+  </data>
+  <data name="PreviewChicletText.Text" xml:space="preserve">
+    <value>PREVIEW</value>
+    <comment>Badge in the title bar of preview builds.</comment>
+  </data>
+  <data name="PageTitle.Text" xml:space="preserve">
+    <value>USB Audio 2.0 devices</value>
+  </data>
+  <data name="PageDescription.Text" xml:space="preserve">
+    <value>Choose the driver each USB Audio 2.0 device uses. Music apps can use a device through ASIO when it's on the low-latency driver. You can switch back to the Windows driver, or to the manufacturer's driver, at any time. USB Audio 1.0 devices aren't listed, because the low-latency driver doesn't support them.</value>
+  </data>
+  <data name="RefreshButton.Content" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="CautionText.Text" xml:space="preserve">
+    <value>Close any apps that are using a device before you change its driver. The device stops for a few seconds while Windows changes the driver.</value>
+  </data>
+  <data name="DevicesListView.[using:Microsoft.UI.Xaml.Automation]AutomationProperties.Name" xml:space="preserve">
+    <value>USB Audio 2.0 devices</value>
+  </data>
+
+  <!-- ============================== Banners ============================== -->
+
+  <data name="ElevationBar.Title" xml:space="preserve">
+    <value>Running without administrator rights</value>
+  </data>
+  <data name="ElevationBar.Message" xml:space="preserve">
+    <value>You can see which driver each device uses, but changing a driver needs administrator rights.</value>
+  </data>
+  <data name="RestartElevatedButton.Content" xml:space="preserve">
+    <value>Restart as administrator</value>
+  </data>
+  <data name="ElevationDeclined" xml:space="preserve">
+    <value>The tool didn't restart with administrator rights, so drivers still can't be changed.</value>
+  </data>
+  <data name="ElevationRequiredForAction" xml:space="preserve">
+    <value>Changing a driver needs administrator rights. Select "Restart as administrator", then try again.</value>
+  </data>
+  <data name="PackageMissingBar.Title" xml:space="preserve">
+    <value>The low-latency driver isn't installed</value>
+  </data>
+  <data name="PackageMissingBar.Message" xml:space="preserve">
+    <value>Run the installer again to add it. You can still switch devices back to the Windows driver or to the manufacturer's driver.</value>
+  </data>
+
+  <!-- ============================== Status line ============================== -->
+
+  <data name="StatusScanning" xml:space="preserve">
+    <value>Looking for USB Audio 2.0 devices...</value>
+  </data>
+  <data name="StatusNoDevices" xml:space="preserve">
+    <value>No USB Audio 2.0 devices are connected.</value>
+  </data>
+  <data name="StatusDeviceCountFormat" xml:space="preserve">
+    <value>USB Audio 2.0 devices found: {0}</value>
+    <comment>{0} is the number of devices.</comment>
+  </data>
+  <data name="StatusChanging" xml:space="preserve">
+    <value>Changing the driver. This can take up to a minute.</value>
+  </data>
+
+  <!-- ============================== Device rows ============================== -->
+
+  <data name="UseLowLatencyButton.Content" xml:space="preserve">
+    <value>Use low-latency driver</value>
+  </data>
+  <data name="UseWindowsButton.Content" xml:space="preserve">
+    <value>Use Windows driver</value>
+  </data>
+  <data name="UseManufacturerButton.Content" xml:space="preserve">
+    <value>Use manufacturer's driver</value>
+  </data>
+  <data name="ValueUnknown" xml:space="preserve">
+    <value>unknown</value>
+    <comment>Shown in place of a driver version or provider that Windows doesn't report.</comment>
+  </data>
+  <data name="DriverLowLatencyFormat" xml:space="preserve">
+    <value>Using the low-latency driver, version {0}</value>
+    <comment>{0} is the driver version.</comment>
+  </data>
+  <data name="DriverWindowsFormat" xml:space="preserve">
+    <value>Using the Windows USB Audio 2.0 driver, version {0}</value>
+    <comment>{0} is the driver version.</comment>
+  </data>
+  <data name="DriverManufacturerFormat" xml:space="preserve">
+    <value>Using the {0} driver, version {1}</value>
+    <comment>{0} is the company that published the driver. {1} is the driver version.</comment>
+  </data>
+  <data name="DriverManufacturerWholeDeviceFormat" xml:space="preserve">
+    <value>Using the {0} driver for the whole device, version {1}</value>
+    <comment>{0} is the company that published the driver. {1} is the driver version.</comment>
+  </data>
+  <data name="DriverOtherFormat" xml:space="preserve">
+    <value>Using another driver ({0}), version {1}</value>
+    <comment>{0} is the driver's INF file name, such as oem12.inf. {1} is the driver version.</comment>
+  </data>
+  <data name="DriverNone" xml:space="preserve">
+    <value>No driver is installed</value>
+  </data>
+  <data name="NoteWholeDevice" xml:space="preserve">
+    <value>The manufacturer's driver controls the whole device. To use the low-latency driver, the tool hands the device back to Windows first.</value>
+  </data>
+  <data name="NoteLowLatencyWholeDevice" xml:space="preserve">
+    <value>The low-latency driver controls the whole device, the way an earlier version set it up. Select "Use low-latency driver" to move it to the device's audio interface.</value>
+  </data>
+  <data name="NoteUpdateFormat" xml:space="preserve">
+    <value>A newer low-latency driver, version {0}, is installed. Select "Use low-latency driver" to switch to it.</value>
+    <comment>{0} is the driver version.</comment>
+  </data>
+  <data name="DetailFormat" xml:space="preserve">
+    <value>{0} ({1})</value>
+    <comment>{0} is the vendor and product ID text. {1} is the Windows device instance ID.</comment>
+  </data>
+  <data name="ProblemFormat" xml:space="preserve">
+    <value>Windows reports a problem with this device (Device Manager code {0}).</value>
+    <comment>{0} is the Device Manager problem code, a number.</comment>
+  </data>
+  <data name="HardwareTextFormat" xml:space="preserve">
+    <value>Vendor ID {0}, product ID {1}</value>
+    <comment>{0} and {1} are 4-digit hexadecimal USB IDs.</comment>
+  </data>
+  <data name="HardwareTextInterfaceFormat" xml:space="preserve">
+    <value>Vendor ID {0}, product ID {1}, interface {2}</value>
+    <comment>{0} and {1} are 4-digit hexadecimal USB IDs. {2} is the 2-digit USB interface number.</comment>
+  </data>
+  <data name="DeviceNameInterfaceFormat" xml:space="preserve">
+    <value>{0} (interface {1})</value>
+    <comment>Used when one device has more than one USB Audio 2.0 interface. {0} is the device name. {1} is the 2-digit USB interface number.</comment>
+  </data>
+
+  <!-- ============================== Confirmation ============================== -->
+
+  <data name="ConfirmDialog.PrimaryButtonText" xml:space="preserve">
+    <value>Change driver</value>
+  </data>
+  <data name="ConfirmDialog.CloseButtonText" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
+  <data name="ConfirmTitle" xml:space="preserve">
+    <value>Change the driver?</value>
+  </data>
+  <data name="ConfirmLowLatencyFormat" xml:space="preserve">
+    <value>{0} will switch to the low-latency driver. Close any apps that are using it first. The device stops for a few seconds while Windows changes the driver.</value>
+    <comment>{0} is the device name.</comment>
+  </data>
+  <data name="ConfirmLowLatencyWholeDeviceFormat" xml:space="preserve">
+    <value>{0} uses its manufacturer's driver for the whole device. To use the low-latency driver, the tool first hands the device back to Windows, then puts the low-latency driver on its audio interface.
+
+Anything else the manufacturer's driver provided, such as MIDI ports or the manufacturer's control panel, may stop working until you switch back. Close any apps that are using the device first.</value>
+    <comment>{0} is the device name.</comment>
+  </data>
+  <data name="ConfirmWindowsFormat" xml:space="preserve">
+    <value>{0} will switch to the Windows USB Audio 2.0 driver. Close any apps that are using it first.</value>
+    <comment>{0} is the device name.</comment>
+  </data>
+  <data name="ConfirmWindowsWholeDeviceFormat" xml:space="preserve">
+    <value>{0} will switch from its manufacturer's driver back to the Windows drivers. Anything the manufacturer's driver provided, such as its control panel, may stop working until you switch back. Close any apps that are using the device first.</value>
+    <comment>{0} is the device name.</comment>
+  </data>
+  <data name="ConfirmManufacturerFormat" xml:space="preserve">
+    <value>{0} will switch to the {1} driver. Close any apps that are using it first.</value>
+    <comment>{0} is the device name. {1} is the company that published the driver.</comment>
+  </data>
+  <data name="ConfirmManufacturerWholeDeviceFormat" xml:space="preserve">
+    <value>{0} will switch to the {1} driver. That driver controls the whole device, so it replaces the Windows drivers for every part of it, including any MIDI ports. Close any apps that are using the device first.</value>
+    <comment>{0} is the device name. {1} is the company that published the driver.</comment>
+  </data>
+
+  <!-- ============================== Outcome ============================== -->
+
+  <data name="OutcomeReadyTitle" xml:space="preserve">
+    <value>Driver changed</value>
+  </data>
+  <data name="OutcomeReplugTitle" xml:space="preserve">
+    <value>Reconnect the device</value>
+  </data>
+  <data name="OutcomeRestartTitle" xml:space="preserve">
+    <value>Restart Windows to finish</value>
+  </data>
+  <data name="OutcomeFailedTitle" xml:space="preserve">
+    <value>The driver wasn't changed</value>
+  </data>
+  <data name="DriverChangedReady" xml:space="preserve">
+    <value>The device is now using the new driver.</value>
+  </data>
+  <data name="DriverChangedReplug" xml:space="preserve">
+    <value>The new driver is installed. Disconnect the device and connect it again to start using it.</value>
+  </data>
+  <data name="DriverChangedRestartWindows" xml:space="preserve">
+    <value>The new driver is installed. Restart Windows to start using it.</value>
+  </data>
+  <data name="CompositeNeedsRestart" xml:space="preserve">
+    <value>The device is back on the Windows drivers, but Windows needs a restart to finish. Restart Windows, then select "Use low-latency driver" again.</value>
+  </data>
+  <data name="CompositeFunctionMissing" xml:space="preserve">
+    <value>The device is back on the Windows drivers, but its audio interface didn't appear. Disconnect the device, connect it again, then select "Use low-latency driver" again.</value>
+  </data>
+  <data name="ErrorLowLatencyNotInstalled" xml:space="preserve">
+    <value>The low-latency driver isn't installed on this PC. Run the installer again to add it.</value>
+  </data>
+  <data name="ErrorDeviceNotFound" xml:space="preserve">
+    <value>The device isn't connected anymore. Connect it, then select Refresh.</value>
+  </data>
+  <data name="ErrorDriverNotAvailable" xml:space="preserve">
+    <value>That driver isn't available for this device anymore. Select Refresh to see the current choices.</value>
+  </data>
+  <data name="ErrorCompositeFailedFormat" xml:space="preserve">
+    <value>Windows couldn't hand the device back from the manufacturer's driver (error {0}).</value>
+    <comment>{0} is an error code such as 0xE0000203.</comment>
+  </data>
+  <data name="ErrorInstallFailedFormat" xml:space="preserve">
+    <value>Windows couldn't install the driver (error {0}).</value>
+    <comment>{0} is an error code such as 0xE0000203.</comment>
+  </data>
+  <data name="ErrorWithSystemTextFormat" xml:space="preserve">
+    <value>{0} {1}</value>
+    <comment>{0} is one of the error sentences above. {1} is the description Windows gives for the error code.</comment>
+  </data>
+  <data name="ErrorUnexpected" xml:space="preserve">
+    <value>Something unexpected went wrong, and the driver may not have changed. Select Refresh to see what each device is using now.</value>
+  </data>
+
+  <!-- ============================== Follow-up dialogs ============================== -->
+
+  <data name="RestartComputerDialog.Title" xml:space="preserve">
+    <value>Restart Windows now?</value>
+  </data>
+  <data name="RestartComputerDialog.PrimaryButtonText" xml:space="preserve">
+    <value>Restart now</value>
+  </data>
+  <data name="RestartComputerDialog.CloseButtonText" xml:space="preserve">
+    <value>Later</value>
+  </data>
+  <data name="ReplugDeviceDialog.Title" xml:space="preserve">
+    <value>Reconnect the device</value>
+  </data>
+  <data name="ReplugDeviceDialog.CloseButtonText" xml:space="preserve">
+    <value>OK</value>
+  </data>
+</root>

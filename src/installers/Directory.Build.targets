@@ -1,0 +1,56 @@
+<Project>
+
+  <!--
+    Opt-in Authenticode signing for the installer projects.
+
+    Nothing here runs unless LLA_SIGNING_THUMBPRINT (or the LlaSigningThumbprint property) holds
+    the thumbprint of a code signing certificate in the current user's certificate store.
+    build\build-all.ps1 sets that variable when it is run with -Sign; see build\sign-files.ps1.
+
+    What gets signed here, in build order:
+
+      LowLatencyAudioSetupActions.dll   The custom action DLL. An Authenticode signature on the
+                                        .msi does not cover a DLL that Windows Installer unpacks
+                                        from it and loads, and Smart App Control blocks that DLL
+                                        if it is unsigned. The install then fails with error 1723.
+      the .cab files and the .msi       Before the bundle is built, because the bundle embeds the
+                                        .msi. The bundle project references the package project,
+                                        so this happens on its own.
+      the bundle engine, then the       WiX detaches the engine, has it signed, puts it back, and
+      bundle                            then has the whole bundle signed.
+  -->
+
+  <PropertyGroup>
+    <LlaSigningThumbprint Condition="'$(LlaSigningThumbprint)' == ''">$(LLA_SIGNING_THUMBPRINT)</LlaSigningThumbprint>
+    <LlaSignCommand>pwsh -NoProfile -ExecutionPolicy Bypass -File "$(MSBuildThisFileDirectory)..\..\build\sign-files.ps1" -CertificateThumbprint "$(LlaSigningThumbprint)"</LlaSignCommand>
+    <SignOutput Condition="'$(LlaSigningThumbprint)' != '' and '$(MSBuildProjectExtension)' == '.wixproj'">true</SignOutput>
+  </PropertyGroup>
+
+  <!-- WiX calls these four by name when SignOutput is true. -->
+
+  <Target Name="SignCabs" Condition="'$(LlaSigningThumbprint)' != ''">
+    <Exec Command="$(LlaSignCommand) -Path &quot;%(SignCabs.FullPath)&quot;" />
+  </Target>
+
+  <Target Name="SignMsi" Condition="'$(LlaSigningThumbprint)' != ''">
+    <Exec Command="$(LlaSignCommand) -Path &quot;%(SignMsi.FullPath)&quot;" />
+  </Target>
+
+  <Target Name="SignBundleEngine" Condition="'$(LlaSigningThumbprint)' != ''">
+    <Exec Command="$(LlaSignCommand) -Path &quot;%(SignBundleEngine.FullPath)&quot;" />
+  </Target>
+
+  <Target Name="SignBundle" Condition="'$(LlaSigningThumbprint)' != ''">
+    <Exec Command="$(LlaSignCommand) -Path &quot;%(SignBundle.FullPath)&quot;" />
+  </Target>
+
+  <!-- The package embeds the DLL straight from the custom action project's output folder, so
+       that copy is the one to sign. Files that already have a valid signature are skipped, so an
+       incremental build that did not relink it signs nothing. -->
+  <Target Name="LlaSignCustomActionDll"
+          AfterTargets="Build"
+          Condition="'$(LlaSigningThumbprint)' != '' and '$(MSBuildProjectName)' == 'LowLatencyAudioSetupActions'">
+    <Exec Command="$(LlaSignCommand) -Path &quot;$(TargetPath)&quot;" />
+  </Target>
+
+</Project>
