@@ -25,6 +25,19 @@ Environment:
 #define _TRANSFEROBJECT_H_
 
 class RtPacketObject;
+class AudioIsochronousEngine;
+
+enum class RequestState
+{
+    Idle,
+    InFlight,
+    Cancelling
+};
+
+constexpr LONG toLONG(RequestState requestState)
+{
+    return static_cast<LONG>(requestState);
+}
 
 class TransferObject
 {
@@ -32,15 +45,24 @@ class TransferObject
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     TransferObject(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ StreamObject *  streamObject,
-        _In_ LONG            index,
-        _In_ IsoDirection    direction
+        _In_ PDEVICE_CONTEXT          deviceContext,
+        _In_ AudioIsochronousEngine * audioIsochronousEngine,
+        _In_ StreamObject *           streamObject,
+        _In_ LONG                     index,
+        _In_ IsoDirection             direction
     );
 
-    virtual __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
+    virtual __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
     ~TransferObject();
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    LONG AddRef();
+
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
+    LONG Release();
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
@@ -103,7 +125,7 @@ class TransferObject
 
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
-    void TransferObject::DumpUrbPacket(
+    void DumpUrbPacket(
         _In_ LPCSTR Label
     );
 
@@ -133,11 +155,6 @@ class TransferObject
     NONPAGED_CODE_SEG
     USBD_STATUS
     GetUSBDStatus();
-
-    __drv_maxIRQL(DISPATCH_LEVEL)
-    NONPAGED_CODE_SEG
-    bool
-    IsRequested();
 
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG
@@ -210,8 +227,8 @@ class TransferObject
     PUCHAR
     GetDataBuffer();
 
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
     ULONG GetTransferredBytesInThisIrp();
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -266,8 +283,8 @@ class TransferObject
     PAGED_CODE_SEG
     ULONGLONG GetPeriodQPCPosition();
 
-    __drv_maxIRQL(PASSIVE_LEVEL)
-    PAGED_CODE_SEG
+    __drv_maxIRQL(DISPATCH_LEVEL)
+    NONPAGED_CODE_SEG
     ULONGLONG CalculateEstimatedQPCPosition(
         _In_ ULONG bytesCopiedUpToBoundary
     );
@@ -293,45 +310,53 @@ class TransferObject
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     TransferObject * Create(
-        _In_ PDEVICE_CONTEXT deviceContext,
-        _In_ StreamObject *  streamObject,
-        _In_ LONG            index,
-        _In_ IsoDirection    direction
+        _In_ PDEVICE_CONTEXT          deviceContext,
+        _In_ AudioIsochronousEngine * audioIsochronousEngine,
+        _In_ StreamObject *           streamObject,
+        _In_ LONG                     index,
+        _In_ IsoDirection             direction
     );
 
   private:
-    const PDEVICE_CONTEXT m_deviceContext;
-    StreamObject *        m_streamObject{nullptr};
-    const LONG            m_index;
-    const IsoDirection    m_direction;
-    bool                  m_isCompleted{true};
-    PURB                  m_urb{nullptr};
-    WDFMEMORY             m_urbMemory{nullptr};
-    WDFREQUEST            m_request{nullptr};
-    bool                  m_isRequested{false};
-    PMDL                  m_dataBufferMdl{nullptr};
-    PUCHAR                m_dataBuffer{nullptr};
-    ULONG                 m_numIsoPackets{0}; // Number of IsoPackets in the URB
-    ULONG                 m_isoPacketSize{0}; // Interval per Offset of IsoPacket within the URB, for input
-    ULONG                 m_maxXferSize{0};   // Buffer size used for transfer in the URB
-    ULONG                 m_feedbackSamples{0};
-    ULONG                 m_feedbackRemainder{0};
-    ULONG                 m_presendSamples{0};
-    ULONG                 m_totalBytesProcessed{0};
-    ULONG                 m_transferredBytesInThisIrp{0};
-    ULONG                 m_errorPacketCount{0};
-    LONG                  m_asyncPacketsCount{0};
-    LONG                  m_syncPacketsCount{0};
-    ULONG                 m_lockDelayCount{0};
-    PUCHAR                m_isoPacketBuffer[UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_FRAMES_PER_MS]{0};
-    ULONG                 m_isoPacketLength[UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_FRAMES_PER_MS]{0};
-    ULONG                 m_totalProcessedBytesSoFar[UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_FRAMES_PER_MS]{0};
-    WDFSPINLOCK           m_spinLock{nullptr};
-    KEVENT                m_requestCompletedEvent{0};
-    ULONGLONG             m_completedTimeUs{0ULL};   // Time when the URB was processed (microseconds)
-    ULONGLONG             m_qpcPosition{0ULL};       // Time when the URB was processed (query performance counter value)
-    ULONGLONG             m_periodUs{0ULL};          // Interval between the time the previous URB was processed and the time this URB was processed; 0 for the first URB (microseconds)
-    ULONGLONG             m_periodQPCPosition{0ULL}; // Interval between the time the previous URB was processed and the time this URB was processed; 0 for the first URB (query performance counter value)
+    static __drv_maxIRQL(PASSIVE_LEVEL)
+    NONPAGED_CODE_SEG
+    EVT_WDF_WORKITEM EvtWorkItemFunction;
+
+    const PDEVICE_CONTEXT    m_deviceContext;
+    AudioIsochronousEngine * m_audioIsochronousEngine{nullptr};
+    StreamObject *           m_streamObject{nullptr};
+    const LONG               m_index;
+    const IsoDirection       m_direction;
+    bool                     m_isCompleted{true};
+    PURB                     m_urb{nullptr};
+    WDFMEMORY                m_urbMemory{nullptr};
+    WDFREQUEST               m_request{nullptr};
+    LONG                     m_requestState{toLONG(RequestState::Idle)};
+    PMDL                     m_dataBufferMdl{nullptr};
+    PUCHAR                   m_dataBuffer{nullptr};
+    ULONG                    m_numIsoPackets{0}; // Number of IsoPackets in the URB
+    ULONG                    m_isoPacketSize{0}; // Interval per Offset of IsoPacket within the URB, for input
+    ULONG                    m_maxXferSize{0};   // Buffer size used for transfer in the URB
+    ULONG                    m_feedbackSamples{0};
+    ULONG                    m_feedbackRemainder{0};
+    ULONG                    m_presendSamples{0};
+    ULONG                    m_totalBytesProcessed{0};
+    ULONG                    m_transferredBytesInThisIrp{0};
+    ULONG                    m_errorPacketCount{0};
+    LONG                     m_asyncPacketsCount{0};
+    LONG                     m_syncPacketsCount{0};
+    ULONG                    m_lockDelayCount{0};
+    PUCHAR                   m_isoPacketBuffer[UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_FRAMES_PER_MS]{0};
+    ULONG                    m_isoPacketLength[UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_FRAMES_PER_MS]{0};
+    ULONG                    m_totalProcessedBytesSoFar[UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_FRAMES_PER_MS]{0};
+    WDFSPINLOCK              m_spinLock{nullptr};
+    WDFSPINLOCK              m_releaseWorkItemSpinLock{nullptr};
+    WDFWORKITEM              m_releaseWorkItem{nullptr};
+    ULONGLONG                m_completedTimeUs{0ULL};   // Time when the URB was processed (microseconds)
+    ULONGLONG                m_qpcPosition{0ULL};       // Time when the URB was processed (query performance counter value)
+    ULONGLONG                m_periodUs{0ULL};          // Interval between the time the previous URB was processed and the time this URB was processed; 0 for the first URB (microseconds)
+    ULONGLONG                m_periodQPCPosition{0ULL}; // Interval between the time the previous URB was processed and the time this URB was processed; 0 for the first URB (query performance counter value)
+    LONG                     m_referenceCounter{0};
 };
 
 #endif

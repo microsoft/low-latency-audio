@@ -28,6 +28,7 @@ Environment:
 #include "USBAudio.h"
 #include "TransferObject.h"
 #include "StreamObject.h"
+#include "AudioIsochronousEngine.h"
 
 #ifndef __INTELLISENSE__
 #include "TransferObject.tmh"
@@ -36,51 +37,128 @@ Environment:
 _Use_decl_annotations_
 PAGED_CODE_SEG
 TransferObject * TransferObject::Create(
-    PDEVICE_CONTEXT deviceContext,
-    StreamObject *  streamObject,
-    LONG            index,
-    IsoDirection    direction
+    PDEVICE_CONTEXT          deviceContext,
+    AudioIsochronousEngine * audioIsochronousEngine,
+    StreamObject *           streamObject,
+    LONG                     index,
+    IsoDirection             direction
 )
 {
     PAGED_CODE();
 
-    return new (POOL_FLAG_NON_PAGED, DRIVER_TAG) TransferObject(deviceContext, streamObject, index, direction);
+    TransferObject * transferObject = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) TransferObject(deviceContext, audioIsochronousEngine, streamObject, index, direction);
+
+    if ((transferObject != nullptr) && ((transferObject->m_spinLock == nullptr) || (transferObject->m_releaseWorkItem == nullptr) || (transferObject->m_releaseWorkItemSpinLock == nullptr)))
+    {
+        delete transferObject;
+        transferObject = nullptr;
+    }
+
+    return transferObject;
 }
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
 TransferObject::TransferObject(
-    PDEVICE_CONTEXT deviceContext,
-    StreamObject *  streamObject,
-    LONG            index,
-    IsoDirection    direction
+    PDEVICE_CONTEXT          deviceContext,
+    AudioIsochronousEngine * audioIsochronousEngine,
+    StreamObject *           streamObject,
+    LONG                     index,
+    IsoDirection             direction
 )
-    : m_deviceContext(deviceContext), m_streamObject(streamObject), m_index(index), m_direction(direction)
+    : m_deviceContext(deviceContext), m_audioIsochronousEngine(audioIsochronousEngine), m_streamObject(streamObject), m_index(index), m_direction(direction)
 {
     NTSTATUS              status = STATUS_SUCCESS;
     WDF_OBJECT_ATTRIBUTES attributes;
 
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
+
+    AddRef();
+
     WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
 
     attributes.ParentObject = m_deviceContext->Device;
     status = WdfSpinLockCreate(&attributes, &m_spinLock);
     ASSERT(NT_SUCCESS(status));
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
+        m_spinLock = nullptr;
+        return;
+    }
 
-    KeInitializeEvent(&m_requestCompletedEvent, NotificationEvent, TRUE);
+    WDF_WORKITEM_CONFIG workItemConfig;
+    WDF_WORKITEM_CONFIG_INIT(&workItemConfig, EvtWorkItemFunction);
+
+    WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, WORK_ITEM_CONTEXT);
+
+    attributes.ParentObject = m_deviceContext->Device;
+    status = WdfWorkItemCreate(&workItemConfig, &attributes, &m_releaseWorkItem);
+
+    ASSERT(NT_SUCCESS(status));
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWorkItemCreate failed %!STATUS!", status);
+        m_releaseWorkItem = nullptr;
+        return;
+    }
+
+    PWORK_ITEM_CONTEXT workItemContext = GetWorkItemContext(m_releaseWorkItem);
+    ASSERT(workItemContext != nullptr);
+
+    WDF_OBJECT_ATTRIBUTES_INIT(&attributes);
+    attributes.ParentObject = m_releaseWorkItem;
+    status = WdfSpinLockCreate(&attributes, &m_releaseWorkItemSpinLock);
+
+    workItemContext->SpinLock = m_releaseWorkItemSpinLock;
+
+    ASSERT(NT_SUCCESS(status));
+    if (!NT_SUCCESS(status))
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfSpinLockCreate failed %!STATUS!", status);
+        workItemContext->SpinLock = m_releaseWorkItemSpinLock = nullptr;
+        return;
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
 
 _Use_decl_annotations_
-PAGED_CODE_SEG
+NONPAGED_CODE_SEG
 TransferObject::~TransferObject()
 {
-    PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
     Free();
+
+    if (m_releaseWorkItem != nullptr)
+    {
+        WdfObjectDelete(m_releaseWorkItem);
+        m_releaseWorkItem = nullptr;
+    }
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+}
+
+NONPAGED_CODE_SEG
+_Use_decl_annotations_
+LONG TransferObject::AddRef(
+)
+{
+    return InterlockedIncrement(&m_referenceCounter);
+}
+
+NONPAGED_CODE_SEG
+_Use_decl_annotations_
+LONG TransferObject::Release(
+)
+{
+    LONG counter = InterlockedDecrement(&m_referenceCounter);
+    if (counter == 0)
+    {
+        delete this;
+    }
+    return counter;
 }
 
 _Use_decl_annotations_
@@ -121,7 +199,10 @@ void TransferObject::Free()
 {
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, m_index = %u", m_index);
 
-    WdfSpinLockAcquire(m_spinLock);
+    if (m_spinLock != nullptr)
+    {
+        WdfSpinLockAcquire(m_spinLock);
+    }
 
     if (m_dataBufferMdl != nullptr)
     {
@@ -138,7 +219,11 @@ void TransferObject::Free()
         m_urb = nullptr;
     }
     m_dataBuffer = nullptr;
-    WdfSpinLockRelease(m_spinLock);
+
+    if (m_spinLock != nullptr)
+    {
+        WdfSpinLockRelease(m_spinLock);
+    }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
@@ -186,7 +271,7 @@ TransferObject::SetUrbIsochronousParametersInput(
             }
             if (status == STATUS_UNSUCCESSFUL)
             {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - ContiguousMemory = %p, m_request = %p", m_deviceContext->ContiguousMemory, m_request);
+                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - ContiguousMemory = %p, m_request = %p", m_audioIsochronousEngine->GetContiguousMemory(), m_request);
             }
             Free();
         }
@@ -207,7 +292,7 @@ TransferObject::SetUrbIsochronousParametersInput(
     });
 
     RETURN_NTSTATUS_IF_TRUE_ACTION(pipe == nullptr, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_deviceContext->ContiguousMemory == nullptr, status = STATUS_UNSUCCESSFUL, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(m_audioIsochronousEngine->GetContiguousMemory() == nullptr, status = STATUS_UNSUCCESSFUL, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_dataBuffer == nullptr, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_request != nullptr, status = STATUS_UNSUCCESSFUL, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_numIsoPackets == 0, status = STATUS_UNSUCCESSFUL, status);
@@ -276,11 +361,11 @@ TransferObject::SetUrbIsochronousParametersInput(
         ULONG         numberOfFrames;
         ULONG         numberOfPackets;
 
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - classic frames per irp       = %u", m_deviceContext->ClassicFramesPerIrp);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - classic frames per irp       = %u", m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - frames per ms                = %u", m_deviceContext->FramesPerMs);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - max burst override           = %u", m_deviceContext->SupportedControl.MaxBurstOverride);
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - bInterval                    = %u", m_deviceContext->InputInterfaceAndPipe.PipeInfo.Interval);
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - maximum packet size          = %u", m_deviceContext->InputInterfaceAndPipe.PipeInfo.MaximumPacketSize);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - bInterval                    = %u", m_audioIsochronousEngine->GetInputInterfaceAndPipe().PipeInfo.Interval);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - maximum packet size          = %u", m_audioIsochronousEngine->GetInputInterfaceAndPipe().PipeInfo.MaximumPacketSize);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - transfer size per frame      = %u", pipeContext->TransferSizePerFrame);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - transfer size per microframe = %u", pipeContext->TransferSizePerMicroframe);
 
@@ -365,7 +450,7 @@ TransferObject::SetUrbIsochronousParametersOutput(
             }
             if (status == STATUS_UNSUCCESSFUL)
             {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - ContiguousMemory = %p, m_request = %p", m_deviceContext->ContiguousMemory, m_request);
+                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - ContiguousMemory = %p, m_request = %p", m_audioIsochronousEngine->GetContiguousMemory(), m_request);
             }
             Free();
         }
@@ -386,7 +471,7 @@ TransferObject::SetUrbIsochronousParametersOutput(
     });
 
     RETURN_NTSTATUS_IF_TRUE_ACTION(pipe == nullptr, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_deviceContext->ContiguousMemory == nullptr, status = STATUS_UNSUCCESSFUL, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(m_audioIsochronousEngine->GetContiguousMemory() == nullptr, status = STATUS_UNSUCCESSFUL, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_dataBuffer == nullptr, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_request != nullptr, status = STATUS_UNSUCCESSFUL, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_numIsoPackets == 0, status = STATUS_UNSUCCESSFUL, status);
@@ -453,11 +538,11 @@ TransferObject::SetUrbIsochronousParametersOutput(
         ULONG         numberOfFrames;
         ULONG         numberOfPackets;
 
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - classic frames per irp       = %u", m_deviceContext->ClassicFramesPerIrp);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - classic frames per irp       = %u", m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - frames per ms                = %u", m_deviceContext->FramesPerMs);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - max burst override           = %u", m_deviceContext->SupportedControl.MaxBurstOverride);
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - bInterval                    = %u", m_deviceContext->OutputInterfaceAndPipe.PipeInfo.Interval);
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - maximum packet size          = %u", m_deviceContext->OutputInterfaceAndPipe.PipeInfo.MaximumPacketSize);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - bInterval                    = %u", m_audioIsochronousEngine->GetOutputInterfaceAndPipe().PipeInfo.Interval);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - maximum packet size          = %u", m_audioIsochronousEngine->GetOutputInterfaceAndPipe().PipeInfo.MaximumPacketSize);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - transfer size per frame      = %u", pipeContext->TransferSizePerFrame);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - transfer size per microframe = %u", pipeContext->TransferSizePerMicroframe);
 
@@ -544,7 +629,7 @@ TransferObject::SetUrbIsochronousParametersFeedback(
             }
             if (status == STATUS_UNSUCCESSFUL)
             {
-                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - ContiguousMemory = %p, m_request = %p", m_deviceContext->ContiguousMemory, m_request);
+                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, " - ContiguousMemory = %p, m_request = %p", m_audioIsochronousEngine->GetContiguousMemory(), m_request);
             }
             Free();
         }
@@ -565,7 +650,7 @@ TransferObject::SetUrbIsochronousParametersFeedback(
     });
 
     RETURN_NTSTATUS_IF_TRUE_ACTION(pipe == nullptr, status = STATUS_INVALID_PARAMETER, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(m_deviceContext->ContiguousMemory == nullptr, status = STATUS_UNSUCCESSFUL, status);
+    RETURN_NTSTATUS_IF_TRUE_ACTION(m_audioIsochronousEngine->GetContiguousMemory() == nullptr, status = STATUS_UNSUCCESSFUL, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_dataBuffer == nullptr, status = STATUS_INVALID_PARAMETER, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_request != nullptr, status = STATUS_UNSUCCESSFUL, status);
     RETURN_NTSTATUS_IF_TRUE_ACTION(m_numIsoPackets == 0, status = STATUS_UNSUCCESSFUL, status);
@@ -633,11 +718,11 @@ TransferObject::SetUrbIsochronousParametersFeedback(
         ULONG         numberOfFrames;
         ULONG         numberOfPackets;
 
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - classic frames per irp       = %u", m_deviceContext->ClassicFramesPerIrp);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - classic frames per irp       = %u", m_audioIsochronousEngine->GetAudioStreamPropertySet().ClassicFramesPerIrp);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - frames per ms                = %u", m_deviceContext->FramesPerMs);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - max burst override           = %u", m_deviceContext->SupportedControl.MaxBurstOverride);
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - bInterval                    = %u", m_deviceContext->FeedbackInterfaceAndPipe.PipeInfo.Interval);
-        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - maximum packet size          = %u", m_deviceContext->FeedbackInterfaceAndPipe.PipeInfo.MaximumPacketSize);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - bInterval                    = %u", m_audioIsochronousEngine->GetFeedbackInterfaceAndPipe().PipeInfo.Interval);
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - maximum packet size          = %u", m_audioIsochronousEngine->GetFeedbackInterfaceAndPipe().PipeInfo.MaximumPacketSize);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - transfer size per frame      = %u", pipeContext->TransferSizePerFrame);
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - transfer size per microframe = %u", pipeContext->TransferSizePerMicroframe);
 
@@ -801,15 +886,15 @@ TransferObject::SendIsochronousRequest(
 
     if (direction == IsoDirection::In)
     {
-        pipe = m_deviceContext->InputInterfaceAndPipe.Pipe;
+        pipe = m_audioIsochronousEngine->GetInputInterfaceAndPipe().Pipe;
     }
     else if (direction == IsoDirection::Out)
     {
-        pipe = m_deviceContext->OutputInterfaceAndPipe.Pipe;
+        pipe = m_audioIsochronousEngine->GetOutputInterfaceAndPipe().Pipe;
     }
     else
     {
-        pipe = m_deviceContext->FeedbackInterfaceAndPipe.Pipe;
+        pipe = m_audioIsochronousEngine->GetFeedbackInterfaceAndPipe().Pipe;
     }
 
     requestContext = GetIsochronousRequestContext(m_request);
@@ -829,12 +914,24 @@ TransferObject::SendIsochronousRequest(
     WdfRequestSetCompletionRoutine(m_request, completionRoutine, requestContext);
 
     requestContext->DeviceContext = m_deviceContext;
-    requestContext->StreamObject = const_cast<StreamObject *>(m_streamObject);
-    requestContext->TransferObject = this;
-    requestContext->UrbMemory = m_urbMemory;
-    WdfSpinLockRelease(m_spinLock);
+    requestContext->IsochronousRequestSpinLock = m_deviceContext->IsochronousRequestSpinLock;
 
-    KeClearEvent(&m_requestCompletedEvent);
+    {
+        WdfSpinLockAcquire(requestContext->IsochronousRequestSpinLock);
+        requestContext->AudioIsochronousEngine = m_audioIsochronousEngine;
+        requestContext->AudioIsochronousEngine->AddRef();
+
+        requestContext->StreamObject = m_streamObject;
+        requestContext->StreamObject->AddRef();
+
+        requestContext->TransferObject = this;
+        requestContext->TransferObject->AddRef();
+        requestContext->ReleaseWorkItem = m_releaseWorkItem;
+
+        WdfSpinLockRelease(requestContext->IsochronousRequestSpinLock);
+    }
+
+    WdfSpinLockRelease(m_spinLock);
 
 #if defined(DBG)
     if (false)
@@ -843,11 +940,41 @@ TransferObject::SendIsochronousRequest(
     }
 #endif
 
-    m_isRequested = true;
+    InterlockedExchange(&m_requestState, toLONG(RequestState::InFlight));
     if (WdfRequestSend(m_request, WdfUsbTargetPipeGetIoTarget(pipe), WDF_NO_SEND_OPTIONS) == FALSE)
     {
-        m_isRequested = false;
+        InterlockedCompareExchange(&m_requestState, toLONG(RequestState::Idle), toLONG(RequestState::InFlight));
         status = WdfRequestGetStatus(m_request);
+
+        WdfSpinLockAcquire(requestContext->IsochronousRequestSpinLock);
+        AudioIsochronousEngine * audioIsochronousEngine = requestContext->AudioIsochronousEngine;
+        StreamObject *           streamObject = requestContext->StreamObject;
+        TransferObject *         transferObject = requestContext->TransferObject;
+
+        requestContext->TransferObject = nullptr;
+        requestContext->StreamObject = nullptr;
+        requestContext->AudioIsochronousEngine = nullptr;
+        requestContext->ReleaseWorkItem = nullptr;
+        WdfSpinLockRelease(requestContext->IsochronousRequestSpinLock);
+
+        if (streamObject != nullptr)
+        {
+            streamObject->Release();
+            streamObject = nullptr;
+        }
+
+        if (audioIsochronousEngine != nullptr)
+        {
+            audioIsochronousEngine->Release();
+            audioIsochronousEngine = nullptr;
+        }
+
+        if (transferObject != nullptr)
+        {
+            transferObject->Release();
+            transferObject = nullptr;
+        }
+
         if (!NT_SUCCESS(status))
         {
             TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfRequestSend failed");
@@ -867,24 +994,67 @@ TransferObject::CancelRequest()
 {
     NTSTATUS status = STATUS_SUCCESS;
 
-    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, m_index = %u", m_index);
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, direction = %s, m_index = %u", GetDirectionString(m_direction), m_index);
 
-    WdfSpinLockAcquire(m_spinLock);
-    if (m_isRequested && (m_request != nullptr))
+    if (InterlockedCompareExchange(&m_requestState, toLONG(RequestState::Cancelling), toLONG(RequestState::InFlight)) == toLONG(RequestState::InFlight))
     {
-        m_isRequested = false;
-        WdfSpinLockRelease(m_spinLock);
+        //
+        // The request may remain owned by the USB stack after WdfRequestCancelSentRequest returns.
+        // Accessing a destroyed TransferObject from the completion routine can therefore result in a use-after-free condition and trigger a system crash.
+        //
+        // To prevent this, AudioIsochronousEngine and TransferObject are detached from ISOCHRONOUS_REQUEST_CONTEXT before issuing the cancellation request.
+        //
+        // The pointers in ISOCHRONOUS_REQUEST_CONTEXT are managed using interlocked operations.
+        // This allows the cancellation and completion paths to safely transfer ownership and prevents both paths from processing the same references.
+        //
+        WdfSpinLockAcquire(m_spinLock);
+        if (m_request != nullptr)
+        {
+            PISOCHRONOUS_REQUEST_CONTEXT requestContext = GetIsochronousRequestContext(m_request);
+            WdfSpinLockAcquire(requestContext->IsochronousRequestSpinLock);
+            AudioIsochronousEngine * audioIsochronousEngine = requestContext->AudioIsochronousEngine;
+            StreamObject *           streamObject = requestContext->StreamObject;
+            TransferObject *         transferObject = requestContext->TransferObject;
 
-        LARGE_INTEGER timeout{};
-        // Isochronous only
-        timeout.QuadPart = (UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_DEFAULT_FIRST_PACKET_LATENCY) * -20000LL;
+            requestContext->AudioIsochronousEngine = nullptr;
+            requestContext->StreamObject = nullptr;
+            requestContext->TransferObject = nullptr;
+            requestContext->ReleaseWorkItem = nullptr;
+            WdfSpinLockRelease(requestContext->IsochronousRequestSpinLock);
 
-        WdfRequestCancelSentRequest(m_request);
-        status = KeWaitForSingleObject(&m_requestCompletedEvent, Executive, KernelMode, FALSE, &timeout);
-    }
-    else
-    {
-        WdfSpinLockRelease(m_spinLock);
+            //
+            // Keep the request object valid while canceling the sent request.
+            // https://learn.microsoft.com/en-us/windows-hardware/drivers/wdf/synchronizing-cancellation-of-sent-requests
+            //
+            WDFREQUEST request = m_request;
+            WdfObjectReference(request);
+            WdfSpinLockRelease(m_spinLock);
+
+            WdfRequestCancelSentRequest(request);
+            WdfObjectDereference(request);
+
+            if (streamObject != nullptr)
+            {
+                streamObject->Release();
+                streamObject = nullptr;
+            }
+
+            if (audioIsochronousEngine != nullptr)
+            {
+                audioIsochronousEngine->Release();
+                audioIsochronousEngine = nullptr;
+            }
+
+            if (transferObject != nullptr)
+            {
+                transferObject->Release();
+                transferObject = nullptr;
+            }
+        }
+        else
+        {
+            WdfSpinLockRelease(m_spinLock);
+        }
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -905,13 +1075,11 @@ void TransferObject::CompleteRequest(
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "%u, %llu, %llu, %llu, %llu", m_index, completedTimeUs, qpcPosition, periodUs, periodQPCPosition);
     WdfSpinLockAcquire(m_spinLock);
 
-    m_isRequested = false;
+    InterlockedExchange(&m_requestState, toLONG(RequestState::Idle));
     m_completedTimeUs = completedTimeUs;
     m_periodUs = periodUs;
     m_qpcPosition = qpcPosition;
     m_periodQPCPosition = periodQPCPosition;
-    KeSetEvent(&m_requestCompletedEvent, 1, FALSE);
-
     WdfSpinLockRelease(m_spinLock);
 
     // TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
@@ -941,21 +1109,6 @@ TransferObject::GetUSBDStatus()
     // TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 
     return usbdStatus;
-}
-
-_Use_decl_annotations_
-NONPAGED_CODE_SEG
-bool TransferObject::IsRequested()
-{
-    bool isRequested;
-
-    WdfSpinLockAcquire(m_spinLock);
-
-    isRequested = m_isRequested;
-
-    WdfSpinLockRelease(m_spinLock);
-
-    return isRequested;
 }
 
 _Use_decl_annotations_
@@ -1008,14 +1161,14 @@ TransferObject::UpdateTransferredBytesInThisIrp(ULONG & transferredBytesInThisIr
                     ULONG length = m_urb->UrbIsochronousTransfer.IsoPacket[i].Length;
                     transferredBytesInThisIrp += length;
                     // Detect when a sample ends in the middle of a packet.
-                    if (((length % (m_deviceContext->InputProperty.BytesPerBlock) != 0) || (((length < m_deviceContext->InputProperty.BytesPerBlock * (m_deviceContext->InputProperty.SamplesPerPacket - 1)) ||
-                                                                                             (length > m_deviceContext->InputProperty.BytesPerBlock * (m_deviceContext->InputProperty.SamplesPerPacket + 1))))))
+                    if (((length % (m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock) != 0) || (((length < m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock * (m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.SamplesPerPacket - 1)) ||
+                                                                                                                                  (length > m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock * (m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.SamplesPerPacket + 1))))))
                     {
                         if (m_lockDelayCount == 0)
                         {
                             if (length != 0)
                             {
-                                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "in frame %u iso packet %d : invalid length %u bytes, in %u bytes per sample, %u samples per packet", m_urb->UrbIsochronousTransfer.StartFrame, i, length, m_deviceContext->InputProperty.BytesPerBlock, m_deviceContext->InputProperty.SamplesPerPacket);
+                                TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "in frame %u iso packet %d : invalid length %u bytes, in %u bytes per sample, %u samples per packet", m_urb->UrbIsochronousTransfer.StartFrame, i, length, m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock, m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.SamplesPerPacket);
 
                                 if (invalidPacket != nullptr)
                                 {
@@ -1025,7 +1178,7 @@ TransferObject::UpdateTransferredBytesInThisIrp(ULONG & transferredBytesInThisIr
                             }
                             else
                             {
-                                TraceEvents(TRACE_LEVEL_WARNING, TRACE_DEVICE, "in frame %u iso packet %d : zero length, in %u bytes per sample, %u samples per packet", m_urb->UrbIsochronousTransfer.StartFrame, i, m_deviceContext->InputProperty.BytesPerBlock, m_deviceContext->InputProperty.SamplesPerPacket);
+                                TraceEvents(TRACE_LEVEL_WARNING, TRACE_DEVICE, "in frame %u iso packet %d : zero length, in %u bytes per sample, %u samples per packet", m_urb->UrbIsochronousTransfer.StartFrame, i, m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock, m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.SamplesPerPacket);
                             }
                         }
                         else
@@ -1035,11 +1188,13 @@ TransferObject::UpdateTransferredBytesInThisIrp(ULONG & transferredBytesInThisIr
                     }
                     if (length != 0)
                     {
+                        ULONG measuredSampleRate = m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.MeasuredSampleRate;
                         // detecting sampling rate
-                        bool updated = m_streamObject->CalculateSampleRate(TRUE, m_deviceContext->InputProperty.BytesPerBlock, m_deviceContext->InputProperty.PacketsPerSec, length, m_deviceContext->InputProperty.MeasuredSampleRate);
+                        bool updated = m_streamObject->CalculateSampleRate(true, m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.BytesPerBlock, m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.PacketsPerSec, length, measuredSampleRate);
+                        m_audioIsochronousEngine->SetMeasuredSampleRate(true, measuredSampleRate);
                         if (updated)
                         {
-                            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputMeasuredSampleRate = %d", m_deviceContext->InputProperty.MeasuredSampleRate);
+                            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - InputMeasuredSampleRate = %d", m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.MeasuredSampleRate);
                         }
                     }
                 }
@@ -1061,6 +1216,8 @@ TransferObject::UpdateTransferredBytesInThisIrp(ULONG & transferredBytesInThisIr
                 }
                 else
                 {
+                    ULONG measuredSampleRate = m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.MeasuredSampleRate;
+
                     // The following two comments are from sample code in Microsoft's documentation.
                     // Length is a return value for isochronous IN transfers.
                     // Length is ignored by the USB driver stack for isochronous OUT transfers.
@@ -1069,10 +1226,11 @@ TransferObject::UpdateTransferredBytesInThisIrp(ULONG & transferredBytesInThisIr
 
                     // detecting sampling rate
                     ULONG length = m_urb->UrbIsochronousTransfer.IsoPacket[i].Length;
-                    bool  updated = m_streamObject->CalculateSampleRate(FALSE, m_deviceContext->OutputProperty.BytesPerBlock, m_deviceContext->OutputProperty.PacketsPerSec, length, m_deviceContext->OutputProperty.MeasuredSampleRate);
+                    bool  updated = m_streamObject->CalculateSampleRate(false, m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.BytesPerBlock, m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.PacketsPerSec, length, measuredSampleRate);
+                    m_audioIsochronousEngine->SetMeasuredSampleRate(false, measuredSampleRate);
                     if (updated)
                     {
-                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputMeasuredSampleRate = %d", m_deviceContext->OutputProperty.MeasuredSampleRate);
+                        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - OutputMeasuredSampleRate = %d", m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.MeasuredSampleRate);
                     }
                 }
             }
@@ -1267,12 +1425,15 @@ TransferObject::GetDataBuffer()
 }
 
 _Use_decl_annotations_
-PAGED_CODE_SEG
+NONPAGED_CODE_SEG
 ULONG
 TransferObject::GetTransferredBytesInThisIrp()
 {
-    PAGED_CODE();
-    return m_transferredBytesInThisIrp;
+    WdfSpinLockAcquire(m_spinLock);
+    ULONG transferredBytesInThisIrp = m_transferredBytesInThisIrp;
+    WdfSpinLockRelease(m_spinLock);
+
+    return transferredBytesInThisIrp;
 }
 
 _Use_decl_annotations_
@@ -1396,16 +1557,34 @@ TransferObject::GetPeriodQPCPosition()
 }
 
 _Use_decl_annotations_
-PAGED_CODE_SEG
+NONPAGED_CODE_SEG
 ULONGLONG
 TransferObject::CalculateEstimatedQPCPosition(
     ULONG bytesCopiedUpToBoundary
 )
 {
-    PAGED_CODE();
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " %llu + (%llu * %u) / %u = %llu", m_qpcPosition, m_periodQPCPosition, bytesCopiedUpToBoundary, m_transferredBytesInThisIrp, m_qpcPosition + (m_periodQPCPosition * bytesCopiedUpToBoundary) / m_transferredBytesInThisIrp);
+    WdfSpinLockAcquire(m_spinLock);
+    ULONG     transferredBytesInThisIrp = m_transferredBytesInThisIrp;
+    ULONGLONG qpcPosition = m_qpcPosition;
+    ULONGLONG periodQPCPosition = m_periodQPCPosition;
+    ULONGLONG estimatedQPCPosition = qpcPosition;
 
-    return m_qpcPosition + (m_periodQPCPosition * bytesCopiedUpToBoundary) / m_transferredBytesInThisIrp;
+    if (transferredBytesInThisIrp != 0)
+    {
+        estimatedQPCPosition += ((periodQPCPosition * bytesCopiedUpToBoundary) / transferredBytesInThisIrp);
+    }
+    WdfSpinLockRelease(m_spinLock);
+
+    if (transferredBytesInThisIrp == 0)
+    {
+        TraceEvents(TRACE_LEVEL_WARNING, TRACE_DEVICE, "Skipping QPC position estimation: transferred byte count is zero");
+    }
+    else
+    {
+        TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " %llu + (%llu * %u) / %u = %llu", qpcPosition, periodQPCPosition, bytesCopiedUpToBoundary, transferredBytesInThisIrp, estimatedQPCPosition);
+    }
+
+    return estimatedQPCPosition;
 }
 
 _Use_decl_annotations_
@@ -1479,4 +1658,45 @@ void TransferObject::DebugReport()
     }
     // WdfSpinLockRelease(m_spinLock);
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
+}
+
+_Use_decl_annotations_
+NONPAGED_CODE_SEG
+VOID TransferObject::EvtWorkItemFunction(
+    WDFWORKITEM workItem
+)
+{
+    PWORK_ITEM_CONTEXT workItemContext = GetWorkItemContext(workItem);
+    ASSERT(workItemContext != nullptr);
+
+    WdfSpinLockAcquire(workItemContext->SpinLock);
+    LONG                     counter = workItemContext->Counter;
+    TransferObject *         transferObject = workItemContext->TransferObject;
+    StreamObject *           streamObject = workItemContext->StreamObject;
+    AudioIsochronousEngine * audioIsochronousEngine = workItemContext->AudioIsochronousEngine;
+
+    workItemContext->TransferObject = nullptr;
+    workItemContext->StreamObject = nullptr;
+    workItemContext->AudioIsochronousEngine = nullptr;
+    workItemContext->Counter = 0;
+    WdfSpinLockRelease(workItemContext->SpinLock);
+
+    while (counter > 0)
+    {
+        if (transferObject != nullptr)
+        {
+            transferObject->Release();
+        }
+
+        if (streamObject != nullptr)
+        {
+            streamObject->Release();
+        }
+
+        if (audioIsochronousEngine != nullptr)
+        {
+            audioIsochronousEngine->Release();
+        }
+        counter--;
+    }
 }
