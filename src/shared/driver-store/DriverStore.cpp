@@ -676,8 +676,14 @@ namespace driverstore
 
                 DriverNodeDetail detail{};
 
-                if (!GetDriverNodeDetail(set.Get(), device, driver, detail) ||
-                    !EqualsNoCase(FileNameOnly(detail.InfFileName), expectedInfName))
+                if (!GetDriverNodeDetail(set.Get(), device, driver, detail))
+                {
+                    continue;
+                }
+
+                auto const originalInfFileName = OriginalInfName(detail.InfFileName);
+
+                if (!EqualsNoCase(originalInfFileName, expectedInfName))
                 {
                     continue;
                 }
