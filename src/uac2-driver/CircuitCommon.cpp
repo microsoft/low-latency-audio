@@ -162,7 +162,6 @@ NTSTATUS Codec_AddAudioDummyJackToBridgePin(
     _In_ ACXPIN Pin
 )
 {
-    ACX_JACK_CALLBACKS    jackCallbacks{};
     ACX_JACK_CONFIG       jackCfg{};
     ACXJACK               jack{};
     PJACK_CONTEXT         jackContext = nullptr;
@@ -174,9 +173,6 @@ NTSTATUS Codec_AddAudioDummyJackToBridgePin(
     // Add audio jack to bridge pin.
     // For more information on audio jack see: https://docs.microsoft.com/en-us/windows/win32/api/devicetopology/ns-devicetopology-ksjack_description
     //
-    ACX_JACK_CALLBACKS_INIT(&jackCallbacks);
-    jackCallbacks.EvtAcxJackRetrievePresenceState = EvtJackRetrievePresence;
-
     ACX_JACK_CONFIG_INIT(&jackCfg);
     jackCfg.Description.ChannelMapping = 0;
     jackCfg.Description.Color = RGB(0, 0, 0);
@@ -184,8 +180,8 @@ NTSTATUS Codec_AddAudioDummyJackToBridgePin(
     jackCfg.Description.GeoLocation = AcxGeoLocNotApplicable;
     jackCfg.Description.GenLocation = AcxGenLocOther;
     jackCfg.Description.PortConnection = AcxPortConnUnknown;
-    jackCfg.Flags = AcxJackConfigJackDetection;
-    jackCfg.Callbacks = &jackCallbacks;
+    // Without connector control this is a static endpoint.
+    jackCfg.Flags = AcxJackConfigNoFlags;
     WDF_OBJECT_ATTRIBUTES_INIT_CONTEXT_TYPE(&attributes, JACK_CONTEXT);
     attributes.ParentObject = Pin;
 
