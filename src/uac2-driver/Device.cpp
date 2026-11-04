@@ -5800,7 +5800,13 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
 
             deviceContext->Params.SuggestedBufferPeriod = *bufferPeriod;
 
-            deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::ResetRequired);
+            // AsioBufferObject only exists between SetAsioBuffer and UnsetAsioBuffer. A client that
+            // owns the device can change the buffer period before it has set its buffers, so guard
+            // this dereference the same way as every other AsioBufferObject use in this file.
+            if (deviceContext->AsioBufferObject != nullptr)
+            {
+                deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::ResetRequired);
+            }
         }
         else
         {
