@@ -372,8 +372,9 @@ RtPacketObject::SetRtPackets(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 void RtPacketObject::UnsetRtPackets(
-    bool  isInput,
-    ULONG deviceIndex
+    bool    isInput,
+    ULONG   deviceIndex,
+    PVOID * rtPackets
 )
 {
     RT_PACKET_INFO * rtPacketInfo = nullptr;
@@ -392,7 +393,9 @@ void RtPacketObject::UnsetRtPackets(
         numOfDevices = m_numOfOutputDevices;
     }
 
-    if (deviceIndex < numOfDevices)
+    // Only clear the slot if it holds this caller's packets. A stream whose SetRtPackets was
+    // refused (slot already in use) must not wipe the running stream's table.
+    if ((deviceIndex < numOfDevices) && ((rtPackets == nullptr) || (rtPacketInfo[deviceIndex].RtPackets == rtPackets)))
     {
         rtPacketInfo[deviceIndex].RtPackets = nullptr;
         rtPacketInfo[deviceIndex].RtPacketsCount = 0;

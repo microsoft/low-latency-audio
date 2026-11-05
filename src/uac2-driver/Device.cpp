@@ -3633,7 +3633,8 @@ _Use_decl_annotations_
 void USBAudioAcxDriverStreamUnsetRtPackets(
     bool            isInput,
     ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext
+    PDEVICE_CONTEXT deviceContext,
+    PVOID *         packets
 )
 {
     PAGED_CODE();
@@ -3647,7 +3648,7 @@ void USBAudioAcxDriverStreamUnsetRtPackets(
 
     if (deviceContext->RtPacketObject != nullptr)
     {
-        deviceContext->RtPacketObject->UnsetRtPackets(isInput, deviceIndex);
+        deviceContext->RtPacketObject->UnsetRtPackets(isInput, deviceIndex, packets);
     }
 
     WdfWaitLockRelease(deviceContext->StreamEngineWaitLock);
