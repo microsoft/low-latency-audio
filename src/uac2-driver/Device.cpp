@@ -3610,12 +3610,17 @@ USBAudioAcxDriverStreamSetRtPackets(
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, %s, packetsCount = %d, packetSize = %d", isInput ? "Input" : "Output", packetsCount, packetSize);
 
     WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
+    // Also hold StreamEngineWaitLock, which the mixing thread holds while it copies to/from
+    // the RT packets, so the packet table never changes in the middle of a copy.
+    // Lock order: StreamWaitLock, then StreamEngineWaitLock.
+    WdfWaitLockAcquire(deviceContext->StreamEngineWaitLock, nullptr);
 
     if (deviceContext->RtPacketObject != nullptr)
     {
         status = deviceContext->RtPacketObject->SetRtPackets(isInput, deviceIndex, packets, packetsCount, packetSize, channel, numOfChannelsPerDevice);
     }
 
+    WdfWaitLockRelease(deviceContext->StreamEngineWaitLock);
     WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -3635,12 +3640,17 @@ void USBAudioAcxDriverStreamUnsetRtPackets(
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
     WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
+    // Wait for any in-progress mixing pass to finish before the packet table is cleared and
+    // the packet buffers are freed. Without this the mixing thread could read RtPacketsCount
+    // after it was zeroed (bugcheck 0x7E, divide by zero in CopyFromRtPacketToOutputData).
+    WdfWaitLockAcquire(deviceContext->StreamEngineWaitLock, nullptr);
 
     if (deviceContext->RtPacketObject != nullptr)
     {
         deviceContext->RtPacketObject->UnsetRtPackets(isInput, deviceIndex);
     }
 
+    WdfWaitLockRelease(deviceContext->StreamEngineWaitLock);
     WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");

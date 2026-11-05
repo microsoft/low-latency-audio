@@ -446,6 +446,7 @@ RtPacketObject::CopyFromRtPacketToOutputData(
     IF_TRUE_ACTION_JUMP(m_deviceContext->RenderStreamEngine == nullptr, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(transferObject->GetTransferredBytesInThisIrp() == 0, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(m_outputRtPacketInfo[deviceIndex].RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
+    IF_TRUE_ACTION_JUMP((m_outputRtPacketInfo[deviceIndex].RtPackets == nullptr) || (m_outputRtPacketInfo[deviceIndex].RtPacketsCount == 0), status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(m_outputRtPacketInfo[deviceIndex].Pause, status = STATUS_SUCCESS, CopyFromRtPacketToOutputData_Exit);
 
     bool fedRtPacket = false;
@@ -735,6 +736,7 @@ RtPacketObject::CopyToRtPacketFromInputData(
     IF_TRUE_ACTION_JUMP(m_deviceContext->CaptureStreamEngine == nullptr, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(transferObject->GetTransferredBytesInThisIrp() == 0, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(m_inputRtPacketInfo[deviceIndex].RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
+    IF_TRUE_ACTION_JUMP((m_inputRtPacketInfo[deviceIndex].RtPackets == nullptr) || (m_inputRtPacketInfo[deviceIndex].RtPacketsCount == 0), status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(m_inputRtPacketInfo[deviceIndex].Pause, status = STATUS_SUCCESS, CopyToRtPacketFromInputData_Exit);
 
     bool filledRtPacket = false;
