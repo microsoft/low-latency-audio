@@ -1688,6 +1688,15 @@ void StreamObject::MixingEngineThreadMain(
         // Counts packets for which isochronous IN processing has been completed and creates a list.
         // The created list is stored in inBuffer, and if there is a remainder (inputRemainder) from the previous thread wakeup, it is allocated to the beginning of that list.
         bool             inProcessRemainder = CreateCompletedInputPacketList(m_inputBuffers, &inRemainder, inputPacketsPerIrp, numIrp);
+        if (!handleAsioBuffer)
+        {
+            // A remainder only exists to split a packet at an ASIO buffer boundary, and only the
+            // ASIO branch below ever clears it. If ASIO stopped while Windows audio keeps the
+            // stream running, the stale remainder was re-queued on every wake-up and the loop
+            // exited at a phantom "ASIO boundary", so Windows audio got about 1/15 of its data
+            // (loud noise). It has been copied into the list above and is processed once.
+            inRemainder.Buffer = nullptr;
+        }
         ULONG            inBuffersCount = 0;
         ULONG            outBuffersCount = 0;
         PacketLoopReason inLoopExitReason = PacketLoopReason::ContinueLoop;
@@ -1836,6 +1845,11 @@ void StreamObject::MixingEngineThreadMain(
                     }
                 }
                 outProcessRemainder = CreateCompletedOutputPacketList(m_outputBuffers, &outRemainder, outBuffersCount, outputPacketsPerIrp, numIrp);
+                if (!handleAsioBuffer)
+                {
+                    // Consume a stale ASIO-boundary remainder once (see the input loop above).
+                    outRemainder.Buffer = nullptr;
+                }
 
                 if (handleAsioBuffer && hasOutputIsochronousInterface)
                 {
