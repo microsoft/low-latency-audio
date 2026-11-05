@@ -5324,6 +5324,13 @@ VOID EvtUSBAudioAcxDriverStartAsioStream(
             WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
             if (deviceContext->AsioBufferObject != nullptr)
             {
+                // The iso stream is already running for Windows audio, so the StreamObject (and
+                // its ASIO position counters) survived the previous ASIO session. Start the new
+                // session from zero, as a fresh stream would.
+                if (deviceContext->StreamObject != nullptr)
+                {
+                    deviceContext->StreamObject->ResetAsioPositions();
+                }
                 deviceContext->AsioBufferObject->SetReady();
                 status = STATUS_SUCCESS;
             }
@@ -5797,8 +5804,20 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
     {
         if (deviceContext->AsioOwner != nullptr)
         {
+            // Same pattern as the sample-rate change path: if Windows audio is streaming and no
+            // ASIO buffers are set yet (the host is in createBuffers), restart the shared iso
+            // stream after changing the period. Otherwise it stayed stopped under Windows audio,
+            // because the ASIO start path only calls SetReady when Windows audio is running.
+            bool streamRunning = false;
+            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
+            if (deviceContext->AsioBufferObject == nullptr)
+            {
+                streamRunning = true;
+            }
+            WdfWaitLockRelease(deviceContext->AsioWaitLock);
 
-            if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
+            bool wasStreaming = (deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0);
+            if (wasStreaming)
             {
                 StopIsoStream(deviceContext);
             }
@@ -5810,6 +5829,12 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
             ASSERT(NT_SUCCESS(status));
 
             deviceContext->Params.SuggestedBufferPeriod = *bufferPeriod;
+
+            if (wasStreaming && streamRunning)
+            {
+                NTSTATUS restartStatus = StartIsoStream(deviceContext);
+                TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - restarted iso stream after buffer period change %!STATUS!", restartStatus);
+            }
 
             deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::ResetRequired);
         }

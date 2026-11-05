@@ -804,6 +804,23 @@ bool StreamObject::IsFirstWakeUp()
 
 _Use_decl_annotations_
 PAGED_CODE_SEG
+void StreamObject::ResetAsioPositions()
+{
+    PAGED_CODE();
+
+    // A new AsioBufferObject counts its read/write/ready positions from zero. These stream-side
+    // counters were only zeroed when the StreamObject was created (StartIsoStream), so a second
+    // ASIO session on a stream kept alive by Windows audio started with stale positions: the
+    // mixer saw the output as already buffered, never advanced the ASIO positions and never sent
+    // a buffer-switch notification (host starved, then reset itself every few seconds).
+    m_asioReadyPosition = 0;
+    m_outputAsioBufferedPosition = 0;
+    m_inputAsioBufferedPosition = 0;
+    TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_ASIO, "%!FUNC! ASIO positions reset for new session on running stream");
+}
+
+_Use_decl_annotations_
+PAGED_CODE_SEG
 void StreamObject::SaveStartPCUs()
 {
     ULONGLONG currentTimePC = 0ULL;
