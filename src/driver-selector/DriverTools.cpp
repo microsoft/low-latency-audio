@@ -1339,16 +1339,52 @@ namespace driverselector
                 return Failed(L"ErrorDeviceNotFound");
             }
 
-            auto const outcome = InstallCompatibleDriver(device.ParentInstanceId, IsWindowsCompositeDriver);
+            auto const compositeOutcome = InstallCompatibleDriver(device.ParentInstanceId, IsWindowsCompositeDriver);
 
-            if (!outcome.Succeeded)
+            if (!compositeOutcome.Succeeded)
             {
-                return outcome.Error == ERROR_NOT_FOUND ?
+                return compositeOutcome.Error == ERROR_NOT_FOUND ?
                     Failed(L"ErrorDriverNotAvailable") :
-                    FailedWithError(L"ErrorInstallFailedFormat", outcome.Error);
+                    FailedWithError(L"ErrorInstallFailedFormat", compositeOutcome.Error);
             }
 
-            return Completed(device.ParentInstanceId, outcome, outcome.InstalledInfName);
+            if (compositeOutcome.RebootRequired)
+            {
+                DriverOperationResult result{};
+
+                result.Succeeded = true;
+                result.FollowUp = DriverChangeFollowUp::RestartWindows;
+                result.Message = res::GetString(L"CompositeNeedsRestart");
+
+                return result;
+            }
+
+            // Restoring the in-box composite driver causes Windows to recreate the audio function
+            // device. Install the Windows USB Audio 2 driver explicitly so that a previously
+            // installed low-latency driver is not selected automatically.
+            auto const functionInstanceId = WaitForAudioFunction(device.ParentInstanceId);
+
+            if (functionInstanceId.empty())
+            {
+                DriverOperationResult result{};
+
+                result.Succeeded = true;
+                result.FollowUp = DriverChangeFollowUp::ReplugDevice;
+                result.Message = res::GetString(L"CompositeFunctionMissing");
+
+                return result;
+            }
+
+            auto const functionOutcome = InstallCompatibleDriver(functionInstanceId, IsWindowsUsbAudio2Driver);
+
+            if (!functionOutcome.Succeeded)
+            {
+                return functionOutcome.Error == ERROR_NOT_FOUND ?
+                    Failed(L"ErrorDriverNotAvailable") :
+                    FailedWithError(L"ErrorInstallFailedFormat", functionOutcome.Error);
+            }
+
+            return Completed(functionInstanceId, functionOutcome, functionOutcome.InstalledInfName);
         }
         catch (...)
         {
