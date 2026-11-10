@@ -298,8 +298,7 @@ namespace driverselector
                 IsCompositeDevice(node) &&
                 !node.Service.empty() &&
                 !driverstore::EqualsNoCase(node.Service, config::WindowsUsbCompositeServiceName) &&
-                StartsWithNoCase(node.InfName, L"oem") &&
-                ::IsEqualGUID(node.ClassGuid, GUID_DEVCLASS_MEDIA);
+                StartsWithNoCase(node.InfName, L"oem");
         }
 
         // configuration 0, read through the device's hub so it works whatever driver the device has
