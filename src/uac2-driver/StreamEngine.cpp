@@ -233,7 +233,7 @@ VOID CStreamEngine::FreeRtPackets(
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DRIVER, "%!FUNC! Entry");
 
-    USBAudioAcxDriverStreamUnsetRtPackets(m_input, m_deviceIndex, m_deviceContext);
+    USBAudioAcxDriverStreamUnsetRtPackets(m_input, m_deviceIndex, m_deviceContext, m_packetTopAddresses);
 
     for (i = 0; i < PacketCount; ++i)
     {

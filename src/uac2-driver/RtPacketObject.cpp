@@ -372,8 +372,9 @@ RtPacketObject::SetRtPackets(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 void RtPacketObject::UnsetRtPackets(
-    bool  isInput,
-    ULONG deviceIndex
+    bool    isInput,
+    ULONG   deviceIndex,
+    PVOID * rtPackets
 )
 {
     RT_PACKET_INFO * rtPacketInfo = nullptr;
@@ -392,7 +393,9 @@ void RtPacketObject::UnsetRtPackets(
         numOfDevices = m_numOfOutputDevices;
     }
 
-    if (deviceIndex < numOfDevices)
+    // Only clear the slot if it holds this caller's packets. A stream whose SetRtPackets was
+    // refused (slot already in use) must not wipe the running stream's table.
+    if ((deviceIndex < numOfDevices) && ((rtPackets == nullptr) || (rtPacketInfo[deviceIndex].RtPackets == rtPackets)))
     {
         rtPacketInfo[deviceIndex].RtPackets = nullptr;
         rtPacketInfo[deviceIndex].RtPacketsCount = 0;
@@ -446,6 +449,7 @@ RtPacketObject::CopyFromRtPacketToOutputData(
     IF_TRUE_ACTION_JUMP(m_deviceContext->RenderStreamEngine == nullptr, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(transferObject->GetTransferredBytesInThisIrp() == 0, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(m_outputRtPacketInfo[deviceIndex].RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
+    IF_TRUE_ACTION_JUMP((m_outputRtPacketInfo[deviceIndex].RtPackets == nullptr) || (m_outputRtPacketInfo[deviceIndex].RtPacketsCount == 0), status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(m_outputRtPacketInfo[deviceIndex].Pause, status = STATUS_SUCCESS, CopyFromRtPacketToOutputData_Exit);
 
     bool fedRtPacket = false;
@@ -735,6 +739,7 @@ RtPacketObject::CopyToRtPacketFromInputData(
     IF_TRUE_ACTION_JUMP(m_deviceContext->CaptureStreamEngine == nullptr, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(transferObject->GetTransferredBytesInThisIrp() == 0, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(m_inputRtPacketInfo[deviceIndex].RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
+    IF_TRUE_ACTION_JUMP((m_inputRtPacketInfo[deviceIndex].RtPackets == nullptr) || (m_inputRtPacketInfo[deviceIndex].RtPacketsCount == 0), status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(m_inputRtPacketInfo[deviceIndex].Pause, status = STATUS_SUCCESS, CopyToRtPacketFromInputData_Exit);
 
     bool filledRtPacket = false;

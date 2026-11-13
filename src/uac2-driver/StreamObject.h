@@ -368,6 +368,15 @@ class StreamObject
     PAGED_CODE_SEG
     bool IsFirstWakeUp();
 
+  public:
+    // Re-align the ASIO position counters for a new ASIO session that starts while the iso
+    // stream is already running for Windows audio. Call with AsioWaitLock held.
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void ResetAsioPositions();
+
+  private:
+
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     void
