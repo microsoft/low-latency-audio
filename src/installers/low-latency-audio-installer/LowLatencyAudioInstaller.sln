@@ -11,6 +11,11 @@ Project("{B7DD6F7E-DEF8-4E67-B5B7-07EF123DB6F0}") = "LowLatencyAudioPackage", "p
 	EndProjectSection
 EndProject
 Project("{B7DD6F7E-DEF8-4E67-B5B7-07EF123DB6F0}") = "LowLatencyAudioBundle", "bundle\LowLatencyAudioBundle.wixproj", "{94286A6F-CC11-436A-9772-6337AC9CF617}"
+	ProjectSection(ProjectDependencies) = postProject
+		{5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10} = {5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "LowLatencyAudioBAFunctions", "ba-functions\LowLatencyAudioBAFunctions.vcxproj", "{5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -44,6 +49,14 @@ Global
 		{94286A6F-CC11-436A-9772-6337AC9CF617}.Release|ARM64.Build.0 = Release|ARM64
 		{94286A6F-CC11-436A-9772-6337AC9CF617}.Release|x64.ActiveCfg = Release|x64
 		{94286A6F-CC11-436A-9772-6337AC9CF617}.Release|x64.Build.0 = Release|x64
+		{5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10}.Debug|ARM64.ActiveCfg = Debug|ARM64
+		{5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10}.Debug|ARM64.Build.0 = Debug|ARM64
+		{5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10}.Debug|x64.ActiveCfg = Debug|x64
+		{5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10}.Debug|x64.Build.0 = Debug|x64
+		{5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10}.Release|ARM64.ActiveCfg = Release|ARM64
+		{5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10}.Release|ARM64.Build.0 = Release|ARM64
+		{5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10}.Release|x64.ActiveCfg = Release|x64
+		{5B0E6F3A-2C47-4D8E-9A61-7F3C2E8B4D10}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

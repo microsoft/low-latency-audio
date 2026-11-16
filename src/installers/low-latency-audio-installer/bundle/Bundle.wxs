@@ -33,6 +33,10 @@
                                               ShowVersion="yes"
                                               SuppressOptionsUI="yes"
                                               SuppressRepair="yes" />
+
+      <!-- Stops a second copy of the setup from running while one is already open. -->
+      <Payload SourceFile="$(var.BAFunctionsDll)"
+               bal:BAFunctions="yes" />
     </BootstrapperApplication>
 
     <!-- The finish page offers to open the Driver Selector, which is where the customer chooses

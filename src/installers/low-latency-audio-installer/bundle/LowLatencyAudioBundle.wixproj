@@ -3,7 +3,18 @@
   <PropertyGroup>
     <OutputType>Bundle</OutputType>
     <OutputName>LowLatencyAudioSetup</OutputName>
-    <DefineConstants>$(DefineConstants);ProductVersion=$(LlaVersionMajor).$(LlaVersionMinor).$(LlaVersionBuild).$(LlaVersionRevision);VCRuntimeInstaller=$(LlaVCRuntimeInstaller);WindowsAppRuntimeInstaller=$(LlaWindowsAppRuntimeInstaller);ProductIconFile=$(LlaRepoRoot)src\driver-selector\Assets\AppIcon.ico</DefineConstants>
+
+    <!-- The BAFunctions DLL is built by its own project first: build-all.ps1 builds it, and the
+         solution lists it as a dependency of this project. -->
+    <LlaBAFunctionsFolder>$(MSBuildThisFileDirectory)..\..\..\vsfiles\out\LowLatencyAudioBAFunctions\$(Platform)\$(Configuration)</LlaBAFunctionsFolder>
+    <DefineConstants>
+      $(DefineConstants);
+      ProductVersion=$(LlaVersionMajor).$(LlaVersionMinor).$(LlaVersionBuild).$(LlaVersionRevision);
+      VCRuntimeInstaller=$(LlaVCRuntimeInstaller);
+      WindowsAppRuntimeInstaller=$(LlaWindowsAppRuntimeInstaller);
+      ProductIconFile=$(LlaRepoRoot)src\driver-selector\Assets\AppIcon.ico;
+      BAFunctionsDll=$(LlaBAFunctionsFolder)\LowLatencyAudioBAFunctions.dll
+    </DefineConstants>
 
     <!-- WIX1161 recommends a detect condition for each runtime installer. Both check for
          themselves and finish straight away when the runtime is already there. -->

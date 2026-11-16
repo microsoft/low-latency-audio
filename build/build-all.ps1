@@ -169,6 +169,7 @@ $ControlPanelSolution = Join-Path $SourceRoot 'asio-control-panel\USBAsioControl
 $SelectorSolution = Join-Path $SourceRoot 'driver-selector\LowLatencyDriverSelector.sln'
 $InstallerFolder = Join-Path $SourceRoot 'installers\low-latency-audio-installer'
 $CustomActionsProject = Join-Path $InstallerFolder 'custom-actions\LowLatencyAudioSetupActions.vcxproj'
+$BAFunctionsProject = Join-Path $InstallerFolder 'ba-functions\LowLatencyAudioBAFunctions.vcxproj'
 $BundleProject = Join-Path $InstallerFolder 'bundle\LowLatencyAudioBundle.wixproj'
 $BrandingFile = Join-Path $InstallerFolder 'Branding.wxi'
 
@@ -401,10 +402,12 @@ function Invoke-MSBuild {
 function Invoke-PackagesConfigRestore {
     param(
         [Parameter(Mandatory)] [string] $Solution,
-        [Parameter(Mandatory)] [string] $BuildPlatform
+        [Parameter(Mandatory)] [string] $BuildPlatform,
+        [hashtable] $Properties = @{}
     )
 
-    Invoke-MSBuild -Project $Solution -BuildPlatform $BuildPlatform -Targets @('Restore') -Properties @{ RestorePackagesConfig = 'true' }
+    $restoreProperties = @{ RestorePackagesConfig = 'true' } + $Properties
+    Invoke-MSBuild -Project $Solution -BuildPlatform $BuildPlatform -Targets @('Restore') -Properties $restoreProperties
 }
 
 function Invoke-Sign {
@@ -549,6 +552,7 @@ function Invoke-CleanTarget {
         'USBAsioControlPanel',
         'LowLatencyDriverSelector',
         'LowLatencyAudioSetupActions',
+        'LowLatencyAudioBAFunctions',
         'LowLatencyAudioPackage',
         'LowLatencyAudioBundle'
     )
@@ -908,6 +912,9 @@ function Invoke-SetupTarget {
 
         # The package embeds the custom action DLL, so it is built (and, with -Sign, signed) first.
         Invoke-MSBuild -Project $CustomActionsProject -BuildPlatform $buildPlatform -Properties $properties
+        # Standalone project restore needs SolutionDir so packages land in ..\packages, where the vcxproj imports them.
+        Invoke-PackagesConfigRestore -Solution $BAFunctionsProject -BuildPlatform $buildPlatform -Properties @{ SolutionDir = "$InstallerFolder\" }
+        Invoke-MSBuild -Project $BAFunctionsProject -BuildPlatform $buildPlatform -Properties $properties
         Invoke-MSBuild -Project $BundleProject -BuildPlatform $buildPlatform -Properties $properties -Restore
 
         foreach ($output in @((Get-BundlePath -BuildPlatform $buildPlatform), (Get-PackagePath -BuildPlatform $buildPlatform))) {

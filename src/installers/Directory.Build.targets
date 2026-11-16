@@ -49,7 +49,7 @@
        incremental build that did not relink it signs nothing. -->
   <Target Name="LlaSignCustomActionDll"
           AfterTargets="Build"
-          Condition="'$(LlaSigningThumbprint)' != '' and '$(MSBuildProjectName)' == 'LowLatencyAudioSetupActions'">
+          Condition="'$(LlaSigningThumbprint)' != '' and ('$(MSBuildProjectName)' == 'LowLatencyAudioSetupActions' or '$(MSBuildProjectName)' == 'LowLatencyAudioBAFunctions')">
     <Exec Command="$(LlaSignCommand) -Path &quot;$(TargetPath)&quot;" />
   </Target>
 
