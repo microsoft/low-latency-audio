@@ -107,4 +107,30 @@ namespace driverselector
 
         return false;
     }
+
+    _Use_decl_annotations_
+    bool HasCommandLineSwitch(wchar_t const* const name) noexcept
+    {
+        try
+        {
+            int count{ 0 };
+            wil::unique_hlocal_ptr<PWSTR[]> values{ ::CommandLineToArgvW(::GetCommandLineW(), &count) };
+
+            if (!values)
+            {
+                return false;
+            }
+
+            for (int i = 1; i < count; i++)
+            {
+                if (::CompareStringOrdinal(values[i], -1, name, -1, TRUE) == CSTR_EQUAL)
+                {
+                    return true;
+                }
+            }
+        }
+        DRIVER_SELECTOR_CATCH_AND_LOG(L"Unable to read the command line.")
+
+        return false;
+    }
 }

@@ -13,36 +13,6 @@
 
 namespace winrt::LowLatencyDriverSelector::implementation
 {
-    namespace
-    {
-        // --noelevate keeps the tool read-only, for testing without a prompt. --relaunched marks
-        // the elevated copy, so a failed elevation can never loop.
-        bool HasCommandLineSwitch(_In_ wchar_t const* const name) noexcept
-        {
-            try
-            {
-                int count{ 0 };
-                wil::unique_hlocal_ptr<PWSTR[]> values{ ::CommandLineToArgvW(::GetCommandLineW(), &count) };
-
-                if (!values)
-                {
-                    return false;
-                }
-
-                for (int i = 1; i < count; i++)
-                {
-                    if (::CompareStringOrdinal(values[i], -1, name, -1, TRUE) == CSTR_EQUAL)
-                    {
-                        return true;
-                    }
-                }
-            }
-            DRIVER_SELECTOR_CATCH_AND_LOG(L"Unable to read the command line.")
-
-            return false;
-        }
-    }
-
     bool App::s_isElevated{ false };
 
     App::App()
@@ -84,20 +54,9 @@ namespace winrt::LowLatencyDriverSelector::implementation
 
         try
         {
+            // The elevation relaunch happens in wWinMain, before the single-instance mutex is
+            // created; here the app only records the state the process ended up with.
             s_isElevated = ::driverselector::IsProcessElevated();
-
-            // Everything that changes a driver needs administrator rights, so the tool asks once
-            // here. A declined prompt still leaves a tool that shows what each device is using.
-            if (!s_isElevated &&
-                !HasCommandLineSwitch(L"--noelevate") &&
-                !HasCommandLineSwitch(L"--relaunched"))
-            {
-                if (::driverselector::TryRelaunchElevated(L"--relaunched"))
-                {
-                    Exit();
-                    return;
-                }
-            }
 
             auto window = winrt::make_self<MainWindow>();
 

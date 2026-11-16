@@ -20,4 +20,7 @@ namespace driverselector
 
     // Restarts Windows. Only ever called after the customer has said yes.
     bool TryRestartComputer() noexcept;
+
+    // True when the process command line contains the given switch, compared case-insensitively.
+    bool HasCommandLineSwitch(_In_ wchar_t const* name) noexcept;
 }
