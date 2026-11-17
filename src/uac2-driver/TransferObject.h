@@ -350,12 +350,12 @@ class TransferObject
     ULONG                    m_isoPacketLength[UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_FRAMES_PER_MS]{0};
     ULONG                    m_totalProcessedBytesSoFar[UAC_MAX_CLASSIC_FRAMES_PER_IRP * UAC_MAX_FRAMES_PER_MS]{0};
     WDFSPINLOCK              m_spinLock{nullptr};
-    WDFSPINLOCK              m_releaseWorkItemSpinLock{nullptr};
+    WDFSPINLOCK              m_releaseWorkItemSpinLock{nullptr}; // Lock order: m_spinLock -> DEVICE_CONTEXT::IsochronousRequestSpinLock. Never acquire in reverse.
     WDFWORKITEM              m_releaseWorkItem{nullptr};
-    ULONGLONG                m_completedTimeUs{0ULL};   // Time when the URB was processed (microseconds)
-    ULONGLONG                m_qpcPosition{0ULL};       // Time when the URB was processed (query performance counter value)
-    ULONGLONG                m_periodUs{0ULL};          // Interval between the time the previous URB was processed and the time this URB was processed; 0 for the first URB (microseconds)
-    ULONGLONG                m_periodQPCPosition{0ULL}; // Interval between the time the previous URB was processed and the time this URB was processed; 0 for the first URB (query performance counter value)
+    ULONGLONG                m_completedTimeUs{0ULL};            // Time when the URB was processed (microseconds)
+    ULONGLONG                m_qpcPosition{0ULL};                // Time when the URB was processed (query performance counter value)
+    ULONGLONG                m_periodUs{0ULL};                   // Interval between the time the previous URB was processed and the time this URB was processed; 0 for the first URB (microseconds)
+    ULONGLONG                m_periodQPCPosition{0ULL};          // Interval between the time the previous URB was processed and the time this URB was processed; 0 for the first URB (query performance counter value)
     LONG                     m_referenceCounter{0};
 };
 

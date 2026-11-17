@@ -312,21 +312,12 @@ typedef struct _DEVICE_CONTEXT
     LONG                               IsIdleStopSucceeded;
     LARGE_INTEGER                      LastVendorRequestTime;
     bool                               IsPrepareHardwareSucceeded;
-    WDFSPINLOCK                        IsochronousRequestSpinLock;
-
-    bool              SuperSpeedCompatible;
-    ErrorStatistics * ErrorStatistics;
-    // UCHAR                              ClockSelectorId;
-    // ULONG                              AcClockSources;
-    // AC_CLOCK_SOURCE_INFO               AcClockSourceInfo[UAC_MAX_CLOCK_SOURCE];
-    // WCHAR                              ClockSourceName[UAC_MAX_CLOCK_SOURCE][UAC_MAX_CLOCK_SOURCE_NAME_LENGTH];
-    // ULONG                              CurrentClockSource;
-    // KEVENT                             ClockObservationThreadKillEvent;
-    // PKTHREAD                           ClockObservationThread;
-    LARGE_INTEGER                   ResetEnableTime;
-    UCHAR                           AudioControlInterfaceNumber; // Audio Control interface number
-    const UAC_LATENCY_OFFSET_LIST * LatencyOffsetList;
-    ULONG                           HubCount;
+    WDFSPINLOCK                        IsochronousRequestSpinLock; // Lock order: TransferObject::m_spinLock -> IsochronousRequestSpinLock. Never acquire in reverse.
+    bool                               SuperSpeedCompatible;
+    ErrorStatistics *                  ErrorStatistics;
+    LARGE_INTEGER                      ResetEnableTime;
+    const UAC_LATENCY_OFFSET_LIST *    LatencyOffsetList;
+    ULONG                              HubCount;
 } DEVICE_CONTEXT, *PDEVICE_CONTEXT;
 
 //

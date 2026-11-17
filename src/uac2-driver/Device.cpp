@@ -2861,7 +2861,6 @@ void ReportInternalParameters(
 {
     PAGED_CODE();
 
-    TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - AudioControlInterfaceNumber  %d", deviceContext->AudioControlInterfaceNumber);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Interrupt IsValid            %!bool!", deviceContext->InterruptMessageProperty.IsValid);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Interrupt InterfaceNumber    %d", deviceContext->InterruptMessageProperty.InterfaceNumber);
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - Interrupt EndpointNumber     0x%d", deviceContext->InterruptMessageProperty.EndpointNumber);

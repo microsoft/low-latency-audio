@@ -193,7 +193,6 @@ class AsioBufferObject
     LONGLONG                              m_notifyPosition{0LL};
     LONGLONG                              m_readPosition{0LL};
     LONGLONG                              m_writePosition{0LL};
-    WDFSPINLOCK                           m_positionSpinLock{nullptr};
     PKEVENT                               m_userNotificationEvent{nullptr};
     PKEVENT                               m_outputReadyEvent{nullptr};
     ULONGLONG                             m_playChannelsMap{0ULL};
