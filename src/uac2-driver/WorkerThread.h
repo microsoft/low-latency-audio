@@ -67,7 +67,7 @@ class WorkerThread
 
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
-    virtual void Terminate();
+    void Terminate();
 
     __drv_maxIRQL(DISPATCH_LEVEL)
     NONPAGED_CODE_SEG

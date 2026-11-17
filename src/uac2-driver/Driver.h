@@ -24,7 +24,7 @@ Environment:
 #ifndef _DRIVER_H_
 #define _DRIVER_H_
 
-#include <ntddk.h>
+#include <ntifs.h>
 #include <wdf.h>
 #include <acx.h>
 

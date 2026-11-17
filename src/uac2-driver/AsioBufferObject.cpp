@@ -230,7 +230,6 @@ AsioBufferObject::SetBuffer(
     m_playHeader = static_cast<PUAC_ASIO_PLAY_BUFFER_HEADER>(systemAddress);
 
     RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.HeaderLength != sizeof(UAC_ASIO_PLAY_BUFFER_HEADER), status = STATUS_INVALID_BUFFER_SIZE, status);
-    RETURN_NTSTATUS_IF_TRUE_ACTION(playBufferHeader.HeaderLength < (offsetof(UAC_ASIO_PLAY_BUFFER_HEADER, AsioDriverVersion) + sizeof(ULONG)), status = STATUS_INVALID_BUFFER_SIZE, status);
 
     m_playBuffer = static_cast<PBYTE>(systemAddress) + playBufferHeader.HeaderLength;
     m_playBufferSize = actualPlayBufferLength - playBufferHeader.HeaderLength;

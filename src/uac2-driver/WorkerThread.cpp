@@ -84,8 +84,9 @@ WorkerThread::CreateThread(
     KPRIORITY              priority
 )
 {
-    NTSTATUS status = STATUS_SUCCESS;
-    HANDLE   thread = nullptr;
+    NTSTATUS          status = STATUS_SUCCESS;
+    HANDLE            thread = nullptr;
+    OBJECT_ATTRIBUTES objectAttributes;
 
     PAGED_CODE();
 
@@ -93,13 +94,40 @@ WorkerThread::CreateThread(
 
     m_workerThreadFunction = workerThreadFunction;
 
-    status = PsCreateSystemThread(&thread, THREAD_ALL_ACCESS, nullptr, nullptr, nullptr, ThreadRoutine, this);
+    // Create the thread handle as a kernel handle so that it cannot be closed or replaced from user mode.
+    InitializeObjectAttributes(&objectAttributes, nullptr, OBJ_KERNEL_HANDLE, nullptr, nullptr);
+
+    status = PsCreateSystemThread(&thread, THREAD_ALL_ACCESS, &objectAttributes, nullptr, nullptr, ThreadRoutine, this);
     IF_FAILED_JUMP(status, CreateThread_Exit);
 
     status = ObReferenceObjectByHandle(thread, THREAD_ALL_ACCESS, nullptr, KernelMode, (PVOID *)&m_thread, nullptr);
+    if (!NT_SUCCESS(status))
+    {
+        NTSTATUS waitStatus = STATUS_SUCCESS;
+
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ObReferenceObjectByHandle failed %!STATUS!, terminating the created thread.", status);
+
+        m_thread = nullptr;
+        KeSetEvent(&m_threadKillEvent, EVENT_INCREMENT, FALSE);
+        waitStatus = ZwWaitForSingleObject(thread, FALSE, nullptr);
+        ZwClose(thread);
+        thread = nullptr;
+        if (waitStatus == STATUS_WAIT_0)
+        {
+            // The thread has terminated, so the events can be safely reset for reuse.
+            KeClearEvent(&m_threadKillEvent);
+            KeClearEvent(&m_threadReadyEvent);
+        }
+        else
+        {
+            // The thread may still be running. Keep the kill event signaled so that the thread exits.
+            TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ZwWaitForSingleObject failed %!STATUS!, the created thread may still be running.", waitStatus);
+            NT_ASSERT(waitStatus == STATUS_WAIT_0);
+        }
+        goto CreateThread_Exit;
+    }
     ZwClose(thread);
     thread = nullptr;
-    IF_FAILED_JUMP(status, CreateThread_Exit);
 
     KeSetPriorityThread(m_thread, priority); // TBD
 
@@ -107,14 +135,22 @@ WorkerThread::CreateThread(
     m_threadEvents[1] = (PVOID)m_thread;
 
     status = KeWaitForMultipleObjects(ARRAYSIZE(m_threadEvents), m_threadEvents, WaitAny, Executive, KernelMode, FALSE, nullptr, nullptr);
-    if (status == STATUS_WAIT_0)
+    if (status != STATUS_WAIT_0)
     {
-        status = STATUS_SUCCESS;
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "Thread was terminated before ready. wait status = %!STATUS!", status);
+
+        // STATUS_WAIT_1 (thread terminated) is treated as success by NT_SUCCESS, so convert it to an error code.
+        if (NT_SUCCESS(status))
+        {
+            status = STATUS_UNSUCCESSFUL;
+        }
+
+        // Do not signal the start event. Make sure the thread has exited before returning.
+        Terminate();
+        goto CreateThread_Exit;
     }
-    else
-    {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "Thread was terminated before ready.");
-    }
+
+    status = STATUS_SUCCESS;
     KeSetEvent(&m_threadStartEvent, EVENT_INCREMENT, FALSE);
 
 CreateThread_Exit:
@@ -135,6 +171,13 @@ void WorkerThread::Terminate()
         KeWaitForSingleObject(m_thread, Executive, KernelMode, FALSE, nullptr);
         ObDereferenceObject(m_thread);
         m_thread = nullptr;
+        m_threadEvents[1] = nullptr;
+
+        // The thread has terminated, so the events can be safely reset for reuse.
+        KeClearEvent(&m_threadKillEvent);
+        KeClearEvent(&m_threadReadyEvent);
+        KeClearEvent(&m_threadStartEvent);
+        KeClearEvent(&m_threadWakeUpEvent);
     }
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");

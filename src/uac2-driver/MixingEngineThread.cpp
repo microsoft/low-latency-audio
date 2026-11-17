@@ -103,10 +103,24 @@ void MixingEngineThread::ThreadMain()
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! initialize instance.");
 
-    ULONG defaultTimerResolution = ExSetTimerResolution(0, FALSE);
+    PEX_TIMER exTimer = nullptr;
+    ULONG     defaultTimerResolution = ExSetTimerResolution(0, FALSE);
     m_currentTimerResolution = defaultTimerResolution;
 
     auto threadMainScope = wil::scope_exit([&]() {
+        if (exTimer != nullptr)
+        {
+            EXT_DELETE_PARAMETERS deleteParameters;
+
+            ExInitializeDeleteTimerParameters(&deleteParameters);
+            deleteParameters.DeleteCallback = nullptr;
+            deleteParameters.DeleteContext = nullptr;
+
+            // Cancel the timer if it is still set, then delete it.
+            ExDeleteTimer(exTimer, TRUE, FALSE, &deleteParameters);
+            exTimer = nullptr;
+            m_waitEvents[toInt(MixingEngineWaitEventsNumber::TimerEvent)] = nullptr;
+        }
         if (m_currentTimerResolution != defaultTimerResolution)
         {
             ExSetTimerResolution(defaultTimerResolution, TRUE);
@@ -125,7 +139,14 @@ void MixingEngineThread::ThreadMain()
         m_currentTimerResolution = defaultTimerResolution;
     }
 
-    PEX_TIMER exTimer = ExAllocateTimer(nullptr, nullptr, EX_TIMER_HIGH_RESOLUTION);
+    exTimer = ExAllocateTimer(nullptr, nullptr, EX_TIMER_HIGH_RESOLUTION);
+    // Exit before signaling the ready event so that CreateThread detects the thread termination and fails.
+    if (exTimer == nullptr)
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "ExAllocateTimer failed.");
+        goto ThreadMain_Exit;
+    }
+
     m_waitEvents[toInt(MixingEngineWaitEventsNumber::TimerEvent)] = exTimer;
     m_waitEvents[toInt(MixingEngineWaitEventsNumber::OutputReadyEvent)] = nullptr;
     m_waitEventsCount = toInt(MixingEngineWaitEventsNumber::NumOfWaitEventsWithoutOutputReady);
@@ -133,10 +154,7 @@ void MixingEngineThread::ThreadMain()
     KeSetEvent(&m_threadReadyEvent, EVENT_INCREMENT, FALSE);
 
     status = KeWaitForMultipleObjects(ARRAYSIZE(m_startEvents), m_startEvents, WaitAny, Executive, KernelMode, FALSE, nullptr, nullptr);
-    if (!NT_SUCCESS(status) || (status == STATUS_WAIT_0))
-    {
-        goto ThreadMain_Exit;
-    }
+    IF_TRUE_JUMP((!NT_SUCCESS(status) || (status == STATUS_WAIT_0)), ThreadMain_Exit);
 
     LONGLONG duetime = 0ll - (LONGLONG)m_classicFramesPerIrp * 10000LL;
     LONGLONG period = (LONGLONG)m_wakeUpIntervalUs * 10LL;
@@ -151,14 +169,6 @@ void MixingEngineThread::ThreadMain()
     // ======================================================================
     ASSERT(m_workerThreadFunction != nullptr);
     m_workerThreadFunction(m_deviceContext, this);
-
-    EXT_DELETE_PARAMETERS deleteParameters;
-
-    ExInitializeDeleteTimerParameters(&deleteParameters);
-    deleteParameters.DeleteCallback = nullptr;
-    deleteParameters.DeleteContext = nullptr;
-
-    ExDeleteTimer(exTimer, FALSE, FALSE, &deleteParameters);
 
 ThreadMain_Exit:
 
