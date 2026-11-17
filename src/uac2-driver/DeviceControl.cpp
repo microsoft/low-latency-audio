@@ -535,18 +535,33 @@ Return Value:
 
     if (NT_SUCCESS(status))
     {
-        NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT2 * parameterBlock = (NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT2 *)dataBufferTemp;
-        if (parameterBlock->wNumSubRanges != 0)
+        if (dataBufferLength < sizeof(USHORT))
         {
-            length = sizeof(NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT2) + (sizeof(NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT2) - sizeof(USHORT)) * (parameterBlock->wNumSubRanges - 1);
+            status = STATUS_INVALID_DEVICE_REQUEST;
         }
         else
         {
-            length = sizeof(NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT2);
-        }
-        if (dataBuffer == nullptr)
-        {
-            status = STATUS_BUFFER_TOO_SMALL;
+            auto        parameterBlock = (NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT2 *)dataBufferTemp;
+            const ULONG subRangeSize = sizeof(NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT2) - sizeof(USHORT);
+            const ULONG numSubRanges = (parameterBlock->wNumSubRanges != 0) ? parameterBlock->wNumSubRanges : 1;
+            const ULONG required = sizeof(USHORT) + subRangeSize * numSubRanges;
+
+            if (required > MAXUSHORT)
+            {
+                status = STATUS_INVALID_DEVICE_REQUEST;
+            }
+            else if (dataBuffer != nullptr && ((required > length) || (required > dataBufferLength)))
+            {
+                status = STATUS_INVALID_DEVICE_REQUEST;
+            }
+            else
+            {
+                length = static_cast<USHORT>(required);
+                if (dataBuffer == nullptr)
+                {
+                    status = STATUS_BUFFER_TOO_SMALL;
+                }
+            }
         }
     }
 
@@ -625,18 +640,33 @@ Return Value:
 
     if (NT_SUCCESS(status))
     {
-        NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT3 * parameterBlock = (NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT3 *)dataBufferTemp;
-        if (parameterBlock->wNumSubRanges != 0)
+        if (dataBufferLength < sizeof(USHORT))
         {
-            length = sizeof(NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT3) + (sizeof(NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT3) - sizeof(USHORT)) * (parameterBlock->wNumSubRanges - 1);
+            status = STATUS_INVALID_DEVICE_REQUEST;
         }
         else
         {
-            length = sizeof(NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT3);
-        }
-        if (dataBuffer == nullptr)
-        {
-            status = STATUS_BUFFER_TOO_SMALL;
+            auto        parameterBlock = (NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT3 *)dataBufferTemp;
+            const ULONG subRangeSize = sizeof(NS_USBAudio0200::CONTROL_RANGE_PARAMETER_BLOCK_LAYOUT3) - sizeof(USHORT);
+            const ULONG numSubRanges = (parameterBlock->wNumSubRanges != 0) ? parameterBlock->wNumSubRanges : 1;
+            const ULONG required = sizeof(USHORT) + subRangeSize * numSubRanges;
+
+            if (required > MAXUSHORT)
+            {
+                status = STATUS_INVALID_DEVICE_REQUEST;
+            }
+            else if (dataBuffer != nullptr && ((required > length) || (required > dataBufferLength)))
+            {
+                status = STATUS_INVALID_DEVICE_REQUEST;
+            }
+            else
+            {
+                length = static_cast<USHORT>(required);
+                if (dataBuffer == nullptr)
+                {
+                    status = STATUS_BUFFER_TOO_SMALL;
+                }
+            }
         }
     }
 
