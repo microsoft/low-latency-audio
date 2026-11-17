@@ -2418,6 +2418,28 @@ NTSTATUS USBAudio2ControlInterface::SetExtensionUnit(const NS_USBAudio::PCS_GENE
     RETURN_NTSTATUS_IF_TRUE(descriptor == nullptr, STATUS_INVALID_PARAMETER);
     RETURN_NTSTATUS_IF_TRUE((descriptor->bDescriptorType != NS_USBAudio0200::CS_INTERFACE) || (descriptor->bDescriptorSubtype != NS_USBAudio0200::EXTENSION_UNIT), STATUS_INVALID_PARAMETER);
 
+    //
+    // Validate the fixed portion of the descriptor before accessing bNrInPins.
+    // USBAudioConfiguration::ParseDescriptors validates that the range specified by bLength is fully contained within the configuration descriptor's wTotalLength.
+    //
+    RETURN_NTSTATUS_IF_TRUE(descriptor->bLength < sizeof(NS_USBAudio0200::CS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON), STATUS_DEVICE_DATA_ERROR);
+
+    NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON extensionUnitDescriptor = (NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON)descriptor;
+
+    const ULONG extensionUnitDescriptorSize = sizeof(NS_USBAudio0200::CS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON) +
+                                              sizeof(UCHAR) * extensionUnitDescriptor->bNrInPins + // baSourceID[p]
+                                              sizeof(UCHAR) +                                      // bNrChannels
+                                              sizeof(UCHAR) * 4 +                                  // bmChannelConfig[4]
+                                              sizeof(UCHAR) +                                      // iChannelNames
+                                              sizeof(UCHAR) +                                      // bmControls
+                                              sizeof(UCHAR);                                       // iExtension
+
+    if (descriptor->bLength < extensionUnitDescriptorSize)
+    {
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DESCRIPTOR, " - bLength = %u, descriptor size = %lu", descriptor->bLength, extensionUnitDescriptorSize);
+        status = STATUS_DEVICE_DATA_ERROR;
+    }
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DESCRIPTOR, "%!FUNC! Exit %!STATUS!", status);
 
     return status;
@@ -3842,7 +3864,7 @@ NTSTATUS USBAudio2ControlInterface::GetInformationForSuperMixElement(
 
                 numOfInputChannels += (UCHAR)GetUnitOutputChannelCount(sourceID);
             }
-            numOfOutputChannels = ((UCHAR *)mixerUnitDescriptor)[sizeof(NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + mixerUnitDescriptor->bNrInPins];
+            numOfOutputChannels = ((UCHAR *)mixerUnitDescriptor)[sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + mixerUnitDescriptor->bNrInPins];
             status = STATUS_SUCCESS;
             break;
         }
@@ -3999,7 +4021,7 @@ ULONG USBAudio2ControlInterface::GetUnitOutputChannelCount(
                 if (((NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor)->bUnitID == unitID)
                 {
                     NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON mixerUnitDescriptor = (NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor;
-                    return ((UCHAR *)mixerUnitDescriptor)[sizeof(NS_USBAudio0200::PCS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + mixerUnitDescriptor->bNrInPins];
+                    return ((UCHAR *)mixerUnitDescriptor)[sizeof(NS_USBAudio0200::CS_AC_MIXER_UNIT_DESCRIPTOR_COMMON) + mixerUnitDescriptor->bNrInPins];
                 }
                 break;
             case NS_USBAudio0200::SELECTOR_UNIT:
@@ -4013,8 +4035,8 @@ ULONG USBAudio2ControlInterface::GetUnitOutputChannelCount(
                 {
                     NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR featureUnitDescriptor = (NS_USBAudio0200::PCS_AC_FEATURE_UNIT_DESCRIPTOR)genericAudioDescriptor.Descriptor;
                     UCHAR                                           numOfChannels = (featureUnitDescriptor->bLength - offsetof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR, ch)) / (sizeof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR::ch[0]));
-                    numOfChannels = (numOfChannels == 0) ? 0 : (numOfChannels - 1);
-                    return numOfChannels;
+                    UCHAR                                           numOfLogicalChannels = (numOfChannels == 0) ? 0 : (numOfChannels - 1);
+                    return numOfLogicalChannels;
                 }
                 break;
             case NS_USBAudio0200::PROCESSING_UNIT:
@@ -4024,7 +4046,7 @@ ULONG USBAudio2ControlInterface::GetUnitOutputChannelCount(
                 if (((NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor)->bUnitID == unitID)
                 {
                     NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON extensionUnitDescriptor = (NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON)genericAudioDescriptor.Descriptor;
-                    return ((UCHAR *)extensionUnitDescriptor)[sizeof(NS_USBAudio0200::PCS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON) + extensionUnitDescriptor->bNrInPins];
+                    return ((UCHAR *)extensionUnitDescriptor)[sizeof(NS_USBAudio0200::CS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON) + extensionUnitDescriptor->bNrInPins];
                 }
                 break;
             default:
@@ -4104,9 +4126,9 @@ NTSTATUS USBAudio2ControlInterface::SearchInputTerminalFromOutputTerminal(
                 TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - feature unit unit id %02x", featureUnitDescriptor->bUnitID);
                 if (featureUnitDescriptor->bUnitID == sourceID)
                 {
-                    UCHAR size = 4; // CS_AC_FEATURE_UNIT_DESCRIPTOR::bmaControls
-                    UCHAR channels = (featureUnitDescriptor->bLength - offsetof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR, ch)) / size;
-                    for (UCHAR ch = 0; ch < channels; ++ch)
+                    // numOfFeatureChannels includes the master channel (bmaControls(0)).
+                    UCHAR numOfFeatureChannels = (featureUnitDescriptor->bLength - offsetof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR, ch)) / (sizeof(NS_USBAudio0200::CS_AC_FEATURE_UNIT_DESCRIPTOR::ch[0]));
+                    for (UCHAR ch = 0; ch < numOfFeatureChannels; ++ch)
                     {
                         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DESCRIPTOR, " - feature unit ch[%u] bmaControls %02x %02x %02x %02x", ch, featureUnitDescriptor->ch[ch].bmaControls[3], featureUnitDescriptor->ch[ch].bmaControls[2], featureUnitDescriptor->ch[ch].bmaControls[1], featureUnitDescriptor->ch[ch].bmaControls[0]);
                         if (featureUnitDescriptor->ch[ch].bmaControls[0] & NS_USBAudio0200::FEATURE_UNIT_BMA_MUTE_CONTROL_MASK)
@@ -4288,7 +4310,7 @@ NTSTATUS USBAudio2ControlInterface::TraverseTowardForward(
                 }
             }
         }
-
+        break;
         default:
         case NS_USBAudio0200::SELECTOR_UNIT:
         case NS_USBAudio0200::INPUT_TERMINAL:
@@ -8670,6 +8692,8 @@ USBAudioConfiguration::ParseCSInterface(const NS_USBAudio::PCS_GENERIC_AUDIO_DES
             case NS_USBAudio0200::PROCESSING_UNIT:
                 break;
             case NS_USBAudio0200::EXTENSION_UNIT:
+                // Extension Units are not supported, but some fields of the descriptor are referenced, so only the length is validated.
+                status = ((USBAudioControlInterface *)lastInterface)->SetExtensionUnit(descriptor);
                 break;
             case NS_USBAudio0200::CLOCK_SELECTOR:
                 status = ((USBAudioControlInterface *)lastInterface)->SetClockSelector(descriptor);

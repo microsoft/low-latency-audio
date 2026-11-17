@@ -807,7 +807,7 @@ enum
 
 typedef struct CS_AC_FEATURE_UNIT_DESCRIPTOR
 {
-    UCHAR bLength;            // Size of this descriptor, in bytes:
+    UCHAR bLength;            // Size of this descriptor, in bytes: 6 + numOfChannels * 4 (numOfChannels includes the master channel)
     UCHAR bDescriptorType;    // CS_INTERFACE descriptor type.
     UCHAR bDescriptorSubtype; // FEATURE_UNIT descriptor subtype.
     UCHAR bUnitID;
@@ -816,15 +816,18 @@ typedef struct CS_AC_FEATURE_UNIT_DESCRIPTOR
     {
         UCHAR bmaControls[4];
     } ch[1];
-    UCHAR		iFeature;                       // offset = 5 + (ch + 1) * 4
+    UCHAR iFeature; // offset = 5 + numOfChannels * 4
 } CS_AC_FEATURE_UNIT_DESCRIPTOR, *PCS_AC_FEATURE_UNIT_DESCRIPTOR;
 
-enum 
+enum
 {
-    SIZE_OF_MINIMUM_CS_AC_FEATURE_UNIT_DESCRIPTOR = (5 + 0 * 4 + 1),
+    // bLength = 5 + numOfChannels * 4 + 1. The master channel (bmaControls(0)) is always present, so the minimum is numOfChannels = 1.
+    SIZE_OF_MINIMUM_CS_AC_FEATURE_UNIT_DESCRIPTOR = (offsetof(CS_AC_FEATURE_UNIT_DESCRIPTOR, ch) + 1 * 4 + sizeof(UCHAR)),
 };
 
-C_ASSERT(sizeof(CS_AC_FEATURE_UNIT_DESCRIPTOR) == (SIZE_OF_MINIMUM_CS_AC_FEATURE_UNIT_DESCRIPTOR + 4));
+C_ASSERT(offsetof(CS_AC_FEATURE_UNIT_DESCRIPTOR, ch) == 5);
+C_ASSERT(SIZE_OF_MINIMUM_CS_AC_FEATURE_UNIT_DESCRIPTOR == 10);
+C_ASSERT(sizeof(CS_AC_FEATURE_UNIT_DESCRIPTOR) == SIZE_OF_MINIMUM_CS_AC_FEATURE_UNIT_DESCRIPTOR);
 
 // Table 4-14: Sampling Rate Converter Unit Descriptor
 typedef struct CS_AC_SAMPLING_RATE_CONVERTER_UNIT_DESCRIPTOR
@@ -925,6 +928,7 @@ enum
 	SIZE_OF_MINIMUM_CS_AC_EXTENSION_UNIT_DESCRIPTOR = 7 + 0 + 8
 };
 
+C_ASSERT(sizeof(CS_AC_EXTENSION_UNIT_DESCRIPTOR_COMMON) == 7);
 C_ASSERT(sizeof(CS_AC_EXTENSION_UNIT_DESCRIPTOR) == (SIZE_OF_MINIMUM_CS_AC_EXTENSION_UNIT_DESCRIPTOR + 1));
 
 // Table 4-27: Class-Specific AS Interface Descriptor
