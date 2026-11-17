@@ -22,5 +22,5 @@ namespace driverselector
     bool TryRestartComputer() noexcept;
 
     // True when the process command line contains the given switch, compared case-insensitively.
-    bool HasCommandLineSwitch(_In_ wchar_t const* name) noexcept;
+    bool HasCommandLineSwitch(_In_ wchar_t const * name) noexcept;
 }

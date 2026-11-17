@@ -4,5 +4,5 @@
 LIBRARY LowLatencyAudioBAFunctions
 
 EXPORTS
-	BAFunctionsCreate
-	BAFunctionsDestroy
+    BAFunctionsCreate
+    BAFunctionsDestroy

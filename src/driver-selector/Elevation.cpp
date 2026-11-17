@@ -109,12 +109,12 @@ namespace driverselector
     }
 
     _Use_decl_annotations_
-    bool HasCommandLineSwitch(wchar_t const* const name) noexcept
+    bool HasCommandLineSwitch(wchar_t const * const name) noexcept
     {
         try
         {
-            int count{ 0 };
-            wil::unique_hlocal_ptr<PWSTR[]> values{ ::CommandLineToArgvW(::GetCommandLineW(), &count) };
+            int                             count{0};
+            wil::unique_hlocal_ptr<PWSTR[]> values{::CommandLineToArgvW(::GetCommandLineW(), &count)};
 
             if (!values)
             {
