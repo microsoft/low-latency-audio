@@ -5,6 +5,8 @@ VisualStudioVersion = 17.12.35707.178
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "USBAsio", "USBAsio.vcxproj", "{6ED7444A-2038-4C09-B0EF-3C597C535FE2}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "ChannelNameTests", "tests\ChannelNameTests.vcxproj", "{D4427918-15A7-487E-9C1A-524E058D8A8D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|ARM64 = Debug|ARM64
@@ -27,6 +29,14 @@ Global
 		{6ED7444A-2038-4C09-B0EF-3C597C535FE2}.Release|ARM64EC.Build.0 = Release|ARM64EC
 		{6ED7444A-2038-4C09-B0EF-3C597C535FE2}.Release|x64.ActiveCfg = Release|x64
 		{6ED7444A-2038-4C09-B0EF-3C597C535FE2}.Release|x64.Build.0 = Release|x64
+		{D4427918-15A7-487E-9C1A-524E058D8A8D}.Debug|ARM64.ActiveCfg = Debug|x64
+		{D4427918-15A7-487E-9C1A-524E058D8A8D}.Debug|ARM64EC.ActiveCfg = Debug|x64
+		{D4427918-15A7-487E-9C1A-524E058D8A8D}.Debug|x64.ActiveCfg = Debug|x64
+		{D4427918-15A7-487E-9C1A-524E058D8A8D}.Debug|x64.Build.0 = Debug|x64
+		{D4427918-15A7-487E-9C1A-524E058D8A8D}.Release|ARM64.ActiveCfg = Release|x64
+		{D4427918-15A7-487E-9C1A-524E058D8A8D}.Release|ARM64EC.ActiveCfg = Release|x64
+		{D4427918-15A7-487E-9C1A-524E058D8A8D}.Release|x64.ActiveCfg = Release|x64
+		{D4427918-15A7-487E-9C1A-524E058D8A8D}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
