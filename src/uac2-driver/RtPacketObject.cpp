@@ -280,10 +280,12 @@ void RtPacketObject::ResetInternal(
 }
 
 _Use_decl_annotations_
-NONPAGED_CODE_SEG
+PAGED_CODE_SEG
 void RtPacketObject::Pause(
 )
 {
+    PAGED_CODE();
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
     auto pause = [](RT_PACKET_INFO *& rtPacketInfo, ULONG numOfDevices) noexcept -> void {
@@ -304,8 +306,12 @@ void RtPacketObject::Pause(
         }
     };
 
+    WdfWaitLockAcquire(m_rtPacketLock, nullptr);
+
     pause(m_inputRtPacketInfo, m_numOfInputDevices);
     pause(m_outputRtPacketInfo, m_numOfOutputDevices);
+
+    WdfWaitLockRelease(m_rtPacketLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
@@ -472,7 +478,7 @@ RtPacketObject::CopyFromRtPacketToOutputData(
     ASSERT(m_deviceContext != nullptr);
     ASSERT(m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex) != nullptr);
     ASSERT(transferObject->GetTransferredBytesInThisIrp() != 0);
-    ASSERT(rtPacketInfo->RtPacketSize != 0);
+    ASSERT(((rtPacketInfo->RtPackets == nullptr) && (rtPacketInfo->RtPacketsCount == 0) && (rtPacketInfo->RtPacketSize == 0)) || ((rtPacketInfo->RtPackets != nullptr) && (rtPacketInfo->RtPacketsCount != 0) && (rtPacketInfo->RtPacketSize != 0)));
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - TransferredBytesInThisIrp = %u", transferObject->GetTransferredBytesInThisIrp());
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - m_outputRtPacketInfo[deviceIndex].rtPacketSize = %u", rtPacketInfo->RtPacketSize);
@@ -483,8 +489,9 @@ RtPacketObject::CopyFromRtPacketToOutputData(
     IF_TRUE_ACTION_JUMP(m_deviceContext == nullptr, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex) == nullptr, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(transferObject->GetTransferredBytesInThisIrp() == 0, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
-    IF_TRUE_ACTION_JUMP(m_outputRtPacketInfo[deviceIndex].RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
-    IF_TRUE_ACTION_JUMP(m_outputRtPacketInfo[deviceIndex].Pause, status = STATUS_SUCCESS, CopyFromRtPacketToOutputData_Exit);
+    IF_TRUE_ACTION_JUMP((rtPacketInfo->RtPackets == nullptr) || (rtPacketInfo->RtPacketsCount == 0), status = STATUS_SUCCESS, CopyFromRtPacketToOutputData_Exit);
+    IF_TRUE_ACTION_JUMP(rtPacketInfo->RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
+    IF_TRUE_ACTION_JUMP(rtPacketInfo->Pause, status = STATUS_SUCCESS, CopyFromRtPacketToOutputData_Exit);
 
     bool fedRtPacket = false;
 
@@ -773,7 +780,7 @@ RtPacketObject::CopyToRtPacketFromInputData(
     ASSERT(m_deviceContext != nullptr);
     ASSERT(m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex) != nullptr);
     ASSERT(transferObject->GetTransferredBytesInThisIrp() != 0);
-    ASSERT(rtPacketInfo->RtPacketSize != 0);
+    ASSERT(((rtPacketInfo->RtPackets == nullptr) && (rtPacketInfo->RtPacketsCount == 0) && (rtPacketInfo->RtPacketSize == 0)) || ((rtPacketInfo->RtPackets != nullptr) && (rtPacketInfo->RtPacketsCount != 0) && (rtPacketInfo->RtPacketSize != 0)));
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - TransferredBytesInThisIrp = %u", transferObject->GetTransferredBytesInThisIrp());
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - m_inputRtPacketInfo[deviceIndex].rtPacketSize = %u", rtPacketInfo->RtPacketSize);
@@ -784,8 +791,9 @@ RtPacketObject::CopyToRtPacketFromInputData(
     IF_TRUE_ACTION_JUMP(m_deviceContext == nullptr, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex) == nullptr, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(transferObject->GetTransferredBytesInThisIrp() == 0, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
-    IF_TRUE_ACTION_JUMP(m_inputRtPacketInfo[deviceIndex].RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
-    IF_TRUE_ACTION_JUMP(m_inputRtPacketInfo[deviceIndex].Pause, status = STATUS_SUCCESS, CopyToRtPacketFromInputData_Exit);
+    IF_TRUE_ACTION_JUMP((rtPacketInfo->RtPackets == nullptr) || (rtPacketInfo->RtPacketsCount == 0), status = STATUS_SUCCESS, CopyToRtPacketFromInputData_Exit);
+    IF_TRUE_ACTION_JUMP(rtPacketInfo->RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
+    IF_TRUE_ACTION_JUMP(rtPacketInfo->Pause, status = STATUS_SUCCESS, CopyToRtPacketFromInputData_Exit);
 
     bool filledRtPacket = false;
 

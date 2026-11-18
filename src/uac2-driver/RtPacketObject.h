@@ -66,7 +66,7 @@ class RtPacketObject
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
-    NONPAGED_CODE_SEG
+    PAGED_CODE_SEG
     void Pause();
 
     __drv_maxIRQL(PASSIVE_LEVEL)

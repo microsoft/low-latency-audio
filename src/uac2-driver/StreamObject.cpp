@@ -90,7 +90,7 @@ StreamObject::StreamObject(
     status = WdfSpinLockCreate(&attributes, &m_positionSpinLock);
     if (!NT_SUCCESS(status))
     {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfSpinLockCreate failed %!STATUS!", status);
         m_positionSpinLock = nullptr;
     }
 
@@ -99,7 +99,7 @@ StreamObject::StreamObject(
     status = WdfSpinLockCreate(&attributes, &m_packetSpinLock);
     if (!NT_SUCCESS(status))
     {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfSpinLockCreate failed %!STATUS!", status);
         m_packetSpinLock = nullptr;
     }
 

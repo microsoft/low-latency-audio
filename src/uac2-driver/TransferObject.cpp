@@ -83,7 +83,7 @@ TransferObject::TransferObject(
     ASSERT(NT_SUCCESS(status));
     if (!NT_SUCCESS(status))
     {
-        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfWaitLockCreate failed %!STATUS!", status);
+        TraceEvents(TRACE_LEVEL_ERROR, TRACE_DEVICE, "WdfSpinLockCreate failed %!STATUS!", status);
         m_spinLock = nullptr;
         return;
     }
