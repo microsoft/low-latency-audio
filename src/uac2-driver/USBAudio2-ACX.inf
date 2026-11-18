@@ -32,33 +32,10 @@ USBAudio2-ACX.sys  = 1,,
 ;*****************************************
 
 [Manufacturer]
-%ManufacturerName%=Standard,NT$ARCH$.10.0...16299 ; %13% support introduced in build 16299
+%ManufacturerName%=Standard,NT$ARCH$.10.0...22621 ; %13% support introduced in build 22621
 
-[Standard.NT$ARCH$.10.0...16299]
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1509        ; Steinberg UR22
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1730        ; Steinberg UR44C
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0499&PID_1760        ; Steinberg IXO22
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_8219&MI_00  ; Focusrite Scarlett 2i2 4th Gen
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_821B&MI_00  ; Focusrite Scarlett 16i16
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_060D&MI_00  ; PreSonus Quantum HD 2
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0423&MI_00  ; PreSonus Revelator IO 24
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0423&MI_03  ; PreSonus Revelator IO 24 Stream Mix A
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0423&MI_06  ; PreSonus Revelator IO 24 Stream Mix B
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2B5A&PID_0021&MI_00  ; UA Volt 2
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2B5A&PID_0023&MI_00  ; UA Volt 276
-
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1C75&PID_AF72&MI_00  ; Arturia Minifuse 4
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2B5A&PID_0020&MI_00  ; UA Volt 1
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1397&PID_0508&MI_00  ; Behringer UMC204HD
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_07FD&PID_000B&MI_00  ; MOTU M4
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0A73&PID_001F&MI_00  ; Mackie Onyx Performer 2+2
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_194F&PID_0109&MI_00  ; PreSonus Studio 24C
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_0644&PID_8070&MI_00  ; Tascam US 2x2HR
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1686&PID_074F&MI_00  ; Zoom UAC 232
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_2708&PID_0009&MI_00  ; Audient ID4
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_8006&MI_00  ; Focusrite Scarlett 2i2 1st (or 2nd?) Gen
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_1235&PID_821D&MI_00  ; Focusrite Scarlett 18i20 4th Gen
-%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USB\VID_17C8&PID_7010&MI_00  ; Bitwig Connect
+[Standard.NT$ARCH$.10.0...22621]
+%USBAudio2-ACX.DeviceDesc%=USBAudio2-ACX_Device, USBAudio2-ACX\ChosenInDriverSelector
 
 
 [USBAudio2-ACX_Device.NT]
