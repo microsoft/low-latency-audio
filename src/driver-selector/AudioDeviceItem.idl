@@ -1,0 +1,33 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License
+// ============================================================================
+// This is part of the Microsoft Low-Latency Audio driver project.
+// Further information: https://aka.ms/asio
+// ============================================================================
+
+namespace LowLatencyDriverSelector
+{
+    // One row in the device list: a USB Audio 2.0 interface, or a whole device that a
+    // manufacturer's driver has taken over.
+    [default_interface]
+    runtimeclass AudioDeviceItem : Microsoft.UI.Xaml.Data.INotifyPropertyChanged
+    {
+        AudioDeviceItem();
+
+        String Name{ get; };
+        String DriverText{ get; };
+        String NoteText{ get; };
+        String DetailText{ get; };
+        String ProblemText{ get; };
+
+        // false while the row is busy, so a second change cannot start on the same device
+        Boolean CanUseLowLatency{ get; };
+        Boolean CanUseWindows{ get; };
+        Boolean CanUseManufacturer{ get; };
+
+        Boolean IsBusy;
+
+        Microsoft.UI.Xaml.Visibility NoteVisibility{ get; };
+        Microsoft.UI.Xaml.Visibility ProblemVisibility{ get; };
+    }
+}

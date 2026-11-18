@@ -1,0 +1,28 @@
+{
+  "$comment": [
+    "The one place the Low-Latency Audio installer version is set. build-all.ps1 reads it and",
+    "stamps it into the installer, the bundle, the Driver Selector and the setup custom actions.",
+    "The driver, the ASIO driver and the ASIO control panel keep their own version resources.",
+    "",
+    "channel:       preview | rc | stable",
+    "channelNumber: ignored when channel is 'stable'",
+    "",
+    "The version text is <major>.<minor>.<patch>-<channel>.<channelNumber>, for example",
+    "1.0.0-preview.1. The numeric version is <major>.<minor>.<patch>.<build>.",
+    "",
+    "build: the 4th field of the numeric version only. -BuildNumber <n> overrides it without",
+    "       changing this file; -BumpBuildNumber adds one and saves it.",
+    "",
+    "IMPORTANT: Windows Installer compares only the first THREE fields of a version. Bump 'patch'",
+    "for every release that has to upgrade one customers already have."
+  ],
+
+  "major": 1,
+  "minor": 0,
+  "patch": 0,
+
+  "channel": "preview",
+  "channelNumber": 1,
+
+  "build": 0
+}
