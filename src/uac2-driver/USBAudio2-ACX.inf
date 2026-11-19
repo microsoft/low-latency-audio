@@ -15,7 +15,7 @@ Class=MEDIA
 ClassGuid={4d36e96c-e325-11ce-bfc1-08002be10318}
 Provider=%ManufacturerName%
 CatalogFile=USBAudio2-ACX.cat
-DriverVer=
+DriverVer=11/19/2026,0.1.0.0
 PnpLockDown=1
 
 [DestinationDirs]
