@@ -91,7 +91,7 @@ CUnknown * CreateInstance(LPUNKNOWN, HRESULT *)
 CLSID IID_ASIO_DRIVER = {0x327468a4, 0x1351, 0x4930, {0xbb, 0x6b, 0xf, 0xeb, 0x69, 0xbf, 0x5d, 0x70}};
 
 CFactoryTemplate g_Templates[] = {
-    {L"YSUSB_ASIO", &IID_ASIO_DRIVER, CUSBAsio::CreateInstance}
+    {L"USB_ASIO", &IID_ASIO_DRIVER, CUSBAsio::CreateInstance}
 };
 
 int g_NumOfTemplates = sizeof(g_Templates) / sizeof(g_Templates[0]);
@@ -888,9 +888,27 @@ ASIOError CUSBAsio::createBuffers(ASIOBufferInfo * bufferInfos, long numChannels
     ASIOError error = ASE_OK;
     bool      callDisposeBuffers = false;
     auto      createBuffersScope = wil::scope_exit([&]() {
-        if ((error != ASE_OK) && callDisposeBuffers)
+        if (error != ASE_OK)
         {
-            disposeBuffers();
+            if (callDisposeBuffers)
+            {
+                disposeBuffers();
+            }
+            {
+                auto lockClient = m_clientInfoCS.lock();
+
+                m_isActive = false;
+                m_activeInputs = 0;
+                m_activeOutputs = 0;
+                for (long channel = 0; channel < NUMOFINPUTS; channel++)
+                {
+                    m_inMap[channel] = 0;
+                }
+                for (long channel = 0; channel < NUMOFOUTPUTS; channel++)
+                {
+                    m_outMap[channel] = 0;
+                }
+            }
         }
     });
 
