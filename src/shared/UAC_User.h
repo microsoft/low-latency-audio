@@ -83,8 +83,8 @@ constexpr ULONG toULong(UACSampleFormat sampleFormat)
 }
 
 // User - Kernel For version check
-#define UAC_KERNEL_DRIVER_VERSION 0x00050000
-#define UAC_ASIO_DRIVER_VERSION   0x00050000
+#define UAC_KERNEL_DRIVER_VERSION 0x00060000
+#define UAC_ASIO_DRIVER_VERSION   0x00060000
 
 enum class DeviceStatuses
 {
@@ -114,26 +114,30 @@ constexpr ULONG toULONG(OperationFlags Flag)
 // {016AF08F-F499-4637-B7A5-AFC01C86276F}
 DEFINE_GUID(KSPROPSETID_LowLatencyAudio, 0x16af08f, 0xf499, 0x4637, 0xb7, 0xa5, 0xaf, 0xc0, 0x1c, 0x86, 0x27, 0x6f);
 
+//
+// To preserve the numeric property IDs and ABI compatibility, do not remove unused enum values; retain them as reserved entries.
+//
 enum class KsPropertyUACLowLatencyAudio
 {
-    GetAudioProperty,
-    GetChannelInfo,
-    GetClockInfo,
-    SetClockSource,
-    SetSampleFormat,
-    ChangeSampleRate,
-    GetAsioOwnership,
-    StartAsioStream,
-    StopAsioStream,
-    SetAsioBuffer,
-    UnsetAsioBuffer,
-    ReleaseAsioOwnership,
-    GetBufferPeriod,
-    SetBufferPeriod,
-    GetInputLatency,
-    GetOutputLatency,
-    SetAsioDevice,
-    GetAsioDevice,
+    GetAudioProperty = 0,
+    GetChannelInfo = 1,
+    GetClockInfo = 2,
+    GetLatencyOffsetOfSampleRate = 3, // Reserved ABI slot; no longer implemented.
+    SetClockSource = 4,
+    SetSampleFormat = 5,
+    ChangeSampleRate = 6,
+    GetAsioOwnership = 7,
+    StartAsioStream = 8,
+    StopAsioStream = 9,
+    SetAsioBuffer = 10,
+    UnsetAsioBuffer = 11,
+    ReleaseAsioOwnership = 12,
+    GetBufferPeriod = 13,
+    SetBufferPeriod = 14,
+    GetInputLatency = 15,
+    GetOutputLatency = 16,
+    SetAsioDevice = 17,
+    GetAsioDevice = 18,
 };
 
 constexpr int toInt(KsPropertyUACLowLatencyAudio Property)
