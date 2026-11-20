@@ -27,6 +27,8 @@ Environment:
 #include <acx.h>
 #include "WorkerThread.h"
 
+class StreamObject;
+
 enum class MixingEngineWaitEventsNumber
 {
     KillEvent,
@@ -49,6 +51,7 @@ class MixingEngineThread : public WorkerThread
     PAGED_CODE_SEG
     MixingEngineThread(
         _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ StreamObject *  streamObject,
         _In_ ULONG           newTimerResolution
     );
 
@@ -62,7 +65,8 @@ class MixingEngineThread : public WorkerThread
     CreateThread(
         _In_ WORKER_THREAD_FUNCTION mixingEngineThreadFunction,
         _In_ KPRIORITY              priority,
-        _In_ LONG                   wakeUpIntervalUs
+        _In_ LONG                   wakeUpIntervalUs,
+        _In_ ULONG                  classicFramesPerIrp
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -73,10 +77,21 @@ class MixingEngineThread : public WorkerThread
     PAGED_CODE_SEG
     NTSTATUS Wait();
 
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    StreamObject * GetStreamObject() const noexcept;
+
+    __drv_maxIRQL(PASSIVE_LEVEL)
+    PAGED_CODE_SEG
+    void SetOutputReadyEvent(
+        _In_ PKEVENT outputReadyEvent
+    );
+
     static __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     MixingEngineThread * CreateMixingEngineThread(
         _In_ PDEVICE_CONTEXT deviceContext,
+        _In_ StreamObject *  streamObject,
         _In_ ULONG           newTimerResolution
     );
 
@@ -87,19 +102,19 @@ class MixingEngineThread : public WorkerThread
     PAGED_CODE_SEG
     virtual void ThreadMain();
 
-    const ULONG m_newTimerResolution;
-    ULONG       m_currentTimerResolution{0};
-    LONG        m_wakeUpIntervalUs{0};
-
-  protected:
-    KWAIT_BLOCK m_waitBlock[toInt(MixingEngineWaitEventsNumber::NumOfWaitEvents)]{};
-    PVOID       m_waitEvents[toInt(MixingEngineWaitEventsNumber::NumOfWaitEvents)] = {
+    StreamObject * m_streamObject{nullptr};
+    const ULONG    m_newTimerResolution;
+    ULONG          m_currentTimerResolution{0};
+    LONG           m_wakeUpIntervalUs{0};
+    KWAIT_BLOCK    m_waitBlock[toInt(MixingEngineWaitEventsNumber::NumOfWaitEvents)]{};
+    PVOID          m_waitEvents[toInt(MixingEngineWaitEventsNumber::NumOfWaitEvents)] = {
         (PVOID)&m_threadKillEvent,
         (PVOID)&m_threadWakeUpEvent,
         nullptr,
         nullptr
     };
     ULONG m_waitEventsCount{0};
+    ULONG m_classicFramesPerIrp{1};
 };
 
 #endif

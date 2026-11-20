@@ -33,8 +33,8 @@ Environment:
 #include <shlwapi.h>
 
 static HANDLE OpenUsbDeviceCore(
-    _In_ const LPGUID classGuid,
-    _In_ const TCHAR * /* serviceName */,
+    _In_ const LPGUID      classGuid,
+    _In_ const TCHAR *     targetServiceName,
     _In_ const TCHAR *     referenceString,
     _In_opt_ const TCHAR * desiredPath
 )
@@ -83,7 +83,7 @@ static HANDLE OpenUsbDeviceCore(
 
         if (SetupDiGetDeviceRegistryProperty(deviceInfo, &deviceInfoData, SPDRP_SERVICE, nullptr, (PBYTE)serviceName, sizeof(serviceName), nullptr))
         {
-            if (_tcsicmp(serviceName, serviceName) == 0)
+            if (_tcsicmp(serviceName, targetServiceName) == 0)
             {
                 // Allocate the buffer for the device interface detail data.
                 PSP_DEVICE_INTERFACE_DETAIL_DATA deviceInterfaceDetailData = nullptr;

@@ -30,6 +30,7 @@ Environment:
 #include "ContiguousMemory.h"
 #include "TransferObject.h"
 #include "StreamEngine.h"
+#include "AudioIsochronousEngine.h"
 
 #ifndef __INTELLISENSE__
 #include "RtPacketObject.tmh"
@@ -45,12 +46,13 @@ DEFINE_GUIDSTRUCT("00000003-0000-0010-8000-00aa00389b71", KSDATAFORMAT_SUBTYPE_I
 _Use_decl_annotations_
 PAGED_CODE_SEG
 RtPacketObject * RtPacketObject::Create(
-    PDEVICE_CONTEXT deviceContext
+    PDEVICE_CONTEXT          deviceContext,
+    AudioIsochronousEngine * audioIsochronousEngine
 )
 {
     PAGED_CODE();
 
-    RtPacketObject * rtPacketObject = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) RtPacketObject(deviceContext);
+    RtPacketObject * rtPacketObject = new (POOL_FLAG_NON_PAGED, DRIVER_TAG) RtPacketObject(deviceContext, audioIsochronousEngine);
 
     if ((rtPacketObject != nullptr) && (rtPacketObject->m_rtPacketLock == nullptr))
     {
@@ -65,9 +67,10 @@ RtPacketObject * RtPacketObject::Create(
 _Use_decl_annotations_
 PAGED_CODE_SEG
 RtPacketObject::RtPacketObject(
-    PDEVICE_CONTEXT deviceContext
+    PDEVICE_CONTEXT          deviceContext,
+    AudioIsochronousEngine * audioIsochronousEngine
 )
-    : m_deviceContext(deviceContext)
+    : m_deviceContext(deviceContext), m_audioIsochronousEngine(audioIsochronousEngine)
 
 {
     WDF_OBJECT_ATTRIBUTES attributes;
@@ -277,10 +280,12 @@ void RtPacketObject::ResetInternal(
 }
 
 _Use_decl_annotations_
-NONPAGED_CODE_SEG
+PAGED_CODE_SEG
 void RtPacketObject::Pause(
 )
 {
+    PAGED_CODE();
+
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
     auto pause = [](RT_PACKET_INFO *& rtPacketInfo, ULONG numOfDevices) noexcept -> void {
@@ -301,8 +306,12 @@ void RtPacketObject::Pause(
         }
     };
 
+    WdfWaitLockAcquire(m_rtPacketLock, nullptr);
+
     pause(m_inputRtPacketInfo, m_numOfInputDevices);
     pause(m_outputRtPacketInfo, m_numOfOutputDevices);
+
+    WdfWaitLockRelease(m_rtPacketLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
 }
@@ -467,9 +476,9 @@ RtPacketObject::CopyFromRtPacketToOutputData(
     ASSERT(length != 0);
     ASSERT(transferObject != nullptr);
     ASSERT(m_deviceContext != nullptr);
-    ASSERT(m_deviceContext->RenderStreamEngine != nullptr);
+    ASSERT(m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex) != nullptr);
     ASSERT(transferObject->GetTransferredBytesInThisIrp() != 0);
-    ASSERT(rtPacketInfo->RtPacketSize != 0);
+    ASSERT(((rtPacketInfo->RtPackets == nullptr) && (rtPacketInfo->RtPacketsCount == 0) && (rtPacketInfo->RtPacketSize == 0)) || ((rtPacketInfo->RtPackets != nullptr) && (rtPacketInfo->RtPacketsCount != 0) && (rtPacketInfo->RtPacketSize != 0)));
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - TransferredBytesInThisIrp = %u", transferObject->GetTransferredBytesInThisIrp());
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - m_outputRtPacketInfo[deviceIndex].rtPacketSize = %u", rtPacketInfo->RtPacketSize);
@@ -478,18 +487,20 @@ RtPacketObject::CopyFromRtPacketToOutputData(
     IF_TRUE_ACTION_JUMP(length == 0, status = STATUS_INVALID_PARAMETER, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(transferObject == nullptr, status = STATUS_INVALID_PARAMETER, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(m_deviceContext == nullptr, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
-    IF_TRUE_ACTION_JUMP(m_deviceContext->RenderStreamEngine == nullptr, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
+    IF_TRUE_ACTION_JUMP(m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex) == nullptr, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
     IF_TRUE_ACTION_JUMP(transferObject->GetTransferredBytesInThisIrp() == 0, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
-    IF_TRUE_ACTION_JUMP(m_outputRtPacketInfo[deviceIndex].RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
-    IF_TRUE_ACTION_JUMP(m_outputRtPacketInfo[deviceIndex].Pause, status = STATUS_SUCCESS, CopyFromRtPacketToOutputData_Exit);
+    IF_TRUE_ACTION_JUMP((rtPacketInfo->RtPackets == nullptr) || (rtPacketInfo->RtPacketsCount == 0), status = STATUS_SUCCESS, CopyFromRtPacketToOutputData_Exit);
+    IF_TRUE_ACTION_JUMP(rtPacketInfo->RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyFromRtPacketToOutputData_Exit);
+    IF_TRUE_ACTION_JUMP(rtPacketInfo->Pause, status = STATUS_SUCCESS, CopyFromRtPacketToOutputData_Exit);
 
     bool fedRtPacket = false;
 
-    switch (m_deviceContext->AudioProperty.CurrentSampleFormat)
+    switch (m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat)
     {
     case UACSampleFormat::UAC_SAMPLE_FORMAT_PCM: {
         for (ULONG acxCh = 0; acxCh < rtPacketInfo->Channels; acxCh++)
         {
+            bool  copySamples = ((acxCh + rtPacketInfo->UsbChannel) < m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels);
             ULONG rtPacketIndex = (rtPacketInfo->RtPacketPosition / rtPacketInfo->RtPacketSize) % rtPacketInfo->RtPacketsCount;
             ULONG srcIndexInRtPacket = rtPacketInfo->RtPacketPosition % rtPacketInfo->RtPacketSize + acxCh * m_outputBytesPerSample;
             PBYTE srcData = (PBYTE)rtPacketInfo->RtPackets[rtPacketIndex];
@@ -503,73 +514,76 @@ RtPacketObject::CopyFromRtPacketToOutputData(
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - srcIndexInRtPacket, dstIndex = %u, %u", srcIndexInRtPacket, dstIndex);
 
                 // To accommodate differing specifications between the bytesPerSample of the device and ACX audio, the following code modifications are necessary.
-                if (m_outputBytesPerSample == 2)
+                if (copySamples)
                 {
-                    PSHORT outSample = (PSHORT)(dstData + dstIndex);
-                    LONG   thisSample = (LONG)(*outSample) + *(PSHORT)(srcData + srcIndexInRtPacket);
-                    if (thisSample > 0x7fff)
+                    if (m_outputBytesPerSample == 2)
                     {
-                        *outSample = 0x7fff;
+                        PSHORT outSample = (PSHORT)(dstData + dstIndex);
+                        LONG   thisSample = (LONG)(*outSample) + *(PSHORT)(srcData + srcIndexInRtPacket);
+                        if (thisSample > 0x7fff)
+                        {
+                            *outSample = 0x7fff;
+                        }
+                        else if (thisSample < -0x8000)
+                        {
+                            *outSample = -0x8000;
+                        }
+                        else
+                        {
+                            *outSample = (SHORT)thisSample;
+                        }
                     }
-                    else if (thisSample < -0x8000)
+                    else if (m_outputBytesPerSample == 3)
                     {
-                        *outSample = -0x8000;
+                        PUCHAR          outSample = (PUCHAR)(dstData + dstIndex);
+                        volatile BYTE * wdmSample = (volatile BYTE *)(srcData + srcIndexInRtPacket);
+                        LONG            thisSample = (LONG)((ULONG)outSample[0] + ((ULONG)outSample[1] << 8)) + ((LONG)((PCHAR)outSample)[2] << 16) + (LONG)((ULONG)wdmSample[0] + ((ULONG)wdmSample[1] << 8)) + ((LONG)((PCHAR)wdmSample)[2] << 16);
+                        if (thisSample > 0x7fffff)
+                        {
+                            outSample[0] = 0xff;
+                            outSample[1] = 0xff;
+                            outSample[2] = 0x7f;
+                        }
+                        else if (thisSample < -0x800000)
+                        {
+                            outSample[0] = 0x00;
+                            outSample[1] = 0x00;
+                            outSample[2] = 0x80;
+                        }
+                        else
+                        {
+                            outSample[0] = ((PUCHAR)(&thisSample))[0];
+                            outSample[1] = ((PUCHAR)(&thisSample))[1];
+                            outSample[2] = ((PUCHAR)(&thisSample))[2];
+                        }
                     }
+                    else if (m_outputBytesPerSample == 4)
+                    {
+                        PUCHAR          outSample = (PUCHAR)(dstData + dstIndex);
+                        volatile BYTE * wdmSample = (volatile BYTE *)(srcData + srcIndexInRtPacket);
+                        LONGLONG        thisSample = (LONGLONG) * ((LONG *)outSample) + (LONGLONG) * ((LONG *)wdmSample);
 
-                    {
-                        *outSample = (SHORT)thisSample;
-                    }
-                }
-                else if (m_outputBytesPerSample == 3)
-                {
-                    PUCHAR          outSample = (PUCHAR)(dstData + dstIndex);
-                    volatile BYTE * wdmSample = (volatile BYTE *)(srcData + srcIndexInRtPacket);
-                    LONG            thisSample = (LONG)((ULONG)outSample[0] + ((ULONG)outSample[1] << 8)) + ((LONG)((PCHAR)outSample)[2] << 16) + (LONG)((ULONG)wdmSample[0] + ((ULONG)wdmSample[1] << 8)) + ((LONG)((PCHAR)wdmSample)[2] << 16);
-                    if (thisSample > 0x7fffff)
-                    {
-                        outSample[0] = 0xff;
-                        outSample[1] = 0xff;
-                        outSample[2] = 0x7f;
-                    }
-                    else if (thisSample < -0x800000)
-                    {
-                        outSample[0] = 0x00;
-                        outSample[1] = 0x00;
-                        outSample[2] = 0x80;
-                    }
-                    else
-                    {
-                        outSample[0] = ((PUCHAR)(&thisSample))[0];
-                        outSample[1] = ((PUCHAR)(&thisSample))[1];
-                        outSample[2] = ((PUCHAR)(&thisSample))[2];
-                    }
-                }
-                else if (m_outputBytesPerSample == 4)
-                {
-                    PUCHAR          outSample = (PUCHAR)(dstData + dstIndex);
-                    volatile BYTE * wdmSample = (volatile BYTE *)(srcData + srcIndexInRtPacket);
-                    LONGLONG        thisSample = (LONGLONG) * ((LONG *)outSample) + (LONGLONG) * ((LONG *)wdmSample);
-
-                    if (thisSample > 0x7fffffffLL)
-                    {
-                        outSample[0] = 0xff;
-                        outSample[1] = 0xff;
-                        outSample[2] = 0xff;
-                        outSample[3] = 0x7f;
-                    }
-                    else if (thisSample < -0x80000000LL)
-                    {
-                        outSample[0] = 0x00;
-                        outSample[1] = 0x00;
-                        outSample[2] = 0x00;
-                        outSample[3] = 0x80;
-                    }
-                    else
-                    {
-                        outSample[0] = ((PUCHAR)(&thisSample))[0];
-                        outSample[1] = ((PUCHAR)(&thisSample))[1];
-                        outSample[2] = ((PUCHAR)(&thisSample))[2];
-                        outSample[3] = ((PUCHAR)(&thisSample))[3];
+                        if (thisSample > 0x7fffffffLL)
+                        {
+                            outSample[0] = 0xff;
+                            outSample[1] = 0xff;
+                            outSample[2] = 0xff;
+                            outSample[3] = 0x7f;
+                        }
+                        else if (thisSample < -0x80000000LL)
+                        {
+                            outSample[0] = 0x00;
+                            outSample[1] = 0x00;
+                            outSample[2] = 0x00;
+                            outSample[3] = 0x80;
+                        }
+                        else
+                        {
+                            outSample[0] = ((PUCHAR)(&thisSample))[0];
+                            outSample[1] = ((PUCHAR)(&thisSample))[1];
+                            outSample[2] = ((PUCHAR)(&thisSample))[2];
+                            outSample[3] = ((PUCHAR)(&thisSample))[3];
+                        }
                     }
                 }
                 dstIndex += (usbBytesPerSample * usbChannels);
@@ -599,6 +613,7 @@ RtPacketObject::CopyFromRtPacketToOutputData(
     case UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT: {
         for (ULONG acxCh = 0; acxCh < rtPacketInfo->Channels; acxCh++)
         {
+            bool  copySamples = ((acxCh + rtPacketInfo->UsbChannel) < m_audioIsochronousEngine->GetAudioStreamPropertySet().OutputProperty.UsbChannels);
             ULONG rtPacketIndex = (rtPacketInfo->RtPacketPosition / rtPacketInfo->RtPacketSize) % rtPacketInfo->RtPacketsCount;
             ULONG srcIndexInRtPacket = rtPacketInfo->RtPacketPosition % rtPacketInfo->RtPacketSize + acxCh * m_outputBytesPerSample;
             PBYTE srcData = (PBYTE)rtPacketInfo->RtPackets[rtPacketIndex];
@@ -612,7 +627,10 @@ RtPacketObject::CopyFromRtPacketToOutputData(
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - srcIndexInRtPacket, dstIndex = %u, %u", srcIndexInRtPacket, dstIndex);
 
                 float * outSample = (float *)(dstData + dstIndex);
-                *outSample = *outSample + *(float *)(srcData + srcIndexInRtPacket);
+                if (copySamples)
+                {
+                    *outSample = *outSample + *(float *)(srcData + srcIndexInRtPacket);
+                }
 
                 dstIndex += (usbBytesPerSample * usbChannels);
                 srcIndexInRtPacket += m_outputBytesPerSample * rtPacketInfo->Channels;
@@ -710,10 +728,10 @@ RtPacketObject::CopyFromRtPacketToOutputData(
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - index, completedRtPacket, estimatedQPCPosition, qpcPosition, PeriodQPCPosition, bytesCopiedUpToBoundary, TransferredBytesInThisIrp, RtPacketEstimatedPosition, bytesCopiedSrcDataUpToBoundary, %d, %llu, %llu, %llu, %llu, %u, %u, %llu, %u", transferObject->GetIndex(), completedRtPacket, estimatedQPCPosition, transferObject->GetQPCPosition(), transferObject->GetPeriodQPCPosition(), bytesCopiedUpToBoundary, transferObject->GetTransferredBytesInThisIrp(), rtPacketInfo->RtPacketEstimatedPosition, bytesCopiedSrcDataUpToBoundary);
 
         // Tell ACX we've completed the packet.
-        if ((m_deviceContext->RenderStreamEngine[deviceIndex] != nullptr) && (m_deviceContext->RenderStreamEngine[deviceIndex]->GetACXStream() != nullptr))
+        if ((m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex) != nullptr) && (m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex)->GetACXStream() != nullptr))
         {
-            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "call AcxRtStreamNotifyPacketComplete(%p, %llu, %llu)", m_deviceContext->RenderStreamEngine[deviceIndex] != nullptr ? m_deviceContext->RenderStreamEngine[deviceIndex]->GetACXStream() : (void *)(1), completedRtPacket, estimatedQPCPosition);
-            (void)AcxRtStreamNotifyPacketComplete(m_deviceContext->RenderStreamEngine[deviceIndex]->GetACXStream(), completedRtPacket, estimatedQPCPosition);
+            TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, "call AcxRtStreamNotifyPacketComplete(%p, %llu, %llu)", m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex) != nullptr ? m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex)->GetACXStream() : (void *)(1), completedRtPacket, estimatedQPCPosition);
+            (void)AcxRtStreamNotifyPacketComplete(m_audioIsochronousEngine->GetRenderStreamEngine(deviceIndex)->GetACXStream(), completedRtPacket, estimatedQPCPosition);
         }
     }
     InterlockedAdd64((LONG64 *)&(rtPacketInfo->RtPacketPosition), bytesCopiedSrcData);
@@ -760,9 +778,9 @@ RtPacketObject::CopyToRtPacketFromInputData(
     ASSERT(length != 0);
     ASSERT(transferObject != nullptr);
     ASSERT(m_deviceContext != nullptr);
-    ASSERT(m_deviceContext->CaptureStreamEngine != nullptr);
+    ASSERT(m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex) != nullptr);
     ASSERT(transferObject->GetTransferredBytesInThisIrp() != 0);
-    ASSERT(rtPacketInfo->RtPacketSize != 0);
+    ASSERT(((rtPacketInfo->RtPackets == nullptr) && (rtPacketInfo->RtPacketsCount == 0) && (rtPacketInfo->RtPacketSize == 0)) || ((rtPacketInfo->RtPackets != nullptr) && (rtPacketInfo->RtPacketsCount != 0) && (rtPacketInfo->RtPacketSize != 0)));
 
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - TransferredBytesInThisIrp = %u", transferObject->GetTransferredBytesInThisIrp());
     TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - m_inputRtPacketInfo[deviceIndex].rtPacketSize = %u", rtPacketInfo->RtPacketSize);
@@ -771,18 +789,20 @@ RtPacketObject::CopyToRtPacketFromInputData(
     IF_TRUE_ACTION_JUMP(length == 0, status = STATUS_INVALID_PARAMETER, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(transferObject == nullptr, status = STATUS_INVALID_PARAMETER, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(m_deviceContext == nullptr, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
-    IF_TRUE_ACTION_JUMP(m_deviceContext->CaptureStreamEngine == nullptr, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
+    IF_TRUE_ACTION_JUMP(m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex) == nullptr, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
     IF_TRUE_ACTION_JUMP(transferObject->GetTransferredBytesInThisIrp() == 0, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
-    IF_TRUE_ACTION_JUMP(m_inputRtPacketInfo[deviceIndex].RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
-    IF_TRUE_ACTION_JUMP(m_inputRtPacketInfo[deviceIndex].Pause, status = STATUS_SUCCESS, CopyToRtPacketFromInputData_Exit);
+    IF_TRUE_ACTION_JUMP((rtPacketInfo->RtPackets == nullptr) || (rtPacketInfo->RtPacketsCount == 0), status = STATUS_SUCCESS, CopyToRtPacketFromInputData_Exit);
+    IF_TRUE_ACTION_JUMP(rtPacketInfo->RtPacketSize == 0, status = STATUS_UNSUCCESSFUL, CopyToRtPacketFromInputData_Exit);
+    IF_TRUE_ACTION_JUMP(rtPacketInfo->Pause, status = STATUS_SUCCESS, CopyToRtPacketFromInputData_Exit);
 
     bool filledRtPacket = false;
 
-    switch (m_deviceContext->AudioProperty.CurrentSampleFormat)
+    switch (m_audioIsochronousEngine->GetAudioStreamPropertySet().AudioProperty.CurrentSampleFormat)
     {
     case UACSampleFormat::UAC_SAMPLE_FORMAT_PCM: {
         for (ULONG acxCh = 0; acxCh < rtPacketInfo->Channels; acxCh++)
         {
+            bool  copySamples = ((acxCh + rtPacketInfo->UsbChannel) < m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.UsbChannels);
             ULONG rtPacketIndex = (rtPacketInfo->RtPacketPosition / rtPacketInfo->RtPacketSize) % rtPacketInfo->RtPacketsCount;
             ULONG dstIndexInRtPacket = rtPacketInfo->RtPacketPosition % rtPacketInfo->RtPacketSize + acxCh * m_inputBytesPerSample;
             PBYTE srcData = (PBYTE)buffer;
@@ -796,19 +816,39 @@ RtPacketObject::CopyToRtPacketFromInputData(
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - dstIndexInRtPacket, dstIndex = %u, %u", dstIndexInRtPacket, srcIndex);
 
                 // To accommodate differing specifications between the bytesPerSample of the device and ACX audio, the following code modifications are necessary.
-                if (m_inputBytesPerSample == 2)
+                if (copySamples)
                 {
-                    *(PSHORT)(dstData + dstIndexInRtPacket) = *(PSHORT)(srcData + srcIndex);
+                    if (m_inputBytesPerSample == 2)
+                    {
+                        *(PSHORT)(dstData + dstIndexInRtPacket) = *(PSHORT)(srcData + srcIndex);
+                    }
+                    else if (m_inputBytesPerSample == 3)
+                    {
+                        *(dstData + dstIndexInRtPacket) = *(srcData + srcIndex);
+                        *(dstData + dstIndexInRtPacket + 1) = *(srcData + srcIndex + 1);
+                        *(dstData + dstIndexInRtPacket + 2) = *(srcData + srcIndex + 2);
+                    }
+                    else if (m_inputBytesPerSample == 4)
+                    {
+                        *((LONG *)(dstData + dstIndexInRtPacket)) = *((LONG *)(srcData + srcIndex));
+                    }
                 }
-                else if (m_inputBytesPerSample == 3)
+                else
                 {
-                    *(dstData + dstIndexInRtPacket) = *(srcData + srcIndex);
-                    *(dstData + dstIndexInRtPacket + 1) = *(srcData + srcIndex + 1);
-                    *(dstData + dstIndexInRtPacket + 2) = *(srcData + srcIndex + 2);
-                }
-                else if (m_inputBytesPerSample == 4)
-                {
-                    *((LONG *)(dstData + dstIndexInRtPacket)) = *((LONG *)(srcData + srcIndex));
+                    if (m_inputBytesPerSample == 2)
+                    {
+                        *(PSHORT)(dstData + dstIndexInRtPacket) = 0;
+                    }
+                    else if (m_inputBytesPerSample == 3)
+                    {
+                        *(dstData + dstIndexInRtPacket) = 0;
+                        *(dstData + dstIndexInRtPacket + 1) = 0;
+                        *(dstData + dstIndexInRtPacket + 2) = 0;
+                    }
+                    else if (m_inputBytesPerSample == 4)
+                    {
+                        *((LONG *)(dstData + dstIndexInRtPacket)) = 0;
+                    }
                 }
                 srcIndex += (usbBytesPerSample * usbChannels);
                 dstIndexInRtPacket += m_inputBytesPerSample * rtPacketInfo->Channels;
@@ -832,6 +872,7 @@ RtPacketObject::CopyToRtPacketFromInputData(
     case UACSampleFormat::UAC_SAMPLE_FORMAT_IEEE_FLOAT: {
         for (ULONG acxCh = 0; acxCh < rtPacketInfo->Channels; acxCh++)
         {
+            bool  copySamples = ((acxCh + rtPacketInfo->UsbChannel) < m_audioIsochronousEngine->GetAudioStreamPropertySet().InputProperty.UsbChannels);
             ULONG rtPacketIndex = (rtPacketInfo->RtPacketPosition / rtPacketInfo->RtPacketSize) % rtPacketInfo->RtPacketsCount;
             ULONG dstIndexInRtPacket = rtPacketInfo->RtPacketPosition % rtPacketInfo->RtPacketSize + acxCh * m_inputBytesPerSample;
             PBYTE srcData = (PBYTE)buffer;
@@ -843,7 +884,14 @@ RtPacketObject::CopyToRtPacketFromInputData(
             {
                 // TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - dstIndexInRtPacket, dstIndex = %u, %u", dstIndexInRtPacket, srcIndex);
 
-                *((float *)(dstData + dstIndexInRtPacket)) = *((float *)(srcData + srcIndex));
+                if (copySamples)
+                {
+                    *((float *)(dstData + dstIndexInRtPacket)) = *((float *)(srcData + srcIndex));
+                }
+                else
+                {
+                    *((float *)(dstData + dstIndexInRtPacket)) = (float)0;
+                }
                 srcIndex += (usbBytesPerSample * usbChannels);
                 dstIndexInRtPacket += m_inputBytesPerSample * rtPacketInfo->Channels;
                 bytesCopiedDstData += m_inputBytesPerSample;
@@ -932,14 +980,14 @@ RtPacketObject::CopyToRtPacketFromInputData(
         TraceEvents(TRACE_LEVEL_VERBOSE, TRACE_DEVICE, " - index, completedRtPacket, estimatedQPCPosition, qpcPosition, PeriodQPCPosition, bytesCopiedUpToBoundary, TransferredBytesInThisIrp, RtPacketEstimatedPosition, bytesCopiedDstDataUpToBoundary, %d, %llu, %llu, %llu, %llu, %u, %u, %llu, %u", transferObject->GetIndex(), completedRtPacket, estimatedQPCPosition, transferObject->GetQPCPosition(), transferObject->GetPeriodQPCPosition(), bytesCopiedUpToBoundary, transferObject->GetTransferredBytesInThisIrp(), rtPacketInfo->RtPacketEstimatedPosition, bytesCopiedDstDataUpToBoundary);
 
         // Tell ACX we've completed the packet.
-        if ((m_deviceContext->CaptureStreamEngine[deviceIndex] != nullptr) && (m_deviceContext->CaptureStreamEngine[deviceIndex]->GetACXStream() != nullptr))
+        if ((m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex) != nullptr) && (m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex)->GetACXStream() != nullptr))
         {
-            (void)AcxRtStreamNotifyPacketComplete(m_deviceContext->CaptureStreamEngine[deviceIndex]->GetACXStream(), completedRtPacket, estimatedQPCPosition);
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "call AcxRtStreamNotifyPacketComplete(%p, %llu, %llu)", m_deviceContext->CaptureStreamEngine[deviceIndex] != nullptr ? m_deviceContext->CaptureStreamEngine[deviceIndex]->GetACXStream() : (void *)(1), completedRtPacket, estimatedQPCPosition);
+            (void)AcxRtStreamNotifyPacketComplete(m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex)->GetACXStream(), completedRtPacket, estimatedQPCPosition);
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "call AcxRtStreamNotifyPacketComplete(%p, %llu, %llu)", m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex) != nullptr ? m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex)->GetACXStream() : (void *)(1), completedRtPacket, estimatedQPCPosition);
         }
         else
         {
-            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "can't call AcxRtStreamNotifyPacketComplete, %p, %p", m_deviceContext->CaptureStreamEngine, (m_deviceContext->CaptureStreamEngine != nullptr) ? m_deviceContext->CaptureStreamEngine[deviceIndex]->GetACXStream() : nullptr);
+            TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "can't call AcxRtStreamNotifyPacketComplete, %p, %p", m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex), (m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex) != nullptr) ? m_audioIsochronousEngine->GetCaptureStreamEngine(deviceIndex)->GetACXStream() : nullptr);
         }
     }
     InterlockedAdd64((LONG64 *)&(rtPacketInfo->RtPacketPosition), bytesCopiedDstData);
