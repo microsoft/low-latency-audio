@@ -96,8 +96,9 @@ class RtPacketObject
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     void UnsetRtPackets(
-        _In_ bool  Input,
-        _In_ ULONG deviceIndex
+        _In_ bool      Input,
+        _In_ ULONG     deviceIndex,
+        _In_opt_ PVOID * rtPackets
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)

@@ -890,6 +890,8 @@ Return Value:
             ACX_PIN_CONFIG_INIT(&pinCfg);
             pinCfg.Id = index * CodecCapturePinCount + CodecCaptureHostPin;
             pinCfg.Type = AcxPinTypeSource;
+            // One stream per host pin (see RenderCircuit.cpp).
+            pinCfg.MaxStreams = 1;
             pinCfg.Communication = AcxPinCommunicationSink;
             pinCfg.Category = &KSCATEGORY_AUDIO;
 

@@ -1059,6 +1059,13 @@ Return Value:
             ACX_PIN_CONFIG_INIT(&pinCfg);
             pinCfg.Id = index * CodecRenderPinCount + CodecRenderHostPin;
             pinCfg.Type = AcxPinTypeSink;
+            // The driver keeps one RT packet table and one stream engine per device index, so it
+            // can serve only one stream per host pin. ACX defaults MaxStreams to "indeterminate",
+            // which lets the audio engine open a second (for example low-latency) stream next to
+            // the running one; that stream is refused and its cleanup used to reset and clear the
+            // running stream's state. With one instance declared, Windows mixes all clients into
+            // the single stream instead.
+            pinCfg.MaxStreams = 1;
             pinCfg.Communication = AcxPinCommunicationSink;
             pinCfg.Category = &KSCATEGORY_AUDIO;
 

@@ -3610,12 +3610,17 @@ USBAudioAcxDriverStreamSetRtPackets(
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry, %s, packetsCount = %d, packetSize = %d", isInput ? "Input" : "Output", packetsCount, packetSize);
 
     WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
+    // Also hold StreamEngineWaitLock, which the mixing thread holds while it copies to/from
+    // the RT packets, so the packet table never changes in the middle of a copy.
+    // Lock order: StreamWaitLock, then StreamEngineWaitLock.
+    WdfWaitLockAcquire(deviceContext->StreamEngineWaitLock, nullptr);
 
     if (deviceContext->RtPacketObject != nullptr)
     {
         status = deviceContext->RtPacketObject->SetRtPackets(isInput, deviceIndex, packets, packetsCount, packetSize, channel, numOfChannelsPerDevice);
     }
 
+    WdfWaitLockRelease(deviceContext->StreamEngineWaitLock);
     WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit %!STATUS!", status);
@@ -3628,19 +3633,25 @@ _Use_decl_annotations_
 void USBAudioAcxDriverStreamUnsetRtPackets(
     bool            isInput,
     ULONG           deviceIndex,
-    PDEVICE_CONTEXT deviceContext
+    PDEVICE_CONTEXT deviceContext,
+    PVOID *         packets
 )
 {
     PAGED_CODE();
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Entry");
 
     WdfWaitLockAcquire(deviceContext->StreamWaitLock, nullptr);
+    // Wait for any in-progress mixing pass to finish before the packet table is cleared and
+    // the packet buffers are freed. Without this the mixing thread could read RtPacketsCount
+    // after it was zeroed (bugcheck 0x7E, divide by zero in CopyFromRtPacketToOutputData).
+    WdfWaitLockAcquire(deviceContext->StreamEngineWaitLock, nullptr);
 
     if (deviceContext->RtPacketObject != nullptr)
     {
-        deviceContext->RtPacketObject->UnsetRtPackets(isInput, deviceIndex);
+        deviceContext->RtPacketObject->UnsetRtPackets(isInput, deviceIndex, packets);
     }
 
+    WdfWaitLockRelease(deviceContext->StreamEngineWaitLock);
     WdfWaitLockRelease(deviceContext->StreamWaitLock);
 
     TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_DEVICE, "%!FUNC! Exit");
@@ -5313,6 +5324,13 @@ VOID EvtUSBAudioAcxDriverStartAsioStream(
             WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
             if (deviceContext->AsioBufferObject != nullptr)
             {
+                // The iso stream is already running for Windows audio, so the StreamObject (and
+                // its ASIO position counters) survived the previous ASIO session. Start the new
+                // session from zero, as a fresh stream would.
+                if (deviceContext->StreamObject != nullptr)
+                {
+                    deviceContext->StreamObject->ResetAsioPositions();
+                }
                 deviceContext->AsioBufferObject->SetReady();
                 status = STATUS_SUCCESS;
             }
@@ -5786,8 +5804,20 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
     {
         if (deviceContext->AsioOwner != nullptr)
         {
+            // Same pattern as the sample-rate change path: if Windows audio is streaming and no
+            // ASIO buffers are set yet (the host is in createBuffers), restart the shared iso
+            // stream after changing the period. Otherwise it stayed stopped under Windows audio,
+            // because the ASIO start path only calls SetReady when Windows audio is running.
+            bool streamRunning = false;
+            WdfWaitLockAcquire(deviceContext->AsioWaitLock, nullptr);
+            if (deviceContext->AsioBufferObject == nullptr)
+            {
+                streamRunning = true;
+            }
+            WdfWaitLockRelease(deviceContext->AsioWaitLock);
 
-            if ((deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0))
+            bool wasStreaming = (deviceContext->StartCounterAsio != 0) || (deviceContext->StartCounterWdmAudio != 0);
+            if (wasStreaming)
             {
                 StopIsoStream(deviceContext);
             }
@@ -5799,6 +5829,12 @@ VOID EvtUSBAudioAcxDriverSetBufferPeriod(
             ASSERT(NT_SUCCESS(status));
 
             deviceContext->Params.SuggestedBufferPeriod = *bufferPeriod;
+
+            if (wasStreaming && streamRunning)
+            {
+                NTSTATUS restartStatus = StartIsoStream(deviceContext);
+                TraceEvents(TRACE_LEVEL_INFORMATION, TRACE_MULTICLIENT, " - restarted iso stream after buffer period change %!STATUS!", restartStatus);
+            }
 
             deviceContext->AsioBufferObject->SetRecDeviceStatus(DeviceStatuses::ResetRequired);
         }

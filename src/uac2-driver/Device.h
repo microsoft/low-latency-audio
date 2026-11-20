@@ -487,7 +487,8 @@ PAGED_CODE_SEG
 void USBAudioAcxDriverStreamUnsetRtPackets(
     _In_ bool            isInput,
     _In_ ULONG           deviceIndex,
-    _In_ PDEVICE_CONTEXT deviceContext
+    _In_ PDEVICE_CONTEXT deviceContext,
+    _In_opt_ PVOID *     packets
 );
 
 __drv_maxIRQL(PASSIVE_LEVEL)
