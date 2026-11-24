@@ -49,9 +49,9 @@ static constexpr double c_TwoRaisedTo32Reciprocal = 1. / c_TwoRaisedTo32;
 #define ASIODRV_NAME            _T("USBAsio.dll")
 #define CONTROLPANELPROGRAMNAME _T("USBAsioControlPanel.exe")
 #if defined(_M_ARM64EC) || defined(_M_ARM64)
-#define DRIVER_NAME_8b "USB ASIO (ARM64X)"
+#define DRIVER_NAME_8b "Microsoft USB ASIO (ARM64X)"
 #else
-#define DRIVER_NAME_8b "USB ASIO"
+#define DRIVER_NAME_8b "Microsoft USB ASIO"
 #endif
 #define DRIVER_NAME _T(DRIVER_NAME_8b)
 
