@@ -186,9 +186,11 @@ USBAudioDataFormat::SetNext(USBAudioDataFormat * nextUSBAudioDataFormat)
     PAGED_CODE();
 
     ASSERT(nextUSBAudioDataFormat != nullptr);
-    ASSERT(m_nextUSBAudioDataFormat == nullptr);
+    ASSERT(nextUSBAudioDataFormat != this);
 
+    // SetNext() is also used for sorted insertion into the middle of the list, so replacing an existing successor is permitted.
     m_nextUSBAudioDataFormat = nextUSBAudioDataFormat;
+
     return nextUSBAudioDataFormat;
 }
 
@@ -864,7 +866,7 @@ USBAudioDataFormatManager::InsertUSBAudioDataFormat(
         {
             if (usbAudioDataFormat->IsEqualFormat(formatType, formats, subslotSize, bitResolution))
             {
-				createdUsbAudioDataFormat = usbAudioDataFormat;
+                createdUsbAudioDataFormat = usbAudioDataFormat;
                 return STATUS_SUCCESS;
             }
             if (USBAudioDataFormat(formatType, formats, subslotSize, bitResolution) < *usbAudioDataFormat)
