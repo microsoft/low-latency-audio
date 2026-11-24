@@ -1504,18 +1504,18 @@ bool CUSBAsio::GetLatency()
 
     result = DeviceIoControl(m_usbDeviceHandle, IOCTL_KS_PROPERTY, &privateProperty, sizeof(KSPROPERTY), &m_inputLatency, sizeof(m_inputLatency), &bytesReturned, nullptr);
 
-    if (result == false || m_inputLatency == 0)
+    if (result == FALSE)
     {
-        return result;
+        return false;
     }
 
     privateProperty.Id = toInt(KsPropertyUACLowLatencyAudio::GetOutputLatency);
 
     result = DeviceIoControl(m_usbDeviceHandle, IOCTL_KS_PROPERTY, &privateProperty, sizeof(KSPROPERTY), &m_outputLatency, sizeof(m_outputLatency), &bytesReturned, nullptr);
 
-    if (result == false || m_outputLatency == 0)
+    if (result == FALSE)
     {
-        return result;
+        return false;
     }
 
     //
@@ -1526,7 +1526,7 @@ bool CUSBAsio::GetLatency()
 
     info_print_(_T("latency is in:%d, out:%d samples.\n"), m_inputLatency, m_outputLatency);
 
-    return result;
+    return true;
 }
 
 bool CUSBAsio::ExecuteControlPanel()
