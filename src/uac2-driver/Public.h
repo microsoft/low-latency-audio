@@ -144,21 +144,25 @@ EXTERN_C_START
 EXTERN_C_END
 #endif
 
+class AudioIsochronousEngine;
+
 PAGED_CODE_SEG
 NTSTATUS
 CodecR_AddStaticRender(
-    _In_ WDFDEVICE              Device,
-    _In_ const GUID *           ComponentGuid,
-    _In_ const UNICODE_STRING * CircuitName
+    _In_ WDFDEVICE                Device,
+    _In_ const GUID *             ComponentGuid,
+    _In_ const UNICODE_STRING *   CircuitName,
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine
 );
 
 PAGED_CODE_SEG
 NTSTATUS
 CodecC_AddStaticCapture(
-    _In_ WDFDEVICE              Device,
-    _In_ const GUID *           ComponentGuid,
-    _In_ const GUID *           MicCustomName,
-    _In_ const UNICODE_STRING * CircuitName
+    _In_ WDFDEVICE                Device,
+    _In_ const GUID *             ComponentGuid,
+    _In_ const GUID *             MicCustomName,
+    _In_ const UNICODE_STRING *   CircuitName,
+    _In_ AudioIsochronousEngine * AudioIsochronousEngine
 );
 
 PAGED_CODE_SEG

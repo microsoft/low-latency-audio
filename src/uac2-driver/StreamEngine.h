@@ -34,6 +34,8 @@ Environment:
 
 #define DEFAULT_FREQUENCY 220
 
+class AudioIsochronousEngine;
+
 EXTERN_C_START
 
 VOID EvtStreamDestroy(
@@ -182,14 +184,15 @@ class CStreamEngine
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     CStreamEngine(
-        _In_ BOOLEAN         Input,
-        _In_ PDEVICE_CONTEXT DeviceContext,
-        _In_ ACXSTREAM       Stream,
-        _In_ ACXDATAFORMAT   StreamFormat,
-        _In_ ULONG           DeviceIndex,
-        _In_ ULONG           Channel,
-        _In_ ULONG           NumOfChannelsPerDevice,
-        _In_ BOOL            Offload
+        _In_ BOOLEAN                  Input,
+        _In_ PDEVICE_CONTEXT          DeviceContext,
+        _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+        _In_ ACXSTREAM                Stream,
+        _In_ ACXDATAFORMAT            StreamFormat,
+        _In_ ULONG                    DeviceIndex,
+        _In_ ULONG                    Channel,
+        _In_ ULONG                    NumOfChannelsPerDevice,
+        _In_ BOOL                     Offload
     );
 
     virtual __drv_maxIRQL(PASSIVE_LEVEL)
@@ -219,20 +222,21 @@ class CStreamEngine
     GetCurrentState();
 
   protected:
-    BOOLEAN          m_input;
-    PDEVICE_CONTEXT  m_deviceContext;
-    PVOID            m_packets[MAX_PACKET_COUNT]{};
-    PVOID            m_packetTopAddresses[MAX_PACKET_COUNT]{};
-    ULONG            m_packetCount;
-    ULONG            m_packetSize;
-    ULONG            m_firstPacketOffset;
-    ACX_STREAM_STATE m_currentState;
-    ACXSTREAM        m_stream;
-    ACXDATAFORMAT    m_streamFormat;
-    ULONG            m_deviceIndex;
-    ULONG            m_channel;
-    ULONG            m_numOfChannelsPerDevice;
-    BOOL             m_offload;
+    BOOLEAN                  m_input;
+    PDEVICE_CONTEXT          m_deviceContext{nullptr};
+    AudioIsochronousEngine * m_audioIsochronousEngine{nullptr};
+    PVOID                    m_packets[MAX_PACKET_COUNT]{};
+    PVOID                    m_packetTopAddresses[MAX_PACKET_COUNT]{};
+    ULONG                    m_packetCount;
+    ULONG                    m_packetSize;
+    ULONG                    m_firstPacketOffset;
+    ACX_STREAM_STATE         m_currentState;
+    ACXSTREAM                m_stream;
+    ACXDATAFORMAT            m_streamFormat;
+    ULONG                    m_deviceIndex;
+    ULONG                    m_channel;
+    ULONG                    m_numOfChannelsPerDevice;
+    BOOL                     m_offload;
 
     virtual __drv_maxIRQL(DISPATCH_LEVEL)
     ULONG
@@ -245,13 +249,14 @@ class CRenderStreamEngine : public CStreamEngine
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     CRenderStreamEngine(
-        _In_ PDEVICE_CONTEXT DeviceContext,
-        _In_ ACXSTREAM       Stream,
-        _In_ ACXDATAFORMAT   StreamFormat,
-        _In_ ULONG           DeviceIndex,
-        _In_ ULONG           Channel,
-        _In_ ULONG           NumOfChannelsPerDevice,
-        _In_ BOOL            Offload
+        _In_ PDEVICE_CONTEXT          DeviceContext,
+        _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+        _In_ ACXSTREAM                Stream,
+        _In_ ACXDATAFORMAT            StreamFormat,
+        _In_ ULONG                    DeviceIndex,
+        _In_ ULONG                    Channel,
+        _In_ ULONG                    NumOfChannelsPerDevice,
+        _In_ BOOL                     Offload
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
@@ -294,12 +299,13 @@ class CCaptureStreamEngine : public CStreamEngine
     __drv_maxIRQL(PASSIVE_LEVEL)
     PAGED_CODE_SEG
     CCaptureStreamEngine(
-        _In_ PDEVICE_CONTEXT DeviceContext,
-        _In_ ACXSTREAM       Stream,
-        _In_ ACXDATAFORMAT   StreamFormat,
-        _In_ ULONG           DeviceIndex,
-        _In_ ULONG           Channel,
-        _In_ ULONG           NumOfChannelsPerDevice
+        _In_ PDEVICE_CONTEXT          DeviceContext,
+        _In_ AudioIsochronousEngine * AudioIsochronousEngine,
+        _In_ ACXSTREAM                Stream,
+        _In_ ACXDATAFORMAT            StreamFormat,
+        _In_ ULONG                    DeviceIndex,
+        _In_ ULONG                    Channel,
+        _In_ ULONG                    NumOfChannelsPerDevice
     );
 
     __drv_maxIRQL(PASSIVE_LEVEL)
